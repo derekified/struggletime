@@ -31,6 +31,7 @@ def db():
       approved_weighted_secs REAL, reason_code TEXT);
     CREATE TABLE IF NOT EXISTS user(
       handle TEXT PRIMARY KEY, token_hash TEXT, is_public INT NOT NULL DEFAULT 1, created_at INT);
+    CREATE TABLE IF NOT EXISTS silent_streak(project_id TEXT PRIMARY KEY, silent_secs INT NOT NULL DEFAULT 0);
     CREATE TABLE IF NOT EXISTS project(
       id TEXT PRIMARY KEY, owner TEXT, name TEXT, repo_url TEXT, head_from TEXT, head_to TEXT);
     """)
@@ -70,7 +71,10 @@ class H(BaseHTTPRequestHandler):
         return r["handle"] if r else None
 
     def do_GET(self):
-        with _LOCK: return self._get()
+        with _LOCK:
+            try: return self._get()
+            except (BrokenPipeError, ConnectionResetError): pass
+            except Exception as e: return self.send_json(500, {"error": f"internal: {type(e).__name__}"})
     def _get(self):
         parsed = urlparse(self.path); p = parsed.path.strip("/").split("/") if parsed.path.strip("/") else []
         c = db()
@@ -138,7 +142,12 @@ class H(BaseHTTPRequestHandler):
         return self.send_json(404, {"error": "not found"})
 
     def do_POST(self):
-        with _LOCK: return self._post()
+        with _LOCK:
+            try: return self._post()
+            except (ValueError, KeyError, TypeError, AttributeError) as e:
+                return self.send_json(400, {"error": f"malformed request: {type(e).__name__}"})
+            except (BrokenPipeError, ConnectionResetError): pass
+            except Exception as e: return self.send_json(500, {"error": f"internal: {type(e).__name__}"})
     def _post(self):
         p = urlparse(self.path).path.strip("/").split("/"); c = db()
         if p == ["v1", "users"]:
@@ -168,7 +177,11 @@ class H(BaseHTTPRequestHandler):
             c.commit(); return self.send_json(200, {"id": p[2], "repo_url": d.get("repo_url"), "head_from": d.get("head_from"), "head_to": d.get("head_to")})
         if p == ["v1", "buckets", "batch"]:
             d = self.body(); buckets = d.get("buckets", [])
-            if not buckets: return self.send_json(400, {"error": "buckets required"})
+            if not isinstance(buckets, list) or not buckets: return self.send_json(400, {"error": "buckets required"})
+            for i, b in enumerate(buckets):
+                if not isinstance(b, dict) or not isinstance(b.get("counts"), dict) or not isinstance(b.get("git"), dict) \
+                   or not all(k in b for k in ("bucket_id","project_id","prev_hash","hash","bucket_secs","bucket_start_wall","mono_delta_ms")):
+                    return self.send_json(400, {"error": f"bucket {i}: missing required fields"})
             project = buckets[0]["project_id"]
             row = c.execute("SELECT last_hash FROM chain_head WHERE project_id=?", (project,)).fetchone()
             prev = row["last_hash"] if row else GENESIS
@@ -184,7 +197,13 @@ class H(BaseHTTPRequestHandler):
                 if bucket_hash(b) != b["hash"]: return self.send_json(422, {"error": f"bucket {i}: hash mismatch (tampered)"})
                 prev = b["hash"]
             total = 0.0; user = self.auth_handle(c) or d.get("user_id")
-            for b, (w, state) in zip(fresh, weight_sequence(fresh)):
+            srow = c.execute("SELECT silent_secs FROM silent_streak WHERE project_id=?", (project,)).fetchone()
+            seq = weight_sequence(fresh, srow["silent_secs"] if srow else 0)
+            from verify import is_silent
+            silent_end = (srow["silent_secs"] if srow else 0)
+            for b in fresh: silent_end = silent_end + b["bucket_secs"] if is_silent(b) else 0
+            c.execute("INSERT INTO silent_streak VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET silent_secs=excluded.silent_secs", (project, silent_end))
+            for b, (w, state) in zip(fresh, seq):
                 ws = b["bucket_secs"] * w; total += ws
                 c.execute("INSERT INTO bucket VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (b["bucket_id"], user, project, b["bucket_start_wall"], b["bucket_secs"], state, w, ws, b["hash"], b["prev_hash"], json.dumps(b)))

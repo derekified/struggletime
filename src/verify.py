@@ -22,6 +22,7 @@ def validate_allowlist(bucket):
         for k in obj:
             if k in FORBIDDEN: errs.append(f"{label}.{k}: forbidden (raw content can never be sent)")
             elif k not in allowed: errs.append(f"{label}.{k}: not in allowlist")
+    if len(bucket.get("files", [])) > 50: errs.append("files: max 50 per bucket")
     for i, f in enumerate(bucket.get("files", [])):
         for k in f:
             if k in FORBIDDEN: errs.append(f"files[{i}].{k}: forbidden (raw content can never be sent)")
@@ -39,8 +40,8 @@ def decay_weight(silent_secs):
     if silent_secs >= 720: return 0.0
     return round(0.70 * (720 - silent_secs) / 420, 4)
 
-def weight_sequence(buckets):
-    out, silent = [], 0
+def weight_sequence(buckets, initial_silent_secs=0):
+    out, silent = [], initial_silent_secs
     for b in buckets:
         if is_silent(b):
             silent += b["bucket_secs"]
