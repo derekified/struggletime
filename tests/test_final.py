@@ -47,7 +47,7 @@ class TestFinal(unittest.TestCase):
 
     def test_04_dashboard_served(self):
         s, html = req("GET", self.port, "/")
-        self.assertEqual(s, 200); self.assertIn("StruggleTime", html); self.assertIn("productive struggle", html)
+        self.assertEqual(s, 200); self.assertIn("StruggleTime", html); self.assertIn("actually struggling with ai", html)
 
     def test_05_stream_snapshot(self):
         buckets = json.loads((ROOT/"examples/session-closed-loop.json").read_text())

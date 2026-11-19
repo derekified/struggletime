@@ -1,0 +1,75 @@
+import hashlib, hmac, json, os, pathlib, subprocess, sys, tempfile, time, unittest, urllib.request, urllib.error
+from urllib.parse import urlencode
+ROOT = pathlib.Path(__file__).parent.parent
+
+def req(port, method, path, body=None, raw=None, headers=None, ctype="application/json"):
+    data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
+    r = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=data, headers={"Content-Type": ctype, **(headers or {})})
+    try:
+        with urllib.request.urlopen(r) as x: return x.status, json.loads(x.read())
+    except urllib.error.HTTPError as e: return e.code, json.loads(e.read())
+
+class TestIntegrations(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        cls.tmp = tempfile.mkdtemp(); cls.port = 18807
+        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db",
+               "GITHUB_WEBHOOK_SECRET": "ghsecret", "SLACK_SIGNING_SECRET": "slsecret"}
+        cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        for _ in range(50):
+            try:
+                if req(cls.port, "GET", "/health")[0] == 200: break
+            except Exception: time.sleep(0.1)
+        req(cls.port, "POST", "/v1/users", {"handle": "rowan"})
+        req(cls.port, "POST", "/v1/projects", {"id": "cs2", "name": "CS2", "repo_url": "https://github.com/rowan/cs2-browser"})
+    @classmethod
+    def tearDownClass(cls): cls.proc.terminate()
+
+    def test_github_link_and_parse(self):
+        s, r = req(self.port, "POST", "/v1/users/rowan/github", {"github_login": "rowan-17"})
+        self.assertEqual(s, 200); self.assertEqual(r["github_url"], "https://github.com/rowan-17")
+        self.assertEqual(req(self.port, "POST", "/v1/users/rowan/github", {"github_login": "bad login!"})[0], 400)
+        self.assertEqual(req(self.port, "POST", "/v1/users/ghost/github", {"github_login": "x"})[0], 404)
+        s, g = req(self.port, "GET", "/v1/projects/cs2/github")
+        self.assertTrue(g["linked"]); self.assertEqual((g["owner"], g["repo"]), ("rowan", "cs2-browser"))
+        s, p = req(self.port, "GET", "/v1/users/rowan"); self.assertEqual(p["github_login"], "rowan-17")
+
+    def test_github_webhook_signature(self):
+        payload = json.dumps({"repository": {"full_name": "rowan/cs2-browser"}, "commits": [{"id": "1"}, {"id": "2"}], "after": "abc123"}).encode()
+        bad = {"X-Hub-Signature-256": "sha256=nope", "X-GitHub-Event": "push"}
+        self.assertEqual(req(self.port, "POST", "/v1/integrations/github/webhook", raw=payload, headers=bad)[0], 401)
+        sig = "sha256=" + hmac.new(b"ghsecret", payload, hashlib.sha256).hexdigest()
+        s, r = req(self.port, "POST", "/v1/integrations/github/webhook", raw=payload, headers={"X-Hub-Signature-256": sig, "X-GitHub-Event": "push"})
+        self.assertEqual(s, 202); self.assertEqual(r["commits"], 2); self.assertEqual(r["project_id"], "cs2")
+        s, g = req(self.port, "GET", "/v1/projects/cs2/github"); self.assertEqual(len(g["webhook_events"]), 1)
+
+    def test_slack_link_command_and_notify_queue(self):
+        s, _ = req(self.port, "POST", "/v1/users/rowan/slack", {"slack_user_id": "U123"})
+        self.assertEqual(s, 200)
+        form = urlencode({"text": "stats", "user_id": "U123", "user_name": "rowan"}).encode()
+        ts = "1700000000"; sig = "v0=" + hmac.new(b"slsecret", f"v0:{ts}:".encode() + form, hashlib.sha256).hexdigest()
+        h = {"X-Slack-Request-Timestamp": ts, "X-Slack-Signature": sig}
+        s, r = req(self.port, "POST", "/v1/integrations/slack/command", raw=form, headers=h, ctype="application/x-www-form-urlencoded")
+        self.assertEqual(s, 200); self.assertIn("@rowan", r["text"]); self.assertIn("weighted h", r["text"])
+        bad = dict(h); bad["X-Slack-Signature"] = "v0=nope"
+        self.assertEqual(req(self.port, "POST", "/v1/integrations/slack/command", raw=form, headers=bad, ctype="application/x-www-form-urlencoded")[0], 401)
+        s, ev = req(self.port, "GET", "/v1/integrations/events"); self.assertEqual(s, 200)
+
+    def test_submission_queues_slack_notification(self):
+        sys.path.insert(0, str(ROOT/"src")); import verify, uuid
+        c = {"human_edits": 5, "ai_writes": 0, "prompts": 1, "executions": 1, "exec_failures": 0, "commits": 1, "dwell_diff_secs": 0, "idle_secs": 0}
+        b = {"v": 1, "bucket_id": str(uuid.uuid4()), "install_id": "i", "project_id": "cs2", "repo_remote_hash": None,
+             "bucket_start_wall": 1760000000, "bucket_secs": 300, "mono_delta_ms": 300000, "counts": c,
+             "git": {"head_commit": "abc", "lines_added": 9, "lines_deleted": 1, "dirty_files": 1},
+             "formula_version": "v0.1.0-alpha", "prev_hash": verify.GENESIS}
+        b["hash"] = verify.bucket_hash(b)
+        self.assertEqual(req(self.port, "POST", "/v1/buckets/batch", {"user_id": "rowan", "buckets": [b]})[0], 201)
+        s, sub = req(self.port, "POST", "/v1/submissions", {"user_id": "rowan", "project_id": "cs2", "from_bucket": b["bucket_id"], "to_bucket": b["bucket_id"], "ai_declaration": "used claude, reviewed all"})
+        self.assertEqual(s, 201)
+        s, ev = req(self.port, "GET", "/v1/integrations/events")
+        texts = [e["text"] for e in ev["events"]]
+        self.assertTrue(any("new submission" in t for t in texts), texts)
+        self.assertTrue(all(e["delivered"] == 0 for e in ev["events"]))
+
+if __name__ == "__main__":
+    unittest.main()

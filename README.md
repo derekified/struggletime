@@ -30,7 +30,7 @@ flags update live. No dependencies beyond Python 3.10+ (stdlib only).
 | 2 | Accurate struggle hours | Causal state machine, `weighting/rules-v0.1.0.yaml` |
 | 3 | Motivating, not anti-fraud | Live dashboard: weighted h, streaks, weekly goal, public builder profiles |
 | 4 | Passive | Daemon + shell hook; no timers or start/stop |
-| 5 | Central server | Accounts (token auth), public-by-default profiles, projects + git linking, realtime stats + SSE |
+| 5 | Central server | Accounts (token auth), public-by-default profiles, projects + git linking, realtime stats + SSE, github linking + signed push webhooks, slack linking + `/struggletime stats` slash command + submission/review notifications (webhook env, queued otherwise) |
 | 6 | Privacy-friendly | metadata-only 5-min buckets (25–50 kb/session, anonymized file ids, line deltas, exit codes); strict schema allowlist rejects raw text/paths with 400; `daemon/inspect.py` shows byte-for-byte what leaves; logged ≠ submitted |
 | 7 | All models/harnesses | agent-first: layer-1 terminal+fs core (100%, most agent users never open an ide); l2 adapters are optional enrichment, incl. openclaw session log tailing (`adapters/`) |
 | 8 | Win/Mac/Linux, low-spec | Polling daemon, stdlib only, ~46 MB server RSS; hooks for bash/zsh/PowerShell |
@@ -46,7 +46,7 @@ are the remaining scale work; every protocol they need is fixed here.
 ## Test
 
 ```bash
-python3 -m unittest discover -s tests   # 47 tests: verifier, metadata/privacy, server api, daemon end-to-end, malformed/edge cases, openclaw
+python3 -m unittest discover -s tests   # 51 tests: verifier, metadata/privacy, server api, daemon end-to-end, malformed/edge cases, openclaw
 python3 src/verify.py examples/session-closed-loop.json
 ```
 

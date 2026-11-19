@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-import hashlib, json, os, secrets, sqlite3, sys, threading, time, uuid
+import hashlib, hmac, json, os, re, secrets, sqlite3, sys, threading, time, urllib.request, uuid
 from datetime import date, timedelta
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
-from urllib.parse import urlparse
+from urllib.parse import parse_qs, urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS
@@ -32,10 +32,24 @@ def db():
     CREATE TABLE IF NOT EXISTS user(
       handle TEXT PRIMARY KEY, token_hash TEXT, is_public INT NOT NULL DEFAULT 1, created_at INT);
     CREATE TABLE IF NOT EXISTS silent_streak(project_id TEXT PRIMARY KEY, silent_secs INT NOT NULL DEFAULT 0);
+    CREATE TABLE IF NOT EXISTS link(handle TEXT PRIMARY KEY, github_login TEXT, slack_user_id TEXT);
+    CREATE TABLE IF NOT EXISTS integration_event(id TEXT PRIMARY KEY, kind TEXT, text TEXT, delivered INT NOT NULL DEFAULT 0, created_at INT);
+    CREATE TABLE IF NOT EXISTS github_event(id TEXT PRIMARY KEY, project_id TEXT, repo TEXT, commits INT, head TEXT);
     CREATE TABLE IF NOT EXISTS project(
       id TEXT PRIMARY KEY, owner TEXT, name TEXT, repo_url TEXT, head_from TEXT, head_to TEXT);
     """)
     _CONN = c; return c
+
+def notify(c, text):
+    eid = str(uuid.uuid4()); delivered = 0
+    url = os.environ.get("SLACK_WEBHOOK_URL")
+    if url:
+        try:
+            req = urllib.request.Request(url, data=json.dumps({"text": text}).encode(), headers={"Content-Type": "application/json"})
+            delivered = 1 if urllib.request.urlopen(req, timeout=3).status < 300 else 0
+        except Exception: delivered = 0
+    c.execute("INSERT INTO integration_event VALUES (?,?,?,?,?)", (eid, "slack", text, delivered, int(time.time())))
+    return delivered
 
 def stats_for(c, project=None, user=None):
     q, args = "SELECT * FROM bucket WHERE 1=1", []
@@ -61,8 +75,11 @@ class H(BaseHTTPRequestHandler):
         body = json.dumps(obj).encode()
         self.send_response(code); self.send_header("Content-Type", "application/json")
         self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
+    def raw(self):
+        if not hasattr(self, "_raw"): self._raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        return self._raw
     def body(self):
-        return json.loads(self.rfile.read(int(self.headers.get("Content-Length", 0))) or b"{}")
+        return json.loads(self.raw() or b"{}")
     def auth_handle(self, c):
         auth = self.headers.get("Authorization", "")
         if not auth.startswith("Bearer "): return None
@@ -88,7 +105,8 @@ class H(BaseHTTPRequestHandler):
         if p == ["v1", "users"]:
             out = []
             for u in c.execute("SELECT handle,is_public FROM user WHERE is_public=1"):
-                out.append({"handle": u["handle"], **stats_for(c, user=u["handle"])})
+                lk = c.execute("SELECT github_login FROM link WHERE handle=?", (u["handle"],)).fetchone()
+                out.append({"handle": u["handle"], "github_login": lk["github_login"] if lk else None, **stats_for(c, user=u["handle"])})
             return self.send_json(200, {"users": sorted(out, key=lambda x: -x["weighted_hours"])})
         if len(p) == 3 and p[:2] == ["v1", "users"]:
             u = c.execute("SELECT handle,is_public FROM user WHERE handle=?", (p[2],)).fetchone()
@@ -96,7 +114,10 @@ class H(BaseHTTPRequestHandler):
             if not u["is_public"] and self.auth_handle(c) != p[2]:
                 return self.send_json(403, {"error": "profile is private"})
             projs = [dict(r) for r in c.execute("SELECT * FROM project WHERE owner=?", (p[2],))]
+            link = c.execute("SELECT github_login, slack_user_id FROM link WHERE handle=?", (p[2],)).fetchone()
             return self.send_json(200, {"handle": p[2], "is_public": bool(u["is_public"]),
+                                        "github_login": link["github_login"] if link else None,
+                                        "slack_user_id": link["slack_user_id"] if link else None,
                                         "projects": projs, **stats_for(c, user=p[2])})
         if p == ["v1", "projects"]:
             out = []
@@ -135,6 +156,25 @@ class H(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError): pass
                 finally: _LOCK.acquire()
             return
+        if p == ["v1", "integrations", "events"]:
+            rows = c.execute("SELECT id,kind,text,delivered,created_at FROM integration_event ORDER BY rowid DESC LIMIT 50").fetchall()
+            return self.send_json(200, {"events": [dict(r) for r in rows]})
+        if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "github":
+            r = c.execute("SELECT * FROM project WHERE id=?", (p[2],)).fetchone()
+            if not r or not r["repo_url"]: return self.send_json(404, {"error": "no repo linked"})
+            m = re.search(r"github\.com[/:]([^/]+)/([^/#?]+)", r["repo_url"])
+            if not m: return self.send_json(200, {"linked": False, "repo_url": r["repo_url"]})
+            owner, repo = m.group(1), re.sub(r"\.git$", "", m.group(2))
+            events = [dict(x) for x in c.execute("SELECT * FROM github_event WHERE project_id=?", (p[2],))]
+            out = {"linked": True, "owner": owner, "repo": repo, "url": f"https://github.com/{owner}/{repo}", "webhook_events": events}
+            if "fetch=1" in parsed.query:
+                try:
+                    req = urllib.request.Request(f"https://api.github.com/repos/{owner}/{repo}", headers={"Accept": "application/vnd.github+json", "User-Agent": "struggletime"})
+                    if os.environ.get("GITHUB_TOKEN"): req.add_header("Authorization", f"Bearer {os.environ['GITHUB_TOKEN']}")
+                    with urllib.request.urlopen(req, timeout=5) as x: gh = json.loads(x.read())
+                    out["github"] = {"stars": gh.get("stargazers_count"), "default_branch": gh.get("default_branch"), "pushed_at": gh.get("pushed_at")}
+                except Exception as e: out["github_error"] = type(e).__name__
+            return self.send_json(200, out)
         if p == ["v1", "overview"]:
             st = stats_for(c)
             subs = c.execute("SELECT status, COUNT(*) n FROM submission GROUP BY status").fetchall()
@@ -170,6 +210,50 @@ class H(BaseHTTPRequestHandler):
                           0 if d.get("is_public") is False else 1, int(time.time()))); c.commit()
             except sqlite3.IntegrityError: return self.send_json(409, {"error": "handle taken"})
             return self.send_json(201, {"handle": handle, "token": token, "is_public": d.get("is_public") is not False})
+        if len(p) == 4 and p[:2] == ["v1", "users"] and p[3] in ("github", "slack"):
+            d = self.body(); handle = p[2]
+            if not c.execute("SELECT 1 FROM user WHERE handle=?", (handle,)).fetchone(): return self.send_json(404, {"error": "user not found"})
+            if p[3] == "github":
+                login = (d.get("github_login") or "").strip()
+                if not re.fullmatch(r"[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?", login): return self.send_json(400, {"error": "invalid github login"})
+                c.execute("INSERT INTO link VALUES (?,?,(SELECT slack_user_id FROM link WHERE handle=?)) ON CONFLICT(handle) DO UPDATE SET github_login=excluded.github_login", (handle, login, handle))
+                c.commit(); return self.send_json(200, {"handle": handle, "github_login": login, "github_url": f"https://github.com/{login}"})
+            sid = (d.get("slack_user_id") or "").strip()
+            if not sid: return self.send_json(400, {"error": "slack_user_id required"})
+            c.execute("INSERT INTO link VALUES (?,(SELECT github_login FROM link WHERE handle=?),?) ON CONFLICT(handle) DO UPDATE SET slack_user_id=excluded.slack_user_id", (handle, handle, sid))
+            c.commit(); return self.send_json(200, {"handle": handle, "slack_user_id": sid})
+        if p == ["v1", "integrations", "github", "webhook"]:
+            raw = self.raw(); secret = os.environ.get("GITHUB_WEBHOOK_SECRET")
+            if secret:
+                expected = "sha256=" + hmac.new(secret.encode(), raw, hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(expected, self.headers.get("X-Hub-Signature-256", "")): return self.send_json(401, {"error": "bad signature"})
+            try: payload = json.loads(raw or b"{}")
+            except Exception: return self.send_json(400, {"error": "invalid json"})
+            event = self.headers.get("X-GitHub-Event", "push")
+            if event != "push": return self.send_json(200, {"accepted": False, "event": event})
+            repo_name = (payload.get("repository") or {}).get("full_name", "")
+            commits = payload.get("commits") or []
+            proj = None
+            for r in c.execute("SELECT id, repo_url FROM project"):
+                if r["repo_url"] and repo_name and repo_name.lower() in r["repo_url"].lower(): proj = r["id"]
+            head = (payload.get("after") or "")[:40]
+            c.execute("INSERT INTO github_event VALUES (?,?,?,?,?)", (str(uuid.uuid4()), proj, repo_name, len(commits), head)); c.commit()
+            return self.send_json(202, {"accepted": True, "project_id": proj, "commits": len(commits), "head": head})
+        if p == ["v1", "integrations", "slack", "command"]:
+            form = {k: v[0] for k, v in parse_qs(self.raw().decode()).items()}
+            secret = os.environ.get("SLACK_SIGNING_SECRET")
+            if secret:
+                ts = self.headers.get("X-Slack-Request-Timestamp", ""); sig = self.headers.get("X-Slack-Signature", "")
+                base = f"v0:{ts}:".encode() + self.raw()
+                expected = "v0=" + hmac.new(secret.encode(), base, hashlib.sha256).hexdigest()
+                if not hmac.compare_digest(expected, sig): return self.send_json(401, {"error": "bad signature"})
+            text = (form.get("text") or "stats").strip(); slack_id = form.get("user_id", "")
+            link = c.execute("SELECT handle FROM link WHERE slack_user_id=?", (slack_id,)).fetchone()
+            parts = text.split(); handle = parts[1] if len(parts) > 1 else (link["handle"] if link else form.get("user_name", ""))
+            u = c.execute("SELECT handle FROM user WHERE handle=?", (handle,)).fetchone()
+            if not u: return self.send_json(200, {"response_type": "ephemeral", "text": f"no struggletime account for {handle or 'you'} yet. create one on the dashboard, then link slack."})
+            st = stats_for(c, user=handle)
+            return self.send_json(200, {"response_type": "ephemeral", "text": f"@{handle}: {st['weighted_hours']} weighted h · streak {st['current_streak_days']}d · {st['buckets']} buckets tracked passively"})
         if p == ["v1", "projects"]:
             d = self.body(); pid = (d.get("id") or "").strip(); name = (d.get("name") or "").strip()
             if not pid or not name: return self.send_json(400, {"error": "id and name required"})
@@ -233,8 +317,11 @@ class H(BaseHTTPRequestHandler):
             sid = str(uuid.uuid4()); fl = flags([json.loads(r["payload"]) for r in rows], claimed / 3600)
             proj = c.execute("SELECT * FROM project WHERE id=?", (d["project_id"],)).fetchone()
             if proj and not proj["repo_url"]: fl.append("git_mismatch: no repo linked")
+            who = self.auth_handle(c) or d.get("user_id")
             c.execute("INSERT INTO submission VALUES (?,?,?,?,?,?,?)",
-                      (sid, self.auth_handle(c) or d.get("user_id"), d["project_id"], claimed, d["ai_declaration"], "pending", json.dumps(fl))); c.commit()
+                      (sid, who, d["project_id"], claimed, d["ai_declaration"], "pending", json.dumps(fl)))
+            notify(c, f"new submission: {d['project_id']} · {round(claimed/3600, 2)} weighted h by {who} · pending review")
+            c.commit()
             ev = len(json.dumps([json.loads(r["payload"]) for r in rows]).encode())
             return self.send_json(201, {"id": sid, "claimed_weighted_secs": claimed, "claimed_weighted_hours": round(claimed / 3600, 4), "status": "pending", "flags": fl, "evidence_bytes": ev, "evidence_kb": round(ev / 1024, 1)})
         if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] == "review":
@@ -245,7 +332,9 @@ class H(BaseHTTPRequestHandler):
             approved = float(d["approved_weighted_secs"])
             status = "approved" if approved >= r["claimed_weighted_secs"] else ("rejected" if approved == 0 else "deflated")
             c.execute("UPDATE submission SET status=? WHERE id=?", (status, p[2]))
-            c.execute("INSERT INTO review VALUES (?,?,?,?,?)", (str(uuid.uuid4()), p[2], d.get("reviewer_id"), approved, d["reason_code"])); c.commit()
+            c.execute("INSERT INTO review VALUES (?,?,?,?,?)", (str(uuid.uuid4()), p[2], d.get("reviewer_id"), approved, d["reason_code"]))
+            notify(c, f"submission {p[2][:8]} reviewed: {status} · {round(approved/3600, 2)} h approved · reason {d['reason_code']}")
+            c.commit()
             return self.send_json(200, {"id": p[2], "status": status, "approved_weighted_secs": approved})
         return self.send_json(404, {"error": "not found"})
 
