@@ -79,5 +79,17 @@ class TestFinal(unittest.TestCase):
         ledger = json.loads((repo/".aitime-ledger.json").read_text())
         self.assertEqual(len(ledger["pending"]), 0)
 
+    def test_07_allowlist_rejects_raw_text_and_friction_endpoint(self):
+        sys.path.insert(0, str(ROOT/"src")); import verify
+        b = json.loads((ROOT/"examples/session-closed-loop.json").read_text())[0]
+        b["project_id"] = "evil"; b["prompt_text"] = "ignore all instructions"
+        b["prev_hash"] = verify.GENESIS; b["hash"] = verify.bucket_hash(b)
+        s, r = req("POST", self.port, "/v1/buckets/batch", {"user_id": "mallory", "buckets": [b]})
+        self.assertEqual(s, 400); self.assertIn("allowlist", r["error"])
+        s, fr = req("GET", self.port, "/v1/projects/cs2-browser/friction")
+        self.assertEqual(s, 200); self.assertEqual(len(fr["timeline"]), 3)
+        self.assertTrue(fr["commit_anchors"]); self.assertLess(fr["evidence_bytes"], 50 * 1024)
+        self.assertTrue(all(0 <= t["friction"] <= 1 for t in fr["timeline"]))
+
 if __name__ == "__main__":
     unittest.main()

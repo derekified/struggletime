@@ -7,7 +7,7 @@ from pathlib import Path
 from urllib.parse import urlparse
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from verify import bucket_hash, weight, flags, GENESIS
+from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS
 
 REASONS = {"UNATTENDED_AGENT_DUMP","IDLE_INFLATION","NO_TEST_ITERATION","BOILERPLATE_HEAVY","CHAIN_BROKEN","GIT_MISMATCH","NONE"}
 DB = os.environ.get("SERVER_DB", "server.db")
@@ -102,6 +102,18 @@ class H(BaseHTTPRequestHandler):
             for r in c.execute("SELECT DISTINCT project_id FROM bucket"):
                 if r[0] not in known: out.append({"id": r[0], "owner": None, "name": r[0], "repo_url": None, **stats_for(c, project=r[0])})
             return self.send_json(200, {"projects": out})
+        if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] in ("buckets", "friction"):
+            rows = c.execute("SELECT payload FROM bucket WHERE project_id=? ORDER BY bucket_start_wall", (p[2],)).fetchall()
+            if not rows: return self.send_json(404, {"error": "project not found"})
+            buckets = [json.loads(r["payload"]) for r in rows]
+            if p[3] == "buckets":
+                return self.send_json(200, {"project_id": p[2], "buckets": buckets,
+                                            "evidence_bytes": len(json.dumps(buckets).encode())})
+            tl = friction_timeline(buckets)
+            commits = [{"at_bucket": t["bucket_id"], "head_commit": t["head_commit"]} for t in tl if t["commits"] or t["head_commit"]]
+            return self.send_json(200, {"project_id": p[2], "timeline": tl, "commit_anchors": commits,
+                                        "evidence_bytes": len(json.dumps(buckets).encode()),
+                                        "budget": "target 25-50 kb per submitted session, hard cap 50 kb/hour of metadata"})
         if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "stats":
             if not c.execute("SELECT 1 FROM bucket WHERE project_id=? LIMIT 1", (p[2],)).fetchone():
                 return self.send_json(404, {"error": "project not found"})
@@ -160,6 +172,9 @@ class H(BaseHTTPRequestHandler):
             project = buckets[0]["project_id"]
             row = c.execute("SELECT last_hash FROM chain_head WHERE project_id=?", (project,)).fetchone()
             prev = row["last_hash"] if row else GENESIS
+            for i, b in enumerate(buckets):
+                errs = validate_allowlist(b)
+                if errs: return self.send_json(400, {"error": f"bucket {i}: schema allowlist violation", "details": errs})
             seen = {r[0] for r in c.execute("SELECT bucket_id FROM bucket WHERE project_id=?", (project,))}
             fresh = [b for b in buckets if b["bucket_id"] not in seen]
             if len(fresh) != len(buckets):
@@ -169,8 +184,8 @@ class H(BaseHTTPRequestHandler):
                 if bucket_hash(b) != b["hash"]: return self.send_json(422, {"error": f"bucket {i}: hash mismatch (tampered)"})
                 prev = b["hash"]
             total = 0.0; user = self.auth_handle(c) or d.get("user_id")
-            for b in fresh:
-                w, state = weight(b); ws = b["bucket_secs"] * w; total += ws
+            for b, (w, state) in zip(fresh, weight_sequence(fresh)):
+                ws = b["bucket_secs"] * w; total += ws
                 c.execute("INSERT INTO bucket VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (b["bucket_id"], user, project, b["bucket_start_wall"], b["bucket_secs"], state, w, ws, b["hash"], b["prev_hash"], json.dumps(b)))
             c.execute("INSERT INTO chain_head VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET last_hash=excluded.last_hash", (project, prev)); c.commit()
@@ -187,7 +202,8 @@ class H(BaseHTTPRequestHandler):
             if proj and not proj["repo_url"]: fl.append("git_mismatch: no repo linked")
             c.execute("INSERT INTO submission VALUES (?,?,?,?,?,?,?)",
                       (sid, self.auth_handle(c) or d.get("user_id"), d["project_id"], claimed, d["ai_declaration"], "pending", json.dumps(fl))); c.commit()
-            return self.send_json(201, {"id": sid, "claimed_weighted_secs": claimed, "claimed_weighted_hours": round(claimed / 3600, 4), "status": "pending", "flags": fl})
+            ev = len(json.dumps([json.loads(r["payload"]) for r in rows]).encode())
+            return self.send_json(201, {"id": sid, "claimed_weighted_secs": claimed, "claimed_weighted_hours": round(claimed / 3600, 4), "status": "pending", "flags": fl, "evidence_bytes": ev, "evidence_kb": round(ev / 1024, 1)})
         if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] == "review":
             d = self.body()
             if d.get("reason_code") not in REASONS: return self.send_json(400, {"error": "invalid reason_code", "allowed": sorted(REASONS)})

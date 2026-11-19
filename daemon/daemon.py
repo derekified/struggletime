@@ -10,7 +10,7 @@ import argparse, json, os, subprocess, sys, time, urllib.request, uuid
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from verify import bucket_hash, GENESIS
+from verify import bucket_hash, anonymized_file_id, GENESIS
 
 IGNORE = {".git", "node_modules", "__pycache__", ".venv", "dist", "build"}
 
@@ -18,15 +18,22 @@ def git(repo, *args):
     try: return subprocess.run(["git", "-C", str(repo), *args], capture_output=True, text=True, timeout=5).stdout.strip()
     except Exception: return ""
 
-def git_anchor(repo):
-    added = deleted = 0
+def git_anchor(repo, salt=None, bursts=None):
+    added = deleted = 0; files = {}
     for line in git(repo, "diff", "--numstat").splitlines():
         p = line.split("\t")
         if len(p) >= 2:
-            added += int(p[0]) if p[0].isdigit() else 0
-            deleted += int(p[1]) if p[1].isdigit() else 0
+            a = int(p[0]) if p[0].isdigit() else 0; d = int(p[1]) if p[1].isdigit() else 0
+            added += a; deleted += d
+            if salt and len(p) >= 3:
+                fid = anonymized_file_id(p[2], salt)
+                files[fid] = {"file_id": fid, "added": a, "deleted": d, "bursts": (bursts or {}).get(p[2], 0)}
+    for rel, n in (bursts or {}).items():
+        if salt and anonymized_file_id(rel, salt) not in files:
+            fid = anonymized_file_id(rel, salt); files[fid] = {"file_id": fid, "added": 0, "deleted": 0, "bursts": n}
     dirty = len([l for l in git(repo, "status", "--porcelain").splitlines() if l])
-    return {"head_commit": git(repo, "rev-parse", "HEAD") or None, "lines_added": added, "lines_deleted": deleted, "dirty_files": dirty}
+    anchor = {"head_commit": git(repo, "rev-parse", "HEAD") or None, "lines_added": added, "lines_deleted": deleted, "dirty_files": dirty}
+    return anchor, list(files.values())[:50]
 
 def snapshot(repo):
     out = {}
@@ -57,7 +64,11 @@ def main():
     exec_log = Path(os.environ.get("AITIME_EXEC_LOG", Path.home() / ".aitime" / "exec.jsonl"))
     ledger = repo / ".aitime-ledger.json"
     state = json.loads(ledger.read_text()) if ledger.exists() else {"prev_hash": GENESIS, "pending": [], "exec_offset": 0}
-    counts, prev_snap, last_activity = empty(), snapshot(repo), time.monotonic()
+    if "salt" not in state: state["salt"] = uuid.uuid4().hex
+    gi = repo / ".gitignore"
+    if (repo / ".git").exists() and (not gi.exists() or ".aitime-ledger.json" not in gi.read_text(errors="ignore")):
+        open(gi, "a").write("\n.aitime-ledger.json\n")
+    bursts, counts, prev_snap, last_activity = {}, empty(), snapshot(repo), time.monotonic()
     started_wall, started_mono = int(time.time()), time.monotonic()
     print(f"watching {repo} project={project} bucket={a.bucket_secs}s", flush=True)
     while True:
@@ -66,6 +77,7 @@ def main():
         changed = [k for k in snap if k not in prev_snap or snap[k] != prev_snap.get(k)]
         if changed:
             last_activity = time.monotonic()
+            for rel in changed: bursts[rel] = bursts.get(rel, 0) + 1
             if len(changed) >= 5: counts["ai_writes"] += len(changed)
             else: counts["human_edits"] += len(changed)
         prev_snap = snap
@@ -81,10 +93,12 @@ def main():
             state["exec_offset"] = len(lines)
         if time.monotonic() - started_mono < a.bucket_secs and not a.once: continue
         counts["idle_secs"] = int(max(0, a.bucket_secs - (last_activity - started_mono))) if time.monotonic() - last_activity > 60 else 0
+        anchor, files = git_anchor(repo, state["salt"], bursts)
         bucket = {"v": 1, "bucket_id": str(uuid.uuid4()), "install_id": os.environ.get("AITIME_INSTALL", "local"),
                   "project_id": project, "repo_remote_hash": None, "bucket_start_wall": started_wall,
                   "bucket_secs": a.bucket_secs, "mono_delta_ms": int((time.monotonic() - started_mono) * 1000),
-                  "counts": counts, "git": git_anchor(repo), "formula_version": "v0.1.0-alpha", "prev_hash": state["prev_hash"]}
+                  "counts": counts, "git": anchor, "files": files, "formula_version": "v0.1.0-alpha", "prev_hash": state["prev_hash"]}
+        bursts = {}
         bucket["hash"] = bucket_hash(bucket); state["prev_hash"] = bucket["hash"]; state["pending"].append(bucket)
         if a.server:
             req = urllib.request.Request(a.server.rstrip("/") + "/v1/buckets/batch", method="POST",

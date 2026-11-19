@@ -28,6 +28,10 @@ a{color:var(--acc)}small{color:var(--mut)}
 <h2>Projects <small>(live — updates every 2s)</small></h2>
 <div id="projects" class="grid"><div class="card">No projects yet. Run the daemon below — your first closed loop appears here.</div></div>
 
+<h2>Structural friction timeline <small>(overlaid on the git commit graph)</small></h2>
+<div class="card"><div id="friction"><small>track something first — failures, retries and commits will show up here as structure, never as screenshots or text.</small></div>
+<small>bar height = friction (failures · retries · edits · follow-through). ◆ = commit anchor. silent debugging decays gradually over 5–12 min instead of cliffing to zero. evidence is pure metadata — 25–50 kb per submitted session, zero raw text or pixels.</small></div>
+
 <h2>Builders</h2><div id="users" class="grid"></div>
 
 <h2>Try it in 60 seconds</h2>
@@ -57,6 +61,11 @@ async function refresh(){
  $('streak').textContent=streak+' day'+(streak==1?'':'s'); $('closed').textContent=closed;
  const pct=Math.min(100,wh/5*100); $('goal').style.width=pct+'%'; $('goal-t').textContent=wh.toFixed(2)+' / 5 weighted h this goal';
  $('users').innerHTML=us.users.length?us.users.map(u=>`<div class="card"><b>@${u.handle}</b><div class="big">${u.weighted_hours} h</div><small>${u.active_days} active days · 🔥 ${u.current_streak_days}</small></div>`).join(''):'<div class="card">Be the first builder.</div>';
+ const first=ps.projects.find(p=>p.buckets>0);
+ if(first){const [,fr]=await j('/v1/projects/'+first.id+'/friction');
+  const w=Math.max(320,fr.timeline.length*46),h=120,bw=30;
+  $('friction').innerHTML=`<svg width="100%" viewBox="0 0 ${w} ${h+28}" role="img" aria-label="friction timeline for ${first.id}">`+
+   fr.timeline.map((t,i)=>{const bh=Math.max(3,t.friction*100);return `<rect x="${i*46+6}" y="${h-bh}" width="${bw}" height="${bh}" rx="4" fill="${t.state=='OPEN_LOOP_AGENT_DUMP'?'#8a4b1d':'#ff8c37'}"><title>${t.state} · friction ${t.friction} · weight ${t.weight}</title></rect>`+(t.commits?`<text x="${i*46+14}" y="${h+16}" fill="#3ecf8e" font-size="13">◆</text>`:'')+`<text x="${i*46+6}" y="${h+27}" fill="#9aa3b2" font-size="8">${(t.head_commit||'').slice(0,6)}</text>`}).join('')+`</svg><small>${first.id} · evidence so far: ${(fr.evidence_bytes/1024).toFixed(1)} kb of metadata · ${fr.commit_anchors.length} commit anchor(s)</small>`}
 }
 $('demo').onsubmit=async e=>{e.preventDefault();const h=$('handle').value.trim();
  await j('/v1/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:h})});

@@ -38,6 +38,12 @@
         "dirty_files": {"type": "integer", "minimum": 0}
       }
     },
+    "files": {
+      "type": "array", "maxItems": 50,
+      "description": "Per-file metadata only. file_id is a salted hash (salt never leaves the device); paths and content are forbidden by the allowlist.",
+      "items": {"type": "object", "additionalProperties": false, "required": ["file_id","added","deleted","bursts"],
+        "properties": {"file_id": {"type": "string", "pattern": "^[a-f0-9]{16}$"}, "added": {"type": "integer", "minimum": 0}, "deleted": {"type": "integer", "minimum": 0}, "bursts": {"type": "integer", "minimum": 0}}}
+    },
     "exec_categories": {
       "type": "array",
       "items": {"enum": ["git","test_runner","compiler","ai_cli","other"]},

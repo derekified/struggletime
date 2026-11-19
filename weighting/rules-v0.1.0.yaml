@@ -33,6 +33,13 @@ states:
   - id: EXEC_ONLY
     when: { executions_gt: 0 }
     weight: 0.50
+  - id: SILENT_DEBUG
+    when: { no_steering_no_exec: true, idle_secs_lt: 240 }
+    weight: sequence_decay
+    note: >-
+      silent reading/debugging is real work, so it decays instead of cliffing:
+      0.70 for the first 5 min silent, linear decay to 0 at 12 min, then 0.
+      sequence-aware (applied across consecutive silent buckets), never per-bucket reset by agent output alone.
   - id: FALLBACK
     when: {}
     weight: 0.0

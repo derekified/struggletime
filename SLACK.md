@@ -12,10 +12,11 @@ agent dumps a bunch of files and you commit them without looking = 0.2x
 idle = 0
 
 what's in it rn:
-• a passive daemon — filesystem watcher + a 5-line shell hook. no timers, no start/stop button, you just code and it counts. works with literally any editor/ai tool bc it doesn't rely on plugins (there are little adapters for cursor + claude code but they're optional extras)
+• a passive daemon — filesystem watcher + a 5-line shell hook. no timers, no start/stop button, you just code in your terminal and it counts. works with literally any ai tool bc it doesn't rely on plugins
 • a server with accounts, public profiles, git-linked projects and a dashboard that updates live — weighted hours, streaks, weekly goal, that kind of thing
 • every 5-min chunk of time gets hash-chained and tied to your git head + diff size, so if someone tries to rewrite their history before submitting, it just breaks. submitting freezes an evidence pack + you declare how you used ai, and reviewers can approve/deflate with a reason
-• privacy stuff i actually cared about: only counts leave your laptop. no prompts, no code, no commands, no keystrokes, no screenshots. logged hours stay private, only stuff you submit gets uploaded
+• no screen recording, no keylogging, none of that. instead the evidence is like 25-50kb of pure metadata per session — anonymized file ids, line deltas, build/test exit codes — which reviewers see as a friction timeline overlaid on your git commits (failure → retry → commit, as a shape). silent debugging time decays slowly over 5-12 min instead of dropping to zero. there's a strict schema allowlist so raw text literally cannot be sent (server rejects it), and a local inspect command shows you byte-for-byte what leaves your machine before anything does
+• most agent users don't even code in an ide (terminals!!) so the daemon is terminal-first — ide adapters are optional extras, not the product
 • agplv3, zero dependencies, runs on a potato
 
 i just re-tested the server before posting this, here's the actual output:
@@ -25,7 +26,7 @@ $ curl localhost:18765/health
 {"ok": true}
 
 $ python3 -m unittest discover -s tests
-ran 18 tests in 1.379s — ok
+ran 26 tests in 1.420s — ok
 
 struggle-loop session → 0.25 weighted h (full weight, nothing flagged)
 agent-dump session → 0.033 weighted h + auto-flagged (ai:human ratio 27)

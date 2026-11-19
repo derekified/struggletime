@@ -69,3 +69,27 @@ its hours are submitted. Public profiles show aggregates only.
 - `weighting/rules-v0.1.0.yaml` — causal state machine + reason codes
 - `weighting/calibration-20.md` — 20-session calibration protocol
 - `src/verify.py` — reference chain verifier + weighting engine (stdlib only)
+
+## Agent-first, metadata-only evidence (v0.2)
+
+Most agent users never open an IDE, so Layer 1 (terminal + filesystem)
+is the product and IDE adapters are decoration. Evidence never needs
+pixels or keystrokes:
+
+- **25–50 KB per submitted session** of pure metadata: anonymized file
+  ids (salted SHA256, salt stays on-device), line deltas, edit bursts,
+  build/test exit codes, git anchors. A typical hour is ~10 KB.
+- **Structural friction timeline:** reviewers see friction (failures,
+  retries, edits, follow-through, 0–1 per bucket) as bars overlaid on
+  the git commit graph (`GET /v1/projects/{id}/friction`, rendered in
+  the dashboard) — the shape of struggle, with no content to leak.
+- **Silent-debug decay:** silent buckets hold 0.70× for 5 minutes,
+  decay linearly to 0 at 12 minutes, then stop. Reading and thinking
+  are not cliffed to zero, and silence cannot farm forever.
+- **Strict schema allowlist:** the server rejects any bucket carrying a
+  field outside `schemas/heartbeat.schema.json` — `prompt_text`,
+  `command`, `content`, file paths, etc. get a 400 before chaining.
+  Raw text/pixels are not merely unused; they are unrepresentable.
+- **Local inspect:** `python3 daemon/inspect.py <repo|buckets.json>`
+  prints byte-for-byte what will be sent, its size, chain validity, and
+  allowlist status. Verify before you trust.
