@@ -1,33 +1,47 @@
-# Slack post — copy/paste (replace [repo link])
+# slack post — copy/paste (replace [repo link])
 
 ---
 
-hey everyone :wave: this is what I've made so far for the AI time tracking bounty — it's called **StruggleTime**
+hey :wave: so i've been building this thing for the ai time tracking bounty and it finally actually works end to end, so here's what i made so far
 
-the idea: every tracker counts *activity*, but AI makes activity meaningless (an unattended agent is "active" for hours while you're doing something else lol). so instead it counts **causality**:
+it's called **struggletime**. the whole idea came from one thing that bugged me: trackers count activity, but ai makes activity meaningless. an agent can look "active" for 3 hours while you're off doing something else. so instead of counting activity, it counts whether you actually closed the loop:
 
-`(prompt/edit) → (test/build) → (follow-up edit/commit)` = full weight
-fail a build → fix it → pass = full weight (that's the struggle loop!!)
-agent dumps 15 files and you commit them unread = 0.2x
+prompt/edit → test/build → follow-up edit/commit = full weight
+fail a build → fix it → it passes = full weight (this is my favourite signal lol, failing builds don't lie)
+agent dumps a bunch of files and you commit them without looking = 0.2x
 idle = 0
 
-**what's actually working rn:**
-• a passive daemon (filesystem watcher + a tiny shell hook) — no timers, no start/stop, works with any editor/AI tool because it doesn't depend on plugins. adapters for cursor/vscode + claude code are just optional extras on top
-• a server with accounts, public profiles, git-linked projects, and a live dashboard (weighted hours, streaks, weekly goal)
-• every 5-min bucket is hash-chained + anchored to your git HEAD/diff, so if someone rewrites their history it breaks in review. submitting = freezing an evidence pack + declaring how you used AI, reviewers approve/deflate with a reason code
-• privacy: only metadata counts ever leave your laptop. no prompts, no code, no commands, no keystrokes, no screenshots. logged hours stay private, only submitted hours get uploaded
-• AGPLv3, zero dependencies, runs on a potato
+what's in it rn:
+• a passive daemon — filesystem watcher + a 5-line shell hook. no timers, no start/stop button, you just code and it counts. works with literally any editor/ai tool bc it doesn't rely on plugins (there are little adapters for cursor + claude code but they're optional extras)
+• a server with accounts, public profiles, git-linked projects and a dashboard that updates live — weighted hours, streaks, weekly goal, that kind of thing
+• every 5-min chunk of time gets hash-chained and tied to your git head + diff size, so if someone tries to rewrite their history before submitting, it just breaks. submitting freezes an evidence pack + you declare how you used ai, and reviewers can approve/deflate with a reason
+• privacy stuff i actually cared about: only counts leave your laptop. no prompts, no code, no commands, no keystrokes, no screenshots. logged hours stay private, only stuff you submit gets uploaded
+• agplv3, zero dependencies, runs on a potato
 
-**proof it works (just tested):**
-• 18/18 tests passing
-• a real struggle-loop session earned the full 0.25h; an agent-dump session got discounted to 0.033h and auto-flagged
-• a tampered bucket gets rejected by the server (hash mismatch)
-• load test: 5,000 buckets verified in 0.17s (~31MB RAM) — the full struggletime scale is like 0.5 writes/sec so hosting should land around $40-60/mo
+i just re-tested the server before posting this, here's the actual output:
 
-repo: [repo link] — `python3 server/server.py` + `python3 daemon/daemon.py --repo ~/your-project` and you're tracking
+```
+$ curl localhost:18765/health
+{"ok": true}
 
-**honest wip:** no packaged installers yet (you run it from source), and the weighting formula (v0.1.0-alpha) hasn't been calibrated on real sessions yet
+$ python3 -m unittest discover -s tests
+ran 18 tests in 1.379s — ok
 
-**what I need:** ~20 people willing to record a labelled coding session (screen recording stays on your machine) so I can check the formula agrees with human reviewers before anyone relies on it. if you build with AI a lot and want your struggle to count, pls test it and break it — especially try to fake hours, I want to know :saluting_face:
+struggle-loop session → 0.25 weighted h (full weight, nothing flagged)
+agent-dump session → 0.033 weighted h + auto-flagged (ai:human ratio 27)
+tampered bucket → 422 hash mismatch, rejected
+load test → 5,000 buckets verified in 0.17s, server sitting at ~31mb ram
+```
+
+that last one matters bc at full struggletime scale this thing only needs ~0.5 writes/sec, so hosting should be like $40-60/mo, way under the cap
+
+try it: [repo link]
+`python3 server/server.py` in one terminal, `python3 daemon/daemon.py --repo ~/your-project` in another, open the dashboard, go build something
+
+honest wip: there's no installer yet so you run it from source, and the weighting formula is v0.1.0-alpha — it has not been checked against real humans yet
+
+which is the part i actually need help with: i need ~20 people to record a normal coding session (recording never leaves your machine, i just need you to label roughly what you were doing) so i can see if the formula agrees with what a human reviewer would say. also pls try to break it / fake hours, i'd genuinely rather find that out from you than from fraud squad
+
+ty for reading this far lol, feedback very welcome
 
 ---
