@@ -24,6 +24,12 @@ the server loads `.env` automatically on start. real exported
 environment variables win over the file. hosted deployments should use
 the platform's secret store instead of a file.
 
+for oauth sign in, fill in the client id/secret pairs and set
+`OAUTH_REDIRECT_BASE` to the server's public address. behind an ngrok
+tunnel that is the ngrok url, and the callback urls registered in the
+github/slack apps must be `<that url>/v1/auth/github/callback` and
+`<that url>/v1/auth/slack/callback`. restart the server after editing.
+
 ## 2. start the server
 
 ```bash
