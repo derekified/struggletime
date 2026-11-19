@@ -33,11 +33,14 @@ make server       # http://127.0.0.1:18765
 Open it. You get the dashboard: stats, friction timeline, projects,
 builders, review queue. It is empty until the daemon sends something.
 
-Create your account (token is shown once, save it):
+Claim your handle (accounts are just handles — no password, no email):
 
 ```bash
 curl -X POST localhost:18765/v1/users -H 'Content-Type: application/json' -d '{"handle":"you"}'
 ```
+
+or do it in settings on the dashboard, which also live-checks whether
+the handle is available as you type.
 
 Profiles are public by default. Pass `"is_public": false` to opt out.
 

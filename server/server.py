@@ -21,6 +21,41 @@ _load_dotenv()
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS
 
+
+def oauth_config(provider):
+    if provider == "github":
+        return {"client_id": os.environ.get("GITHUB_CLIENT_ID", ""), "client_secret": os.environ.get("GITHUB_CLIENT_SECRET", ""),
+                "base": os.environ.get("GITHUB_OAUTH_BASE", "https://github.com"), "api": os.environ.get("GITHUB_API_BASE", "https://api.github.com")}
+    return {"client_id": os.environ.get("SLACK_CLIENT_ID", ""), "client_secret": os.environ.get("SLACK_CLIENT_SECRET", ""),
+            "base": os.environ.get("SLACK_OAUTH_BASE", "https://slack.com"), "api": os.environ.get("SLACK_OAUTH_BASE", "https://slack.com")}
+
+def http_json(url, data=None, headers=None, form=False):
+    body = None
+    hdrs = {"Accept": "application/json", "User-Agent": "struggletime", **(headers or {})}
+    if data is not None:
+        from urllib.parse import urlencode
+        body = urlencode(data).encode() if form else json.dumps(data).encode()
+        hdrs["Content-Type"] = "application/x-www-form-urlencoded" if form else "application/json"
+    req = urllib.request.Request(url, data=body, headers=hdrs, method="POST" if data is not None else "GET")
+    with urllib.request.urlopen(req, timeout=8) as x: return json.loads(x.read() or b"{}")
+
+def oauth_identity(provider, code):
+    cfg = oauth_config(provider)
+    if provider == "github":
+        tok = http_json(cfg["base"] + "/login/oauth/access_token",
+                        {"client_id": cfg["client_id"], "client_secret": cfg["client_secret"], "code": code})
+        user = http_json(cfg["api"] + "/user", headers={"Authorization": f"Bearer {tok['access_token']}"})
+        return user["login"], str(user["id"])
+    tok = http_json(cfg["base"] + "/api/openid.connect.token",
+                    {"client_id": cfg["client_id"], "client_secret": cfg["client_secret"], "code": code,
+                     "redirect_uri": oauth_redirect(provider)}, form=True)
+    info = http_json(cfg["api"] + "/api/openid.connect.userInfo", headers={"Authorization": f"Bearer {tok['access_token']}"})
+    return info.get("name") or info.get("https://slack.com/user_id") or info["sub"], str(info["sub"])
+
+def oauth_redirect(provider):
+    base = os.environ.get("OAUTH_REDIRECT_BASE", "http://127.0.0.1:18765").rstrip("/")
+    return f"{base}/v1/auth/{provider}/callback"
+
 REASONS = {"UNATTENDED_AGENT_DUMP","IDLE_INFLATION","NO_TEST_ITERATION","BOILERPLATE_HEAVY","CHAIN_BROKEN","GIT_MISMATCH","NONE"}
 DB = os.environ.get("SERVER_DB", "server.db")
 STATIC = Path(__file__).parent / "static"
@@ -47,6 +82,7 @@ def db():
     CREATE TABLE IF NOT EXISTS link(handle TEXT PRIMARY KEY, github_login TEXT, slack_user_id TEXT);
     CREATE TABLE IF NOT EXISTS integration_event(id TEXT PRIMARY KEY, kind TEXT, text TEXT, delivered INT NOT NULL DEFAULT 0, created_at INT);
     CREATE TABLE IF NOT EXISTS github_event(id TEXT PRIMARY KEY, project_id TEXT, repo TEXT, commits INT, head TEXT);
+    CREATE TABLE IF NOT EXISTS oauth_state(state TEXT PRIMARY KEY, provider TEXT, handle TEXT, created_at INT);
     CREATE TABLE IF NOT EXISTS project(
       id TEXT PRIMARY KEY, owner TEXT, name TEXT, repo_url TEXT, head_from TEXT, head_to TEXT);
     """)
@@ -93,11 +129,12 @@ class H(BaseHTTPRequestHandler):
     def body(self):
         return json.loads(self.raw() or b"{}")
     def auth_handle(self, c):
-        auth = self.headers.get("Authorization", "")
-        if not auth.startswith("Bearer "): return None
-        th = hashlib.sha256(auth[7:].encode()).hexdigest()
-        r = c.execute("SELECT handle FROM user WHERE token_hash=?", (th,)).fetchone()
+        handle = (self.headers.get("X-Handle") or "").strip().lower()
+        if not handle: return None
+        r = c.execute("SELECT handle FROM user WHERE handle=?", (handle,)).fetchone()
         return r["handle"] if r else None
+    def redirect(self, location):
+        self.send_response(302); self.send_header("Location", location); self.end_headers()
 
     def do_GET(self):
         with _LOCK:
@@ -114,6 +151,41 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html"); self.send_header("Content-Length", str(len(body)))
             self.end_headers(); self.wfile.write(body); return
         if p == ["health"]: return self.send_json(200, {"ok": True})
+        if len(p) == 3 and p[:2] == ["v1", "handles"]:
+            handle = p[2].lower()
+            taken = c.execute("SELECT 1 FROM user WHERE handle=?", (handle,)).fetchone()
+            valid = bool(re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,30}", handle))
+            return self.send_json(200, {"handle": handle, "valid": valid, "available": valid and not taken})
+        if len(p) == 4 and p[:3] == ["v1", "auth", "github"] or len(p) == 4 and p[:3] == ["v1", "auth", "slack"]:
+            provider = p[2]; cfg = oauth_config(provider)
+            from urllib.parse import parse_qs as _pq, quote as _q
+            qs = _pq(parsed.query)
+            if p[3] == "start":
+                handle = (qs.get("handle", [""])[0]).strip().lower()
+                if not c.execute("SELECT 1 FROM user WHERE handle=?", (handle,)).fetchone():
+                    return self.redirect("/settings?oauth=pick_handle_first")
+                if not cfg["client_id"]:
+                    return self.redirect("/settings?oauth=" + provider + "_not_configured")
+                state = secrets.token_urlsafe(24)
+                c.execute("INSERT INTO oauth_state VALUES (?,?,?,?)", (state, provider, handle, int(time.time()))); c.commit()
+                if provider == "github":
+                    loc = cfg["base"] + "/login/oauth/authorize?client_id=" + cfg["client_id"] + "&scope=read:user&state=" + state + "&redirect_uri=" + _q(oauth_redirect(provider), safe="")
+                else:
+                    loc = cfg["base"] + "/openid/connect/authorize?scope=openid%20profile&response_type=code&client_id=" + cfg["client_id"] + "&state=" + state + "&redirect_uri=" + _q(oauth_redirect(provider), safe="")
+                return self.redirect(loc)
+            if p[3] == "callback":
+                state = qs.get("state", [""])[0]; code = qs.get("code", [""])[0]
+                row = c.execute("SELECT * FROM oauth_state WHERE state=? AND provider=?", (state, provider)).fetchone()
+                if not row or int(time.time()) - row["created_at"] > 600: return self.redirect("/settings?oauth=bad_state")
+                c.execute("DELETE FROM oauth_state WHERE state=?", (state,)); c.commit()
+                try: login, ext_id = oauth_identity(provider, code)
+                except Exception: return self.redirect("/settings?oauth=" + provider + "_failed")
+                handle = row["handle"]
+                if provider == "github":
+                    c.execute("INSERT INTO link VALUES (?,?,(SELECT slack_user_id FROM link WHERE handle=?)) ON CONFLICT(handle) DO UPDATE SET github_login=excluded.github_login", (handle, login, handle))
+                else:
+                    c.execute("INSERT INTO link VALUES (?,(SELECT github_login FROM link WHERE handle=?),?) ON CONFLICT(handle) DO UPDATE SET slack_user_id=excluded.slack_user_id", (handle, handle, ext_id))
+                c.commit(); return self.redirect("/settings?oauth=" + provider + "_linked")
         if p == ["v1", "users"]:
             out = []
             for u in c.execute("SELECT handle,is_public FROM user WHERE is_public=1"):
@@ -214,23 +286,21 @@ class H(BaseHTTPRequestHandler):
     def _post(self):
         p = urlparse(self.path).path.strip("/").split("/"); c = db()
         if p == ["v1", "auth", "signin"]:
-            d = self.body(); handle = (d.get("handle") or "").strip(); token = d.get("token") or ""
-            u = c.execute("SELECT handle, token_hash, is_public FROM user WHERE handle=?", (handle,)).fetchone()
-            if not u or not hmac.compare_digest(u["token_hash"], hashlib.sha256(token.encode()).hexdigest()):
-                return self.send_json(401, {"error": "wrong handle or token"})
+            d = self.body(); handle = (d.get("handle") or "").strip().lower()
+            u = c.execute("SELECT handle, is_public FROM user WHERE handle=?", (handle,)).fetchone()
+            if not u: return self.send_json(404, {"error": "that handle is not claimed yet. pick it to make it yours"})
             link = c.execute("SELECT github_login, slack_user_id FROM link WHERE handle=?", (handle,)).fetchone()
             return self.send_json(200, {"handle": handle, "is_public": bool(u["is_public"]),
                 "github_login": link["github_login"] if link else None, "slack_user_id": link["slack_user_id"] if link else None,
                 **stats_for(c, user=handle)})
         if p == ["v1", "users"]:
-            d = self.body(); handle = (d.get("handle") or "").strip()
-            if not handle: return self.send_json(400, {"error": "handle required"})
-            token = secrets.token_urlsafe(24)
+            d = self.body(); handle = (d.get("handle") or "").strip().lower()
+            if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{1,30}", handle):
+                return self.send_json(400, {"error": "handles are 2-31 chars: lowercase letters, numbers, - and _"})
             try:
-                c.execute("INSERT INTO user VALUES (?,?,?,?)", (handle, hashlib.sha256(token.encode()).hexdigest(),
-                          0 if d.get("is_public") is False else 1, int(time.time()))); c.commit()
-            except sqlite3.IntegrityError: return self.send_json(409, {"error": "handle taken"})
-            return self.send_json(201, {"handle": handle, "token": token, "is_public": d.get("is_public") is not False})
+                c.execute("INSERT INTO user VALUES (?,?,?,?)", (handle, "", 0 if d.get("is_public") is False else 1, int(time.time()))); c.commit()
+            except sqlite3.IntegrityError: return self.send_json(409, {"error": "handle taken, pick another"})
+            return self.send_json(201, {"handle": handle, "is_public": d.get("is_public") is not False})
         if len(p) == 4 and p[:2] == ["v1", "users"] and p[3] in ("github", "slack"):
             d = self.body(); handle = p[2]
             if not c.execute("SELECT 1 FROM user WHERE handle=?", (handle,)).fetchone(): return self.send_json(404, {"error": "user not found"})

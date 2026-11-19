@@ -29,17 +29,17 @@ class TestPagesDaemon(unittest.TestCase):
             s, html = req(self.port, "GET", path)
             self.assertEqual(s, 200, path); self.assertIn(needle, html)
         s, html = req(self.port, "GET", "/settings")
-        for needle in ("create account", "sign in", "link github", "link slack", "GITHUB_WEBHOOK_SECRET", "SLACK_SIGNING_SECRET"):
+        for needle in ("claim handle", "sign in", "sign in with github", "sign in with slack", "GITHUB_WEBHOOK_SECRET", "SLACK_SIGNING_SECRET"):
             self.assertIn(needle, html)
 
     def test_signin_flow(self):
         s, u = req(self.port, "POST", "/v1/users", {"handle": "signinuser"})
-        self.assertEqual(s, 201); token = u["token"]
-        self.assertEqual(req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser", "token": "wrong"})[0], 401)
-        s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser", "token": token})
+        self.assertEqual(s, 201); self.assertNotIn("token", u)
+        self.assertEqual(req(self.port, "POST", "/v1/auth/signin", {"handle": "ghostuser"})[0], 404)
+        s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})
         self.assertEqual(s, 200); self.assertEqual(p["handle"], "signinuser")
         req(self.port, "POST", "/v1/users/signinuser/github", {"github_login": "octocat"})
-        s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser", "token": token})
+        s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})
         self.assertEqual(p["github_login"], "octocat")
 
     def test_helper_lifecycle(self):

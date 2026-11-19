@@ -26,9 +26,12 @@ class TestFinal(unittest.TestCase):
     @classmethod
     def tearDownClass(cls): cls.proc.terminate()
 
-    def test_01_account_public_by_default_and_token(self):
+    def test_01_handle_only_account(self):
         s, u = req("POST", self.port, "/v1/users", {"handle": "rowan"})
-        self.assertEqual(s, 201); self.assertTrue(u["token"]); self.__class__.token = u["token"]
+        self.assertEqual(s, 201); self.assertNotIn("token", u); self.__class__.handle = "rowan"
+        self.assertEqual(req("POST", self.port, "/v1/users", {"handle": "Bad Handle"})[0], 400)
+        s, av = req("GET", self.port, "/v1/handles/rowan"); self.assertFalse(av["available"])
+        s, av = req("GET", self.port, "/v1/handles/free-handle"); self.assertTrue(av["available"])
         s, p = req("GET", self.port, "/v1/users/rowan")
         self.assertEqual(s, 200); self.assertTrue(p["is_public"])
         s, _ = req("POST", self.port, "/v1/users", {"handle": "rowan"}); self.assertEqual(s, 409)
@@ -39,7 +42,7 @@ class TestFinal(unittest.TestCase):
         self.assertNotIn("shy", [u["handle"] for u in req("GET", self.port, "/v1/users")[1]["users"]])
 
     def test_03_project_and_git_link(self):
-        h = {"Authorization": f"Bearer {self.token}"}
+        h = {"X-Handle": self.handle}
         s, p = req("POST", self.port, "/v1/projects", {"id": "cs2-browser", "name": "CS2 Browser Port", "repo_url": "https://github.com/example/cs2"}, headers=h)
         self.assertEqual(s, 201); self.assertEqual(p["owner"], "rowan")
         s, g = req("POST", self.port, "/v1/projects/cs2-browser/git", {"repo_url": "https://github.com/example/cs2", "head_from": "aaa", "head_to": "bbb"})
@@ -55,7 +58,7 @@ class TestFinal(unittest.TestCase):
         sys.path.insert(0, str(ROOT/"src")); import verify
         prev = verify.GENESIS
         for b in buckets: b["prev_hash"] = prev; b["hash"] = verify.bucket_hash(b); prev = b["hash"]
-        s, _ = req("POST", self.port, "/v1/buckets/batch", {"buckets": buckets}, {"Authorization": f"Bearer {self.token}"})
+        s, _ = req("POST", self.port, "/v1/buckets/batch", {"buckets": buckets}, {"X-Handle": self.handle})
         self.assertEqual(s, 201)
         s, sse = req("GET", self.port, "/v1/projects/cs2-browser/stream?once=1")
         self.assertIn("data:", sse); self.assertIn('"weighted_hours": 0.25', sse)

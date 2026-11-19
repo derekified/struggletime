@@ -5,16 +5,21 @@ gracefully: configure nothing and everything still runs.
 
 ## github
 
-### link a user
+### connect with oauth
 
-dashboard form, or:
+1. github → settings → developer settings → oauth apps → new oauth app
+2. authorization callback url: `https://your-server/v1/auth/github/callback`
+   (locally: `http://127.0.0.1:18765/v1/auth/github/callback`)
+3. start the server with `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`
+   (env, `.env`, or the platform secret store — never committed)
+4. in struggletime: settings → claim/sign in with your handle →
+   "sign in with github". you are redirected to github, approve, and
+   land back on settings linked.
 
-```bash
-curl -X POST localhost:18765/v1/users/you/github \
-  -H 'Content-Type: application/json' -d '{"github_login":"your-name"}'
-```
-
-shown on your public profile and in the builders list.
+the server exchanges the one-time code, reads your github login, and
+discards the oauth token. only the username is stored. the manual
+endpoint (`POST /v1/users/{handle}/github`) still exists for tests and
+automation. shown on your public profile and in the builders list.
 
 ### repo webhooks (push → commit anchors)
 
@@ -47,12 +52,17 @@ the server. new submissions and finished reviews post to that channel.
 not set? the same messages queue locally and stay readable at
 `GET /v1/integrations/events`. nothing is silently dropped either way.
 
-### slash command: /struggletime stats
+### connect with oauth + slash command
 
-1. create a slack app → slash commands → `/struggletime`
+for identity: slack app → oauth & permissions → redirect url
+`https://your-server/v1/auth/slack/callback`, then start the server
+with `SLACK_CLIENT_ID` + `SLACK_CLIENT_SECRET`. in struggletime:
+settings → "sign in with slack" → approve on slack → back, linked.
+the code exchange happens server-side; only your slack user id is kept.
+
+1. in the same slack app: slash commands → `/struggletime`
 2. request url: `https://your-server/v1/integrations/slack/command`
-3. link yourself once (dashboard form or API):
-   `POST /v1/users/you/slack {"slack_user_id":"U0123ABCD"}`
+3. (automation fallback: `POST /v1/users/you/slack {"slack_user_id":"U0123ABCD"}`)
 4. start the server with `SLACK_SIGNING_SECRET=<signing secret from
    the app's basic information page>`
 
