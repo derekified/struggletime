@@ -2,99 +2,105 @@
 <html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StruggleTime</title>
 <style>
-:root{--red:#ec3750;--ink:#1f2d3d;--mut:#8492a6;--line:#e0e6ed;--bg:#f9fafc;--card:#fff;--orange:#ff8c37;--green:#33d6a6}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,"Segoe UI",sans-serif}
-a{color:var(--red)}button,input,select{font:inherit}
-header{background:#fff;border-bottom:1px solid var(--line)}
-.bar{max-width:1024px;margin:0 auto;padding:14px 20px;display:flex;align-items:center;gap:22px}
-.logo{font-weight:800;font-size:20px;color:var(--ink);text-decoration:none}.logo span{color:var(--red)}
-nav{display:flex;gap:18px;margin-left:auto;align-items:center}nav a{color:var(--mut);text-decoration:none;font-size:15px}nav a:hover{color:var(--ink)}
-.live{color:#0a9d6c;font-size:14px}
-main{max-width:1024px;margin:0 auto;padding:28px 20px 60px}
-h1{font-size:28px;margin:0 0 4px}h2{font-size:20px;margin:30px 0 8px}
-.sub{color:var(--mut);font-size:14px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:12px;margin-top:20px}
-.stat,.card{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:16px}
-.stat .n{font-size:28px;font-weight:800}.stat .l{color:var(--mut);font-size:13px}
-.cols{display:grid;grid-template-columns:1.6fr 1fr;gap:16px}@media(max-width:800px){.cols{grid-template-columns:1fr}}
-table{width:100%;border-collapse:collapse;font-size:14px}th,td{padding:9px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-th{color:var(--mut);font-weight:600;font-size:13px}tr:last-child td{border-bottom:0}
-.pill{display:inline-block;padding:0 8px;border:1px solid var(--line);border-radius:999px;font-size:12px;color:var(--mut)}
-.pill.ok{color:#0a7a55;border-color:#bfe8d8;background:#eefaf5}.pill.bad{color:#b4233a;border-color:#f3c2cb;background:#fdf0f2}
-.flag{display:block;color:#b7791f;font-size:13px}
-.builder{display:flex;gap:10px;align-items:baseline;padding:9px 0;border-bottom:1px solid var(--line)}.builder:last-child{border:0}.builder b{margin-right:auto}
-.review{padding:12px 0;border-bottom:1px solid var(--line)}.review:last-child{border:0}
-button{background:var(--red);color:#fff;border:0;border-radius:8px;padding:7px 14px;font-weight:700;cursor:pointer}
-input,select{background:#fff;color:var(--ink);border:1px solid var(--line);border-radius:8px;padding:7px 10px}
-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}code{background:#f1f5f9;padding:1px 6px;border-radius:6px;font-size:13px}
-.empty{color:var(--mut)}.legend{color:var(--mut);font-size:13px;margin-top:6px}
-footer{margin-top:40px;color:var(--mut);font-size:14px;border-top:1px solid var(--line);padding-top:16px}
+:root{--bg:#0d0c0a;--panel:#191817;--panel2:#211f1d;--line:#2e2b28;--ink:#f2efe9;--mut:#a39e93;--lime:#d7ff6a;--orange:#ff8c37;--grey:#57534c}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Spline Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
+a{color:var(--lime)}button,input,select{font:inherit}
+.top{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line)}
+.mark{width:30px;height:30px;border-radius:50%;background:var(--lime);color:#111;display:grid;place-items:center;font-weight:900;font-size:16px}
+.word{font-size:19px;font-weight:700}.top nav{margin-left:auto;display:flex;gap:20px;align-items:center}
+.top nav a{color:var(--mut);text-decoration:none;font-size:14px}.top nav a:hover{color:var(--ink)}
+.live{font-size:13px;color:var(--lime)}
+.layout{display:grid;grid-template-columns:190px 1fr;max-width:1180px;margin:0 auto}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.side{display:none}}
+.side{padding:22px 14px;border-right:1px solid var(--line);min-height:calc(100vh - 60px)}
+.side a{display:block;color:var(--mut);text-decoration:none;padding:7px 12px;border-radius:8px;font-size:14px;margin-bottom:2px}
+.side a.on{background:var(--lime);color:#111;font-weight:700}.side a:hover:not(.on){color:var(--ink)}
+.side .who{padding:4px 12px 16px}.side .who b{font-size:15px}.side .who div{color:var(--orange);font-size:13px}
+main{padding:26px 28px 60px;min-width:0}
+h1{font-size:24px;margin:2px 0 2px}h2{font-size:17px;margin:26px 0 8px}
+.sub{color:var(--mut);font-size:13.5px}.small-i{font-style:italic;color:var(--mut);font-size:13px}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 12px;align-items:center}
+.filters label{font-size:11px;color:var(--mut);display:block}
+select,input{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:14px}
+.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
+.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
+.stat .n{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums}.stat .l{color:var(--mut);font-size:12.5px}
+.cols{display:grid;grid-template-columns:1.6fr 1fr;gap:12px}@media(max-width:860px){.cols{grid-template-columns:1fr}}
+.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
+th{color:var(--mut);font-weight:500;font-size:12px}tr:last-child td{border-bottom:0}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+.tag{font-size:12px;color:var(--mut)}.tag.ok{color:var(--lime)}.tag.bad{color:var(--orange)}
+.flag{display:block;color:var(--orange);font-size:12.5px}
+.builder{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.builder:last-child{border:0}
+.builder .bar{flex:1;background:var(--panel2);height:5px;border-radius:99px;margin-top:8px}.builder .bar i{display:block;height:100%;background:var(--lime);border-radius:99px}
+.review{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}.review:last-child{border:0}
+button{background:var(--lime);color:#111;border:0;border-radius:7px;padding:7px 13px;font-weight:700;cursor:pointer;font-size:14px}
+form{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--mut)}
+.empty{color:var(--mut)}footer{margin-top:36px;color:var(--mut);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
 </style></head><body>
-<header><div class="bar">
-  <a class="logo" href="/">struggle<span>time</span></a>
-  <nav><a href="#projects">projects</a><a href="#builders">builders</a><a href="#review">review</a><a href="#integrations">integrations</a><span class="live" id="live-txt">● connecting</span></nav>
-</div></header>
-<main>
-  <h1>dashboard</h1>
-  <div class="sub">time spent actually struggling with ai, tracked passively. updates live.</div>
+<div class="top">
+  <div class="mark">s</div><div class="word">StruggleTime</div>
+  <nav><a href="#friction">friction</a><a href="#projects">projects</a><a href="#integrations">integrations</a><span class="live" id="live-txt">● connecting</span></nav>
+</div>
+<div class="layout">
+  <aside class="side">
+    <div class="who"><b id="who-name">@builder</b><div id="who-streak">keep going</div></div>
+    <a class="on" href="#">home</a><a href="#projects">projects</a><a href="#builders">builders</a><a href="#review">review queue</a><a href="#integrations">integrations</a><a href="#how">how it works</a>
+  </aside>
+  <main>
+    <div class="small-i">no screenshots, no keystrokes, just the loop</div>
+    <h1>keep track of your struggle time</h1>
+    <div class="sub">time spent actually struggling with ai, tracked passively while you code in your terminal. updates live.</div>
 
-  <div class="stats">
-    <div class="stat"><div class="n" id="m-weighted">…</div><div class="l">weighted hours (all time)</div></div>
-    <div class="stat"><div class="n" id="m-raw">…</div><div class="l">raw hours tracked</div></div>
-    <div class="stat"><div class="n" id="m-trust">…</div><div class="l">weighted ÷ raw</div></div>
-    <div class="stat"><div class="n" id="m-pending">…</div><div class="l">submissions waiting for review</div></div>
-  </div>
-  <div class="sub" id="m-scale" style="margin-top:10px"></div>
-
-  <h2 id="friction">structural friction timeline</h2>
-  <div class="sub">each bar is 5 minutes. tall means failure, retry and follow-through. ◆ is a commit.</div>
-  <div class="card" style="margin-top:10px">
-    <label class="sub" for="proj-sel">project </label><select id="proj-sel"></select> <span class="sub" id="fr-meta"></span>
-    <div id="fr-chart"><p class="empty">no data yet.</p></div>
-    <div class="legend">dark bar = agent dump that was discounted · evidence is metadata only, no code or screenshots</div>
-  </div>
-
-  <div class="cols">
-    <div><h2 id="projects">projects</h2><div class="card"><table>
-      <thead><tr><th>project</th><th>weighted</th><th>raw</th><th>flags</th></tr></thead><tbody id="proj-rows"><tr><td colspan="4" class="empty">loading…</td></tr></tbody>
-    </table></div></div>
-    <div><h2 id="builders">builders</h2><div class="card" id="builder-list"><p class="empty">loading…</p></div></div>
-  </div>
-
-  <h2 id="review">review queue</h2>
-  <div class="card" id="review-list"><p class="empty">nothing submitted yet.</p></div>
-
-  <h2>how a minute earns its weight</h2>
-  <div class="card">
-    <p style="margin:4px 0"><b>1. steer</b> — prompt or edit. &nbsp;<b>2. check</b> — run the test or build, failing is fine. &nbsp;<b>3. follow through</b> — edit again or commit. close that loop and the minute counts in full. leave an agent running unattended and it mostly doesn't.</p>
-  </div>
-
-  <h2 id="integrations">integrations</h2>
-  <div class="cols">
-    <div class="card">
-      <b>github</b>
-      <p class="sub">link your github to a builder, and point your repo webhook at the url below. pushes show up as commit anchors, checked against your buckets.</p>
-      <form id="gh-form"><input id="gh-handle" placeholder="struggletime handle" required><input id="gh-login" placeholder="github username" required><button>link github</button></form>
-      <p class="sub" id="gh-out"></p>
-      <p class="sub">webhook: <code>post /v1/integrations/github/webhook</code> (signed when <code>github_webhook_secret</code> is set)<br>
-      repo info: <code>get /v1/projects/{id}/github</code></p>
+    <div class="filters">
+      <span><label for="proj-sel">project</label><select id="proj-sel"></select></span>
+      <span class="sub" id="fr-meta"></span>
     </div>
-    <div class="card">
-      <b>slack</b>
-      <p class="sub">new submissions and reviews post to slack when <code>slack_webhook_url</code> is set (they queue under integration events until then). link your slack id to use the slash command.</p>
-      <form id="sl-form"><input id="sl-handle" placeholder="struggletime handle" required><input id="sl-id" placeholder="slack user id (u…)" required><button>link slack</button></form>
-      <p class="sub" id="sl-out"></p>
-      <p class="sub">slash command: <code>/struggletime stats</code> → <code>post /v1/integrations/slack/command</code> (signed when <code>slack_signing_secret</code> is set)<br>
-      queued events: <code>get /v1/integrations/events</code></p>
-    </div>
-  </div>
 
-  <footer>
-    struggletime is open source under agplv3. logged hours stay private, submitted hours are auditable.
-    an hour submitted should mean an hour actually struggled toward something shipped.
-    <div id="foot-note"></div>
-  </footer>
-</main>
+    <div class="stats">
+      <div class="stat"><div class="n" id="m-weighted">…</div><div class="l">weighted time, all projects</div></div>
+      <div class="stat"><div class="n" id="m-raw">…</div><div class="l">raw time tracked</div></div>
+      <div class="stat"><div class="n" id="m-trust">…</div><div class="l">counted after weighting</div></div>
+      <div class="stat"><div class="n" id="m-pending">…</div><div class="l">waiting for review</div></div>
+    </div>
+    <div class="sub" id="m-scale" style="margin-top:8px"></div>
+
+    <h2 id="friction">structural friction timeline</h2>
+    <div class="panel"><div id="fr-chart"><p class="empty">no data yet. run the daemon, break a build, fix it.</p></div>
+    <div class="sub">each bar is 5 minutes of metadata. tall = failures, retries, follow-through. ◆ = commit. grey = agent dump, discounted.</div></div>
+
+    <div class="cols">
+      <div><h2 id="projects">projects</h2><div class="panel" style="padding-top:6px"><table>
+        <thead><tr><th>project</th><th class="n">weighted</th><th class="n">raw</th><th>flags</th></tr></thead><tbody id="proj-rows"><tr><td colspan="4" class="empty">loading…</td></tr></tbody>
+      </table></div></div>
+      <div><h2 id="builders">builders</h2><div class="panel" id="builder-list"><p class="empty">loading…</p></div></div>
+    </div>
+
+    <h2 id="review">review queue</h2>
+    <div class="panel" id="review-list"><p class="empty">nothing submitted yet. logged time stays private until you submit it.</p></div>
+
+    <h2 id="how">how a minute earns its weight</h2>
+    <div class="panel" style="font-size:14px">steer (prompt or edit) → check (run it, failing counts) → follow through (edit again or commit). close the loop and the minute counts fully. leave an agent running on its own and it counts at 0.2×. go silent to debug and it fades out over 5 to 12 minutes instead of vanishing.</div>
+
+    <h2 id="integrations">integrations</h2>
+    <div class="cols">
+      <div class="panel"><b>github</b>
+        <div class="sub">link a github username, then send repo pushes to the webhook. they land here as commit anchors and get checked against your tracked time.</div>
+        <form id="gh-form"><input id="gh-handle" placeholder="your handle" required><input id="gh-login" placeholder="github username" required><button>link</button></form>
+        <div class="sub" id="gh-out"></div>
+        <div class="sub" style="margin-top:8px">webhook <code>POST /v1/integrations/github/webhook</code><br>repo <code>GET /v1/projects/{id}/github</code></div>
+      </div>
+      <div class="panel"><b>slack</b>
+        <div class="sub">submissions and reviews get posted to slack (queued here until a webhook is configured). link your slack id for the stats command.</div>
+        <form id="sl-form"><input id="sl-handle" placeholder="your handle" required><input id="sl-id" placeholder="slack user id" required><button>link</button></form>
+        <div class="sub" id="sl-out"></div>
+        <div class="sub" style="margin-top:8px">try <code>/struggletime stats</code><br>events <code>GET /v1/integrations/events</code></div>
+      </div>
+    </div>
+
+    <footer>struggletime · open source under agplv3 · logged time is private, submitted time is auditable · <span id="foot-note"></span></footer>
+  </main>
+</div>
 <script>
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function j(u,o){const r=await fetch(u,o);return [r.status,await r.json().catch(()=>({}))]}
@@ -104,32 +110,33 @@ async function refresh(){
   if(os!==200){$('live-txt').textContent='● offline';return}
   $('live-txt').textContent='● live';
   const wh=ov.weighted_hours||0, raw=(ov.raw_secs||0)/3600;
-  $('m-weighted').textContent=fmt(wh)+' h'; $('m-raw').textContent=fmt(raw)+' h';
+  $('m-weighted').textContent=fmt(wh)+'h'; $('m-raw').textContent=fmt(raw)+'h';
   $('m-trust').textContent=raw>0?Math.round(wh/raw*100)+'%':'—'; $('m-pending').textContent=ov.pending_reviews||0;
   $('m-scale').textContent=(ov.users||0)+' builders · '+(ov.projects_count||0)+' projects · '+(ov.buckets||0)+' buckets · formula v0.1.0-alpha';
   $('foot-note').textContent=Object.entries(ov.by_state||{}).map(([k,v])=>k.replaceAll('_',' ').toLowerCase()+' ×'+v).join(' · ');
+  const users=(ur.users||[]).slice().sort((a,b)=>b.weighted_hours-a.weighted_hours);
+  if(users.length){$('who-name').textContent='@'+users[0].handle;$('who-streak').textContent='🔥 '+(users[0].current_streak_days||0)+' day streak · '+fmt(users[0].weighted_hours)+'h weighted'}
   const projs=pr.projects||[], withData=projs.filter(p=>p.buckets>0);
   if(!selected&&withData.length)selected=withData[0].id;
   $('proj-sel').innerHTML=withData.length?withData.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name||p.id)}</option>`).join(''):'<option value="">no projects yet</option>';
   $('proj-rows').innerHTML=projs.length?projs.map(p=>{
     const flags=(p.flags||[]).map(f=>`<span class="flag">⚑ ${esc(f)}</span>`).join('');
-    const gh=p.repo_url?` · <a href="${esc(p.repo_url)}" target="_blank" rel="noreferrer">github</a>`:'';
-    return `<tr><td><b>${esc(p.name||p.id)}</b><br><span class="sub">${esc(p.id)}${p.owner?' · @'+esc(p.owner):''}${gh}</span><br>${Object.entries(p.by_state||{}).map(([k,v])=>`<span class="pill ${k.includes('DUMP')?'bad':k.includes('LOOP')?'ok':''}">${esc(k.replaceAll('_',' ').toLowerCase())} ×${v}</span>`).join(' ')}</td><td><b>${fmt(p.weighted_hours)} h</b></td><td>${fmt((p.raw_secs||0)/3600)} h</td><td>${flags||'<span class="sub">none</span>'}</td></tr>`}).join(''):'<tr><td colspan="4" class="empty">no projects yet.</td></tr>';
+    return `<tr><td><b>${esc(p.name||p.id)}</b><br><span class="sub">${p.owner?'@'+esc(p.owner)+' · ':''}${p.repo_url?`<a href="${esc(p.repo_url)}" target="_blank" rel="noreferrer">github</a>`:'no repo linked'}</span><br>${Object.entries(p.by_state||{}).map(([k,v])=>`<span class="tag ${k.includes('DUMP')?'bad':k.includes('LOOP')?'ok':''}">${esc(k.replaceAll('_',' ').toLowerCase())} ×${v}</span>`).join(' · ')}</td><td class="n"><b>${fmt(p.weighted_hours)}h</b></td><td class="n">${fmt((p.raw_secs||0)/3600)}h</td><td>${flags||'<span class="sub">none</span>'}</td></tr>`}).join(''):'<tr><td colspan="4" class="empty">no projects yet.</td></tr>';
   await drawFriction();
-  const users=(ur.users||[]).slice().sort((a,b)=>b.weighted_hours-a.weighted_hours);
-  $('builder-list').innerHTML=users.length?users.map(u=>`<div class="builder"><span><b>@${esc(u.handle)}</b><br><span class="sub">${u.active_days} active days · streak ${u.current_streak_days}d${u.github_login?' · github.com/'+esc(u.github_login):''}</span></span><span>${fmt(u.weighted_hours)} h</span></div>`).join(''):'<p class="empty">no builders yet.</p>';
+  const max=users.length?users[0].weighted_hours||1:1;
+  $('builder-list').innerHTML=users.length?users.map(u=>`<div class="builder"><span style="min-width:110px"><b>@${esc(u.handle)}</b><br><span class="sub">${u.active_days}d active · 🔥 ${u.current_streak_days}${u.github_login?'<br>github.com/'+esc(u.github_login):''}</span></span><span class="bar"><i style="width:${Math.max(3,u.weighted_hours/max*100)}%"></i></span><b>${fmt(u.weighted_hours)}h</b></div>`).join(''):'<p class="empty">no builders yet.</p>';
   const subs=sr.submissions||[];
-  $('review-list').innerHTML=subs.length?subs.map(s=>`<div class="review"><b>${esc(s.project_id)}</b> <span class="pill ${s.status=='approved'?'ok':s.status=='pending'?'':'bad'}">${esc(s.status)}</span>
-    <span class="sub">by ${esc(s.user_id||'unknown')} · claimed ${fmt(s.claimed_weighted_hours)} h · “${esc(s.ai_declaration)}”</span>${(s.flags||[]).map(f=>`<span class="flag">⚑ ${esc(f)}</span>`).join('')}
-    ${s.status=='pending'?`<form onsubmit="return review(event,'${s.id}')"><input name="amt" type="number" min="0" step="0.01" value="${fmt(s.claimed_weighted_hours)}" style="width:90px" aria-label="approved hours">
+  $('review-list').innerHTML=subs.length?subs.map(s=>`<div class="review"><b>${esc(s.project_id)}</b> <span class="tag ${s.status=='approved'?'ok':s.status=='pending'?'':'bad'}">${esc(s.status)}</span>
+    <span class="sub"> by ${esc(s.user_id||'unknown')} · claimed ${fmt(s.claimed_weighted_hours)}h · “${esc(s.ai_declaration)}”</span>${(s.flags||[]).map(f=>`<span class="flag">⚑ ${esc(f)}</span>`).join('')}
+    ${s.status=='pending'?`<form onsubmit="return review(event,'${s.id}')"><input name="amt" type="number" min="0" step="0.01" value="${fmt(s.claimed_weighted_hours)}" style="width:84px" aria-label="approved hours">
     <select name="why"><option value="NONE">approve fully</option><option value="UNATTENDED_AGENT_DUMP">unattended agent dump</option><option value="IDLE_INFLATION">idle inflation</option><option value="NO_TEST_ITERATION">no test iteration</option><option value="BOILERPLATE_HEAVY">boilerplate heavy</option><option value="CHAIN_BROKEN">chain broken</option><option value="GIT_MISMATCH">git mismatch</option></select>
     <button>save review</button></form>`:''}</div>`).join(''):'<p class="empty">nothing submitted yet.</p>';
 }
 async function drawFriction(){
   if(!selected)return; const [s,fr]=await j('/v1/projects/'+encodeURIComponent(selected)+'/friction'); if(s!==200)return;
-  $('fr-meta').textContent='· evidence '+(fr.evidence_bytes/1024).toFixed(1)+' kb · '+fr.commit_anchors.length+' commits';
+  $('fr-meta').textContent='evidence '+(fr.evidence_bytes/1024).toFixed(1)+' kb of metadata · '+fr.commit_anchors.length+' commits in range';
   const w=Math.max(560,fr.timeline.length*52),h=120,bw=32;
-  $('fr-chart').innerHTML=`<svg width="100%" viewBox="0 0 ${w} ${h+30}" role="img" aria-label="friction timeline">`+fr.timeline.map((t,i)=>{const bh=Math.max(3,t.friction*95);return `<rect x="${i*52+8}" y="${h-bh}" width="${bw}" height="${bh}" rx="4" fill="${t.state=='OPEN_LOOP_AGENT_DUMP'?'#8492a6':'#ec3750'}"><title>${esc(t.state)} · friction ${t.friction} · weight ${t.weight}</title></rect>`+(t.commits?`<text x="${i*52+19}" y="${h+16}" fill="#0a7a55" font-size="12">◆</text>`:'')+`<text x="${i*52+8}" y="${h+27}" fill="#8492a6" font-size="8">${esc((t.head_commit||'').slice(0,6))}</text>`}).join('')+`</svg>`;
+  $('fr-chart').innerHTML=`<svg width="100%" viewBox="0 0 ${w} ${h+30}" role="img" aria-label="friction timeline">`+fr.timeline.map((t,i)=>{const bh=Math.max(3,t.friction*95);return `<rect x="${i*52+8}" y="${h-bh}" width="${bw}" height="${bh}" rx="4" fill="${t.state=='OPEN_LOOP_AGENT_DUMP'?'#57534c':'#d7ff6a'}"><title>${esc(t.state)} · friction ${t.friction} · weight ${t.weight}</title></rect>`+(t.commits?`<text x="${i*52+19}" y="${h+16}" fill="#d7ff6a" font-size="12">◆</text>`:'')+`<text x="${i*52+8}" y="${h+27}" fill="#a39e93" font-size="8">${esc((t.head_commit||'').slice(0,6))}</text>`}).join('')+`</svg>`;
 }
 window.review=async(e,id)=>{e.preventDefault();const f=e.target,amt=parseFloat(f.amt.value),why=f.why.value;
   const [s,r]=await j('/v1/submissions/'+id+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewer_id:'dashboard',approved_weighted_secs:Math.round(amt*3600),reason_code:why})});
