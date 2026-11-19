@@ -87,8 +87,38 @@ for non-AI coding.
 - **Accuracy:** weighted vs. hand-reviewed hours on a labelled sample
 - **Cost:** $/MAU and $/tracked hour at StruggleTime scale
 
-## Biggest risks
+## Biggest risks — and the architecture that neutralises them
 
-1. "Productive struggle" resists any formula → transparent rules + reviewer feedback loop.
-2. Heartbeats can be faked → git/test corroboration, not surveillance.
-3. Harness fragmentation → git/terminal fallback counts any tool from day one.
+Framing: telemetry + cryptographic provenance + causal verification,
+not a stopwatch. Full detail in `docs/architecture.md`.
+
+1. **"Productive struggle" resists any formula** → causal state machine:
+   `(prompt|edit) → (test|build) → (follow-up edit|commit)` = 1.0×,
+   failure→fix→pass = 1.0×, unattended agent dump = 0.20×, idle = 0×.
+   Versioned formula; reviewer deflations require a reason code that
+   tunes the next version. Rules: `weighting/rules-v0.1.0.yaml`,
+   calibration: `weighting/calibration-20.md`.
+2. **Heartbeats can be faked** → hash-chained local ledger
+   (`prev_hash` + monotonic clock + per-install signature) plus git
+   anchors (`head_commit` + diff totals per bucket). Tampering breaks
+   the chain; claimed hours are overlaid on the commit graph at review.
+   Reviewer flags: hours/KLOC, 100%-success executions, AI:human ratio.
+3. **Harness fragmentation** → editor-agnostic daemon core: filesystem
+   watcher + 5-line shell hook (category/duration/exit code only) covers
+   100% of setups; VS Code/Cursor and Claude Code/Codex adapters are
+   thin enrichment only.
+
+Budget stays ~$40–60/mo: client-side 5-min rollup ≈ 0.5 writes/sec at
+109,759 h/mo, single VPS + Postgres, no LLM in the hot path.
+
+## Reference implementation
+
+```bash
+python3 src/verify.py examples/session-closed-loop.json  # 0.25 weighted h, clean chain
+python3 src/verify.py examples/session-open-loop.json    # discounted + flagged
+python3 src/verify.py examples/session-tampered.json     # chain error, exit 1
+python3 -m unittest discover -s tests                    # 4 tests
+```
+
+Schemas: `schemas/local-ledger.sql` (SQLite), `schemas/server.sql`
+(Postgres, partitioned), `schemas/heartbeat.schema.json` (wire v1).

@@ -1,0 +1,31 @@
+[
+  {
+    "v": 1,
+    "bucket_id": "e1bd519f-b6c4-4795-8960-40a283f90c5e",
+    "install_id": "inst_1",
+    "project_id": "proj_1",
+    "repo_remote_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bucket_start_wall": 1760000000,
+    "bucket_secs": 300,
+    "mono_delta_ms": 300000,
+    "counts": {
+      "human_edits": 999,
+      "ai_writes": 0,
+      "prompts": 0,
+      "executions": 1,
+      "exec_failures": 0,
+      "commits": 0,
+      "dwell_diff_secs": 0,
+      "idle_secs": 0
+    },
+    "git": {
+      "head_commit": "abc123",
+      "lines_added": 20,
+      "lines_deleted": 5,
+      "dirty_files": 2
+    },
+    "formula_version": "v0.1.0-alpha",
+    "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "19a3ba73f010bce20ca0d3c72385f31f2c1aa6b66f98c4ebbce47b8380fb3aca"
+  }
+]

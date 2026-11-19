@@ -1,0 +1,59 @@
+formula_version: v0.1.0-alpha
+bucket_secs: 300
+idle_pause_secs: 240
+
+# Per-bucket causal state machine. First matching rule wins.
+# A closed loop = (prompt|human_edit) -> execution -> (follow-up edit|commit)
+states:
+  - id: IDLE
+    when: { idle_secs_gte: 240 }
+    weight: 0.0
+  - id: OPEN_LOOP_AGENT_DUMP
+    when: { ai_writes_gt: 0, human_edits_eq: 0, executions_eq: 0, dwell_diff_secs_lt: 30 }
+    weight: 0.20
+    reviewer_reason: UNATTENDED_AGENT_DUMP
+  - id: STRUGGLE_LOOP
+    when: { exec_failures_gt: 0, executions_gt: 1, any_followup: true }
+    weight: 1.0
+    note: failure -> fix -> re-run is the strongest human-steering signal
+  - id: CLOSED_LOOP
+    when: { any_steering: true, executions_gt: 0, any_followup: true }
+    weight: 1.0
+  - id: AI_REVIEWED
+    when: { ai_writes_gt: 0, dwell_diff_secs_gte: 30, any_followup: true }
+    weight: 0.85
+  - id: HUMAN_UNVERIFIED
+    when: { human_edits_gt: 0 }
+    weight: 0.70
+    reviewer_reason: NO_TEST_ITERATION
+  - id: AI_UNREVIEWED
+    when: { ai_writes_gt: 0 }
+    weight: 0.25
+    reviewer_reason: UNATTENDED_AGENT_DUMP
+  - id: EXEC_ONLY
+    when: { executions_gt: 0 }
+    weight: 0.50
+  - id: FALLBACK
+    when: {}
+    weight: 0.0
+
+reviewer_reason_codes:
+  - UNATTENDED_AGENT_DUMP
+  - IDLE_INFLATION
+  - NO_TEST_ITERATION
+  - BOILERPLATE_HEAVY
+  - CHAIN_BROKEN
+  - GIT_MISMATCH
+  - NONE
+
+outlier_flags:
+  hours_per_kloc: { warn_above: 10, note: "weighted hours / (lines_added+lines_deleted in submission range)" }
+  exec_success_only: { warn_when: "executions >= 5 and exec_failures == 0 and commits == 0" }
+  ai_human_ratio: { warn_above: 5, note: "ai_writes / max(1, human_edits) across submission" }
+  chain_broken: { warn_when: "any prev_hash mismatch or mono_delta regression" }
+  git_mismatch: { warn_when: "claimed lines/commits do not appear between head_from..head_to" }
+
+calibration:
+  labelled_sessions: 20
+  tune_only_on: [labelled_sessions, pilot_100_projects]
+  never_tune_on: unlabelled_production_hours

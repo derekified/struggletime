@@ -1,0 +1,60 @@
+[
+  {
+    "v": 1,
+    "bucket_id": "ce97d1a4-4d62-4ac7-a3a4-63fe74649e97",
+    "install_id": "inst_1",
+    "project_id": "proj_1",
+    "repo_remote_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bucket_start_wall": 1760000000,
+    "bucket_secs": 300,
+    "mono_delta_ms": 300000,
+    "counts": {
+      "human_edits": 0,
+      "ai_writes": 15,
+      "prompts": 0,
+      "executions": 0,
+      "exec_failures": 0,
+      "commits": 1,
+      "dwell_diff_secs": 0,
+      "idle_secs": 0
+    },
+    "git": {
+      "head_commit": "abc123",
+      "lines_added": 420,
+      "lines_deleted": 40,
+      "dirty_files": 2
+    },
+    "formula_version": "v0.1.0-alpha",
+    "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "9278ca1a2b408b9fc05ba3f176fa8b0f080d86c7ac09b943149298dac1446a65"
+  },
+  {
+    "v": 1,
+    "bucket_id": "99f95b49-5c99-417d-af2b-4f28a7f0ecf3",
+    "install_id": "inst_1",
+    "project_id": "proj_1",
+    "repo_remote_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bucket_start_wall": 1760000300,
+    "bucket_secs": 300,
+    "mono_delta_ms": 300000,
+    "counts": {
+      "human_edits": 0,
+      "ai_writes": 12,
+      "prompts": 0,
+      "executions": 0,
+      "exec_failures": 0,
+      "commits": 0,
+      "dwell_diff_secs": 0,
+      "idle_secs": 0
+    },
+    "git": {
+      "head_commit": "abc123",
+      "lines_added": 300,
+      "lines_deleted": 10,
+      "dirty_files": 2
+    },
+    "formula_version": "v0.1.0-alpha",
+    "prev_hash": "9278ca1a2b408b9fc05ba3f176fa8b0f080d86c7ac09b943149298dac1446a65",
+    "hash": "74018e1f79b7e57a4eb9d9980f149c7ec566c509b2df7a44a7d4f84a3002a895"
+  }
+]

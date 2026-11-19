@@ -1,0 +1,89 @@
+[
+  {
+    "v": 1,
+    "bucket_id": "2b1545b6-e1e3-465a-acbd-b88832a083aa",
+    "install_id": "inst_1",
+    "project_id": "proj_1",
+    "repo_remote_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bucket_start_wall": 1760000000,
+    "bucket_secs": 300,
+    "mono_delta_ms": 300000,
+    "counts": {
+      "human_edits": 8,
+      "ai_writes": 0,
+      "prompts": 2,
+      "executions": 2,
+      "exec_failures": 1,
+      "commits": 0,
+      "dwell_diff_secs": 0,
+      "idle_secs": 0
+    },
+    "git": {
+      "head_commit": "abc123",
+      "lines_added": 20,
+      "lines_deleted": 5,
+      "dirty_files": 2
+    },
+    "formula_version": "v0.1.0-alpha",
+    "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "e94c930ccbdd988fb8b174fdec8b43e03360b7742cb40b6fcc7f0132b5f63152"
+  },
+  {
+    "v": 1,
+    "bucket_id": "10995149-11b0-4515-99bc-8c94eb5b4566",
+    "install_id": "inst_1",
+    "project_id": "proj_1",
+    "repo_remote_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bucket_start_wall": 1760000300,
+    "bucket_secs": 300,
+    "mono_delta_ms": 300000,
+    "counts": {
+      "human_edits": 10,
+      "ai_writes": 0,
+      "prompts": 0,
+      "executions": 2,
+      "exec_failures": 0,
+      "commits": 1,
+      "dwell_diff_secs": 0,
+      "idle_secs": 0
+    },
+    "git": {
+      "head_commit": "abc123",
+      "lines_added": 35,
+      "lines_deleted": 8,
+      "dirty_files": 2
+    },
+    "formula_version": "v0.1.0-alpha",
+    "prev_hash": "e94c930ccbdd988fb8b174fdec8b43e03360b7742cb40b6fcc7f0132b5f63152",
+    "hash": "4eb612d462300d78a33658bd8a0da8f995476a0fe00e7f0a9a7f9d5aa7c671d2"
+  },
+  {
+    "v": 1,
+    "bucket_id": "efa9e8a3-56ad-4517-971f-e398ef26cc7b",
+    "install_id": "inst_1",
+    "project_id": "proj_1",
+    "repo_remote_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "bucket_start_wall": 1760000600,
+    "bucket_secs": 300,
+    "mono_delta_ms": 300000,
+    "counts": {
+      "human_edits": 4,
+      "ai_writes": 2,
+      "prompts": 1,
+      "executions": 1,
+      "exec_failures": 0,
+      "commits": 0,
+      "dwell_diff_secs": 90,
+      "idle_secs": 0
+    },
+    "git": {
+      "head_commit": "abc123",
+      "lines_added": 15,
+      "lines_deleted": 3,
+      "dirty_files": 2
+    },
+    "formula_version": "v0.1.0-alpha",
+    "prev_hash": "4eb612d462300d78a33658bd8a0da8f995476a0fe00e7f0a9a7f9d5aa7c671d2",
+    "hash": "3a2a9b0eba43fa8acd92ac1ccd7cd1f1d61208211c795e2dba793a2692292551"
+  }
+]

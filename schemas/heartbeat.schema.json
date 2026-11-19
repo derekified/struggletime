@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.org/struggletime-ai/heartbeat-v1.json",
+  "title": "RollupBucket v1 (wire protocol: one POST per 5-min bucket, batched)",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["v","bucket_id","install_id","project_id","bucket_start_wall","bucket_secs","mono_delta_ms","counts","git","formula_version","prev_hash","hash"],
+  "properties": {
+    "v": {"const": 1},
+    "bucket_id": {"type": "string", "format": "uuid"},
+    "install_id": {"type": "string"},
+    "project_id": {"type": "string", "description": "Local stable id; server maps to projects.id"},
+    "repo_remote_hash": {"type": ["string","null"], "description": "SHA256 of normalized remote URL, never the raw URL if private"},
+    "bucket_start_wall": {"type": "integer", "description": "Unix seconds; display only, never trusted for ordering"},
+    "bucket_secs": {"type": "integer", "enum": [60,300]},
+    "mono_delta_ms": {"type": "integer", "minimum": 0, "description": "Monotonic clock delta since previous bucket; ordering + anti-clock-rollback"},
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["human_edits","ai_writes","prompts","executions","exec_failures","commits","dwell_diff_secs","idle_secs"],
+      "properties": {
+        "human_edits": {"type": "integer", "minimum": 0},
+        "ai_writes": {"type": "integer", "minimum": 0},
+        "prompts": {"type": "integer", "minimum": 0},
+        "executions": {"type": "integer", "minimum": 0},
+        "exec_failures": {"type": "integer", "minimum": 0},
+        "commits": {"type": "integer", "minimum": 0},
+        "dwell_diff_secs": {"type": "integer", "minimum": 0},
+        "idle_secs": {"type": "integer", "minimum": 0}
+      }
+    },
+    "git": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lines_added","lines_deleted","dirty_files"],
+      "properties": {
+        "head_commit": {"type": ["string","null"]},
+        "lines_added": {"type": "integer", "minimum": 0},
+        "lines_deleted": {"type": "integer", "minimum": 0},
+        "dirty_files": {"type": "integer", "minimum": 0}
+      }
+    },
+    "exec_categories": {
+      "type": "array",
+      "items": {"enum": ["git","test_runner","compiler","ai_cli","other"]},
+      "description": "Categories only. Raw commands/args are classified on-device and never sent."
+    },
+    "formula_version": {"type": "string", "pattern": "^v\\d+\\.\\d+\\.\\d+"},
+    "prev_hash": {"type": "string", "pattern": "^[a-f0-9]{64}$"},
+    "hash": {"type": "string", "pattern": "^[a-f0-9]{64}$", "description": "SHA256(canonical_json(bucket_without_hash_and_signature) || prev_hash)"},
+    "signature": {"type": ["string","null"], "description": "Ed25519 signature over hash by per-install key; opaque to weighting"}
+  }
+}
