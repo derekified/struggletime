@@ -22,7 +22,23 @@ ledger, and posts the pending batch if a server is configured.
 
 ## running it
 
-the gui is the normal way. stdlib tkinter, no installs:
+the menu bar / system tray daemon is the normal way:
+
+```bash
+pip install -r daemon/tray-requirements.txt   # one time, two small packages
+make tray                                     # or: python3 daemon/tray.py
+```
+
+it lives in the menu bar on macos, the system tray on windows, and
+the appindicator area on linux. it starts tracking on launch if you
+are set up, shows your weighted hours next to the icon where the
+platform allows, and its menu has start/stop, open dashboard,
+inspect, settings, and quit. linux needs a tray backend
+(`sudo apt install gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`);
+gnome without the appindicator extension has no tray area, use the
+gui there.
+
+the settings window is stdlib tkinter, no installs:
 
 ```bash
 make gui                 # or: python3 daemon/gui.py
@@ -31,8 +47,8 @@ make gui                 # or: python3 daemon/gui.py
 pick your handle, repo and server, press **start tracking**. it runs
 the same daemon underneath, shows its log live and how many sealed
 buckets are waiting to send, and remembers your settings in
-`~/.aitime/gui.json`. `inspect what would be sent` runs the inspect
-command from inside the window.
+`~/.aitime/gui.json`, which the tray reads too. `inspect what would
+be sent` runs the inspect command from inside the window.
 
 headless or scripting, the cli is still there:
 
