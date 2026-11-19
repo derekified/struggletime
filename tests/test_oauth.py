@@ -71,6 +71,11 @@ class TestOAuth(unittest.TestCase):
         s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "oauthuser"})
         self.assertEqual(p["slack_user_id"], "U999")
 
+    def test_auth_status_reports_config_without_values(self):
+        s, r = req(self.port, "GET", "/v1/auth/status")
+        self.assertEqual(s, 200); self.assertTrue(r["github_client_id_set"]); self.assertTrue(r["slack_client_secret_set"])
+        self.assertTrue(r["github_callback"].endswith("/v1/auth/github/callback")); self.assertNotIn("ghsec", str(r))
+
     def test_oauth_requires_claimed_handle(self):
         s, loc, _ = get(self.port, "/v1/auth/github/start?handle=ghost")
         self.assertIn("pick_handle_first", loc)

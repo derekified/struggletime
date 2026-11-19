@@ -44,7 +44,9 @@ def oauth_identity(provider, code):
     if provider == "github":
         tok = http_json(cfg["base"] + "/login/oauth/access_token",
                         {"client_id": cfg["client_id"], "client_secret": cfg["client_secret"], "code": code})
+        if "access_token" not in tok: raise ValueError("token exchange: " + str(tok.get("error") or tok.get("error_description") or "no access token"))
         user = http_json(cfg["api"] + "/user", headers={"Authorization": f"Bearer {tok['access_token']}"})
+        if "login" not in user: raise ValueError("user fetch: " + str(user.get("message") or "no login"))
         return user["login"], str(user["id"])
     tok = http_json(cfg["base"] + "/api/openid.connect.token",
                     {"client_id": cfg["client_id"], "client_secret": cfg["client_secret"], "code": code,
@@ -151,6 +153,11 @@ class H(BaseHTTPRequestHandler):
             self.send_header("Content-Type", "text/html"); self.send_header("Content-Length", str(len(body)))
             self.end_headers(); self.wfile.write(body); return
         if p == ["health"]: return self.send_json(200, {"ok": True})
+        if p == ["v1", "auth", "status"]:
+            gh, sl = oauth_config("github"), oauth_config("slack")
+            return self.send_json(200, {"github_client_id_set": bool(gh["client_id"]), "github_client_secret_set": bool(gh["client_secret"]),
+                                        "slack_client_id_set": bool(sl["client_id"]), "slack_client_secret_set": bool(sl["client_secret"]),
+                                        "github_callback": oauth_redirect("github"), "slack_callback": oauth_redirect("slack")})
         if len(p) == 3 and p[:2] == ["v1", "handles"]:
             handle = p[2].lower()
             taken = c.execute("SELECT 1 FROM user WHERE handle=?", (handle,)).fetchone()
@@ -179,7 +186,9 @@ class H(BaseHTTPRequestHandler):
                 if not row or int(time.time()) - row["created_at"] > 600: return self.redirect("/settings?oauth=bad_state")
                 c.execute("DELETE FROM oauth_state WHERE state=?", (state,)); c.commit()
                 try: login, ext_id = oauth_identity(provider, code)
-                except Exception: return self.redirect("/settings?oauth=" + provider + "_failed")
+                except Exception as e:
+                    print(f"oauth {provider} callback failed: {type(e).__name__}: {e}", file=sys.stderr)
+                    return self.redirect("/settings?oauth=" + provider + "_failed")
                 handle = row["handle"]
                 if provider == "github":
                     c.execute("INSERT INTO link VALUES (?,?,(SELECT slack_user_id FROM link WHERE handle=?)) ON CONFLICT(handle) DO UPDATE SET github_login=excluded.github_login", (handle, login, handle))
