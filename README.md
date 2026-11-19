@@ -122,3 +122,13 @@ python3 -m unittest discover -s tests                    # 4 tests
 
 Schemas: `schemas/local-ledger.sql` (SQLite), `schemas/server.sql`
 (Postgres, partitioned), `schemas/heartbeat.schema.json` (wire v1).
+
+## Server test results (2026-11-19)
+
+Reference server in `server/` (stdlib Python + SQLite; contract = `schemas/server.sql`):
+
+- 12/12 unit + API tests pass (`python3 -m unittest discover -s tests`)
+- Live: closed-loop batch → `201, 0.25 weighted h`; tampered batch → `422`;
+  submission → review (bad reason `400`, valid `200 approved`)
+- Load: 5,000 hash-chained buckets ingested + verified in **0.19s**
+  (~26k/sec locally vs ~0.5/sec needed at 109,759 h/mo), ~46 MB RSS
