@@ -43,7 +43,7 @@ code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--mut)}
 <nav><a href="/settings">settings</a><span class="live" id="live-txt">● connecting</span></nav></div>
 <div class="layout">
   <aside class="side">
-    <div class="who"><b id="who-name">@builder</b><div id="who-streak">keep going</div></div>
+    <div class="who"><b id="who-name">not signed in</b><div id="who-streak">pick a handle to start</div><a id="who-action" href="/settings">claim a handle</a></div>
     <a data-nav="home" href="/">home</a><a data-nav="projects" href="/projects">projects</a><a data-nav="builders" href="/builders">builders</a><a data-nav="review" href="/review">review queue</a><a data-nav="integrations" href="/integrations">integrations</a><a data-nav="settings" href="/settings">settings</a>
   </aside>
   <main>
@@ -135,11 +135,14 @@ document.querySelectorAll('.page').forEach(el=>el.classList.toggle('on', el.id==
 document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('on', a.dataset.nav===(KNOWN.includes(PAGE)?PAGE:'home')));
 const me=()=>localStorage.getItem('st_handle')||'';
 const auth=()=>me()?{'X-Handle':me()}:{};
+if(PAGE==='signout'||PAGE==='logout'){localStorage.removeItem('st_handle');location.replace('/settings?signed_out=1')}
 function acctUI(p){
-  if(me()){$('acct-state').innerHTML='signed in as <b>@'+esc(me())+'</b>'+(p?(' · '+fmt(p.weighted_hours)+'h weighted · github '+(p.github_login?'github.com/'+esc(p.github_login):'not linked')+' · slack '+(p.slack_user_id?'linked':'not linked')):'');
+  if(me()){$('who-name').textContent='@'+me();$('who-streak').textContent=p?('🔥 '+(p.current_streak_days||0)+' day streak · '+fmt(p.weighted_hours)+'h weighted'):'signed in';$('who-action').textContent='sign out';$('who-action').href='/signout';
+    $('acct-state').innerHTML='signed in as <b>@'+esc(me())+'</b>'+(p?(' · '+fmt(p.weighted_hours)+'h weighted · github '+(p.github_login?'github.com/'+esc(p.github_login):'not linked')+' · slack '+(p.slack_user_id?'linked':'not linked')):'');
     const q=new URLSearchParams(location.search).get('oauth'); if(q)$('acct-state').innerHTML+='<br>oauth: '+esc(q.replaceAll('_',' '));
     $('signout-form').style.display='flex'; $('daemon-cmd').textContent='struggletime-helper start --repo ~/my-project --user '+me();}
-  else{$('acct-state').textContent='not signed in. claim a handle, or sign in with your handle.';$('signout-form').style.display='none'}
+  else{$('who-name').textContent='not signed in';$('who-streak').textContent='pick a handle to start';$('who-action').textContent='claim a handle';$('who-action').href='/settings';
+    $('acct-state').textContent=new URLSearchParams(location.search).get('signed_out')?'signed out. claim a handle, or sign in with your handle.':'not signed in. claim a handle, or sign in with your handle.';$('signout-form').style.display='none'}
 }
 async function refresh(){
   const [os,ov]=await j('/v1/overview'),[ps,pr]=await j('/v1/projects'),[us,ur]=await j('/v1/users'),[ss,sr]=await j('/v1/submissions'),[es,er]=await j('/v1/integrations/events');
@@ -151,8 +154,10 @@ async function refresh(){
   $('m-scale').textContent=(ov.users||0)+' builders · '+(ov.projects_count||0)+' projects · '+(ov.buckets||0)+' buckets · formula v0.1.0-alpha';
   $('foot-note').textContent=Object.entries(ov.by_state||{}).map(([k,v])=>k.replaceAll('_',' ').toLowerCase()+' ×'+v).join(' · ');
   const users=(ur.users||[]).slice().sort((a,b)=>b.weighted_hours-a.weighted_hours);
-  if(users.length){$('who-name').textContent='@'+users[0].handle;$('who-streak').textContent='🔥 '+(users[0].current_streak_days||0)+' day streak · '+fmt(users[0].weighted_hours)+'h weighted'}
-  if(me()){const [s,p]=await j('/v1/users/'+encodeURIComponent(me())); if(s===200)acctUI(p); else acctUI(null)}
+  if(me()){const [s,p]=await j('/v1/users/'+encodeURIComponent(me()));
+    if(s===200)acctUI(p);
+    else if(s===404){localStorage.removeItem('st_handle');acctUI(null);$('signin-out').textContent='that handle is not on this server, so you were signed out.'}
+    else acctUI(null)}
   const projs=pr.projects||[], withData=projs.filter(p=>p.buckets>0);
   if(!selected&&withData.length)selected=withData[0].id;
   $('proj-sel').innerHTML=withData.length?withData.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name||p.id)}</option>`).join(''):'<option value="">no projects yet</option>';

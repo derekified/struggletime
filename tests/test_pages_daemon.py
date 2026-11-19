@@ -25,9 +25,12 @@ class TestPagesDaemon(unittest.TestCase):
 
     def test_pages_are_separate_routes(self):
         for path, needle in (("/", "page-home"), ("/projects", "page-projects"), ("/builders", "page-builders"),
-                             ("/review", "page-review"), ("/integrations", "page-integrations"), ("/settings", "page-settings")):
+                             ("/review", "page-review"), ("/integrations", "page-integrations"), ("/settings", "page-settings"),
+                             ("/signout", "who-action"), ("/logout", "who-action")):
             s, html = req(self.port, "GET", path)
             self.assertEqual(s, 200, path); self.assertIn(needle, html)
+        s, html = req(self.port, "GET", "/")
+        self.assertNotIn("@builder", html); self.assertIn("not signed in", html); self.assertIn('id="who-action"', html)
         s, html = req(self.port, "GET", "/settings")
         for needle in ("claim handle", "sign in", "sign in with github", "sign in with slack", "GITHUB_WEBHOOK_SECRET", "SLACK_SIGNING_SECRET"):
             self.assertIn(needle, html)

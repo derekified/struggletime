@@ -144,7 +144,7 @@ class H(BaseHTTPRequestHandler):
     def _get(self):
         parsed = urlparse(self.path); p = parsed.path.strip("/").split("/") if parsed.path.strip("/") else []
         c = db()
-        if p == [] or p == ["index.html"] or (len(p) == 1 and p[0] in ("projects", "builders", "review", "integrations", "settings")):
+        if p == [] or p == ["index.html"] or (len(p) == 1 and p[0] in ("projects", "builders", "review", "integrations", "settings", "signout", "logout")):
             f = STATIC / "index.html"
             if not f.exists(): return self.send_json(404, {"error": "no dashboard"})
             body = f.read_bytes(); self.send_response(200)
