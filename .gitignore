@@ -1,2 +1,6 @@
 __pycache__/
 *.pyc
+.env
+server.db
+*.db
+.aitime-ledger.json

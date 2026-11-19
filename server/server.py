@@ -6,6 +6,18 @@ from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
+def _load_dotenv():
+    for candidate in (Path.cwd() / ".env", Path(__file__).parent.parent / ".env"):
+        if not candidate.exists(): continue
+        for line in candidate.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line: continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+        break
+
+_load_dotenv()
+
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS
 

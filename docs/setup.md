@@ -10,6 +10,20 @@ git clone <this repo> && cd struggletime
 make check        # python, git, full test suite
 ```
 
+## secrets (optional, for slack/github integrations)
+
+`git pull` will never bring secret values down. that is deliberate:
+they must not live in git. for local use, copy the template and fill
+it in. `.env` is gitignored and cannot be committed by accident:
+
+```bash
+cp .env.example .env   # then fill in the values you have
+```
+
+the server loads `.env` automatically on start. real exported
+environment variables win over the file. hosted deployments should use
+the platform's secret store instead of a file.
+
 ## 2. start the server
 
 ```bash
