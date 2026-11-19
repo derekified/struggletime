@@ -188,7 +188,10 @@ class H(BaseHTTPRequestHandler):
             for i, b in enumerate(buckets):
                 errs = validate_allowlist(b)
                 if errs: return self.send_json(400, {"error": f"bucket {i}: schema allowlist violation", "details": errs})
-            seen = {r[0] for r in c.execute("SELECT bucket_id FROM bucket WHERE project_id=?", (project,))}
+            seen = {r[0]: r[1] for r in c.execute("SELECT bucket_id, hash FROM bucket WHERE project_id=?", (project,))}
+            for i, b in enumerate(buckets):
+                if b["bucket_id"] in seen and bucket_hash(b) != seen[b["bucket_id"]]:
+                    return self.send_json(422, {"error": f"bucket {i}: hash mismatch (tampered replay of known bucket_id)"})
             fresh = [b for b in buckets if b["bucket_id"] not in seen]
             if len(fresh) != len(buckets):
                 return self.send_json(409, {"error": "duplicate bucket_id", "duplicates": len(buckets) - len(fresh)})

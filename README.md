@@ -46,7 +46,7 @@ are the remaining scale work; every protocol they need is fixed here.
 ## Test
 
 ```bash
-python3 -m unittest discover -s tests   # 43 tests: verifier, metadata/privacy, server api, daemon end-to-end, malformed/edge cases, openclaw
+python3 -m unittest discover -s tests   # 44 tests: verifier, metadata/privacy, server api, daemon end-to-end, malformed/edge cases, openclaw
 python3 src/verify.py examples/session-closed-loop.json
 ```
 

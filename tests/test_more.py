@@ -58,6 +58,14 @@ class TestMore(unittest.TestCase):
         s, r = req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u", "buckets": b2})
         self.assertEqual(s, 201, r); self.assertLess(r["weighted_secs_added"], 210.0)
 
+    def test_03b_tampered_replay_is_422_not_409(self):
+        buckets = chain("replay-p", [ACTIVE])
+        self.assertEqual(req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u", "buckets": buckets})[0], 201)
+        forged = json.loads(json.dumps(buckets)); forged[0]["counts"]["human_edits"] = 999
+        s, r = req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u", "buckets": forged})
+        self.assertEqual(s, 422); self.assertIn("tampered replay", r["error"])
+        self.assertEqual(req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u", "buckets": buckets})[0], 409)
+
     def test_04_steering_resets_silence(self):
         buckets = chain("reset-p", [SILENT, ACTIVE, SILENT])
         s, r = req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u", "buckets": buckets})
