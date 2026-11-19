@@ -25,8 +25,99 @@ GITHUB_WEBHOOK_SECRET=... SLACK_SIGNING_SECRET=... SLACK_WEBHOOK_URL=... \
 python3 server/server.py
 ```
 
-put it behind your normal reverse proxy for tls, and expose only the
-dashboard/api port. full env list: [`.env.example`](../.env.example).
+full env list: [`.env.example`](../.env.example). the server binds
+`127.0.0.1` only, on purpose. nothing reaches it except through a
+tunnel or a reverse proxy on the same box (below).
+
+## vps setup, step by step
+
+```bash
+# on the vps
+git clone <this repo> struggletime && cd struggletime
+cp .env.example .env        # fill in what you have, see below
+mkdir -p /srv/struggletime  # or point SERVER_DB somewhere writable
+```
+
+in `.env` on the vps:
+
+```bash
+PORT=18765
+SERVER_DB=/srv/struggletime/server.db
+OAUTH_REDIRECT_BASE=https://your-domain.example   # or leave 127.0.0.1 for tunnel-only testing
+GITHUB_CLIENT_ID=
+GITHUB_CLIENT_SECRET=
+SLACK_CLIENT_ID=
+SLACK_CLIENT_SECRET=
+```
+
+run it once by hand first (`make server`, open it through the tunnel
+below, claim your handle), then keep it alive with systemd:
+
+```ini
+# /etc/systemd/system/struggletime.service
+[Unit]
+Description=StruggleTime server
+After=network.target
+[Service]
+WorkingDirectory=/home/you/struggletime
+ExecStart=/usr/bin/python3 server/server.py
+Restart=on-failure
+User=you
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload && sudo systemctl enable --now struggletime
+journalctl -u struggletime -f   # logs
+```
+
+## port forward it
+
+three ways, in the order you will probably want them.
+
+**1. ssh tunnel, private testing (no public exposure at all).** from
+your own machine:
+
+```bash
+ssh -L 18765:127.0.0.1:18765 you@your-vps
+```
+
+leave that open, then `http://127.0.0.1:18765` in your browser is the
+vps dashboard, and your local daemon/tray points at
+`http://127.0.0.1:18765` as usual. oauth and webhooks cannot reach a
+tunnel like this, so use it for dashboard and tracking tests.
+
+**2. reverse proxy + tls, public (what oauth and webhooks need).**
+point a domain at the vps, then caddy is two lines:
+
+```
+your-domain.example {
+    reverse_proxy 127.0.0.1:18765
+}
+```
+
+```bash
+sudo caddy reload --config /etc/caddy/Caddyfile   # or systemctl restart caddy
+```
+
+set `OAUTH_REDIRECT_BASE=https://your-domain.example`, restart the
+server, and register the callback urls from
+[setup](setup.md#secrets-optional-for-slackgithub-integrations)
+with exactly that domain. keep port 18765 firewalled off
+(`ufw allow OpenSSH`, `ufw allow 80,443/tcp`, nothing else) — the
+proxy is the only public door.
+
+**3. temporary public tunnel from the vps** (quick oauth test, no
+domain yet):
+
+```bash
+ngrok http 18765        # or: cloudflared tunnel --url http://127.0.0.1:18765
+```
+
+use the https address it gives you as `OAUTH_REDIRECT_BASE` and in
+the oauth app callbacks, and redo both whenever the tunnel restarts
+and the address changes.
 
 ## operations
 
