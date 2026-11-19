@@ -46,7 +46,9 @@ Profiles are public by default. Pass `"is_public": false` to opt out.
 Terminal 2:
 
 ```bash
-make daemon REPO=~/my-project USER=you
+sh daemon/install.sh   # once, per machine
+struggletime-helper start --repo ~/my-project --user you
+struggletime-helper status   # logs: struggletime-helper logs
 ```
 
 That is it. Code like normal. Every 5 minutes the daemon seals a

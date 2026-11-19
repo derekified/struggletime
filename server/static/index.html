@@ -6,107 +6,141 @@
 *{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Spline Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
 a{color:var(--lime)}button,input,select{font:inherit}
 .top{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line)}
-.mark{width:30px;height:30px;border-radius:50%;background:var(--lime);color:#111;display:grid;place-items:center;font-weight:900;font-size:16px}
-.word{font-size:19px;font-weight:700}.top nav{margin-left:auto;display:flex;gap:20px;align-items:center}
-.top nav a{color:var(--mut);text-decoration:none;font-size:14px}.top nav a:hover{color:var(--ink)}
-.live{font-size:13px;color:var(--lime)}
+.mark{width:30px;height:30px;border-radius:50%;background:var(--lime);color:#111;display:grid;place-items:center;font-weight:900}
+.word{font-size:19px;font-weight:700}.top nav{margin-left:auto;display:flex;gap:18px;align-items:center}
+.top nav a{color:var(--mut);text-decoration:none;font-size:14px}.live{font-size:13px;color:var(--lime)}
 .layout{display:grid;grid-template-columns:190px 1fr;max-width:1180px;margin:0 auto}
 @media(max-width:760px){.layout{grid-template-columns:1fr}.side{display:none}}
 .side{padding:22px 14px;border-right:1px solid var(--line);min-height:calc(100vh - 60px)}
 .side a{display:block;color:var(--mut);text-decoration:none;padding:7px 12px;border-radius:8px;font-size:14px;margin-bottom:2px}
 .side a.on{background:var(--lime);color:#111;font-weight:700}.side a:hover:not(.on){color:var(--ink)}
-.side .who{padding:4px 12px 16px}.side .who b{font-size:15px}.side .who div{color:var(--orange);font-size:13px}
-main{padding:26px 28px 60px;min-width:0}
-h1{font-size:24px;margin:2px 0 2px}h2{font-size:17px;margin:26px 0 8px}
+.side .who{padding:4px 12px 16px}.side .who div{color:var(--orange);font-size:13px}
+main{padding:26px 28px 60px;min-width:0}.page{display:none}.page.on{display:block}
+h1{font-size:24px;margin:2px 0}h2{font-size:17px;margin:26px 0 8px}
 .sub{color:var(--mut);font-size:13.5px}.small-i{font-style:italic;color:var(--mut);font-size:13px}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 12px;align-items:center}
+.filters{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 12px;align-items:end}
 .filters label{font-size:11px;color:var(--mut);display:block}
 select,input{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:14px}
 .stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
-.stat{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:14px}
-.stat .n{font-size:23px;font-weight:700;font-variant-numeric:tabular-nums}.stat .l{color:var(--mut);font-size:12.5px}
-.cols{display:grid;grid-template-columns:1.6fr 1fr;gap:12px}@media(max-width:860px){.cols{grid-template-columns:1fr}}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.stat,.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.stat .n{font-size:23px;font-weight:700}.stat .l{color:var(--mut);font-size:12.5px}
 table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-th{color:var(--mut);font-weight:500;font-size:12px}tr:last-child td{border-bottom:0}td.n,th.n{text-align:right;font-variant-numeric:tabular-nums}
+th{color:var(--mut);font-weight:500;font-size:12px}tr:last-child td{border-bottom:0}td.n,th.n{text-align:right}
 .tag{font-size:12px;color:var(--mut)}.tag.ok{color:var(--lime)}.tag.bad{color:var(--orange)}
 .flag{display:block;color:var(--orange);font-size:12.5px}
 .builder{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.builder:last-child{border:0}
 .builder .bar{flex:1;background:var(--panel2);height:5px;border-radius:99px;margin-top:8px}.builder .bar i{display:block;height:100%;background:var(--lime);border-radius:99px}
-.review{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}.review:last-child{border:0}
+.review,.event{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}.review:last-child,.event:last-child{border:0}
 button{background:var(--lime);color:#111;border:0;border-radius:7px;padding:7px 13px;font-weight:700;cursor:pointer;font-size:14px}
-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--mut)}
+button.dark{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
+form{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
+code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--mut)}
 .empty{color:var(--mut)}footer{margin-top:36px;color:var(--mut);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
+.setgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:860px){.setgrid{grid-template-columns:1fr}}
+.setgrid h2{margin-top:0}
 </style></head><body>
-<div class="top">
-  <div class="mark">s</div><div class="word">StruggleTime</div>
-  <nav><a href="#friction">friction</a><a href="#projects">projects</a><a href="#integrations">integrations</a><span class="live" id="live-txt">● connecting</span></nav>
-</div>
+<div class="top"><div class="mark">s</div><div class="word">StruggleTime</div>
+<nav><a href="/settings">settings</a><span class="live" id="live-txt">● connecting</span></nav></div>
 <div class="layout">
   <aside class="side">
     <div class="who"><b id="who-name">@builder</b><div id="who-streak">keep going</div></div>
-    <a class="on" href="#">home</a><a href="#projects">projects</a><a href="#builders">builders</a><a href="#review">review queue</a><a href="#integrations">integrations</a><a href="#how">how it works</a>
+    <a data-nav="home" href="/">home</a><a data-nav="projects" href="/projects">projects</a><a data-nav="builders" href="/builders">builders</a><a data-nav="review" href="/review">review queue</a><a data-nav="integrations" href="/integrations">integrations</a><a data-nav="settings" href="/settings">settings</a>
   </aside>
   <main>
-    <div class="small-i">no screenshots, no keystrokes, just the loop</div>
-    <h1>keep track of your struggle time</h1>
-    <div class="sub">time spent actually struggling with ai, tracked passively while you code in your terminal. updates live.</div>
-
-    <div class="filters">
-      <span><label for="proj-sel">project</label><select id="proj-sel"></select></span>
-      <span class="sub" id="fr-meta"></span>
-    </div>
-
-    <div class="stats">
-      <div class="stat"><div class="n" id="m-weighted">…</div><div class="l">weighted time, all projects</div></div>
-      <div class="stat"><div class="n" id="m-raw">…</div><div class="l">raw time tracked</div></div>
-      <div class="stat"><div class="n" id="m-trust">…</div><div class="l">counted after weighting</div></div>
-      <div class="stat"><div class="n" id="m-pending">…</div><div class="l">waiting for review</div></div>
-    </div>
-    <div class="sub" id="m-scale" style="margin-top:8px"></div>
-
-    <h2 id="friction">structural friction timeline</h2>
-    <div class="panel"><div id="fr-chart"><p class="empty">no data yet. run the daemon, break a build, fix it.</p></div>
-    <div class="sub">each bar is 5 minutes of metadata. tall = failures, retries, follow-through. ◆ = commit. grey = agent dump, discounted.</div></div>
-
-    <div class="cols">
-      <div><h2 id="projects">projects</h2><div class="panel" style="padding-top:6px"><table>
-        <thead><tr><th>project</th><th class="n">weighted</th><th class="n">raw</th><th>flags</th></tr></thead><tbody id="proj-rows"><tr><td colspan="4" class="empty">loading…</td></tr></tbody>
-      </table></div></div>
-      <div><h2 id="builders">builders</h2><div class="panel" id="builder-list"><p class="empty">loading…</p></div></div>
-    </div>
-
-    <h2 id="review">review queue</h2>
-    <div class="panel" id="review-list"><p class="empty">nothing submitted yet. logged time stays private until you submit it.</p></div>
-
-    <h2 id="how">how a minute earns its weight</h2>
-    <div class="panel" style="font-size:14px">steer (prompt or edit) → check (run it, failing counts) → follow through (edit again or commit). close the loop and the minute counts fully. leave an agent running on its own and it counts at 0.2×. go silent to debug and it fades out over 5 to 12 minutes instead of vanishing.</div>
-
-    <h2 id="integrations">integrations</h2>
-    <div class="cols">
-      <div class="panel"><b>github</b>
-        <div class="sub">link a github username, then send repo pushes to the webhook. they land here as commit anchors and get checked against your tracked time.</div>
-        <form id="gh-form"><input id="gh-handle" placeholder="your handle" required><input id="gh-login" placeholder="github username" required><button>link</button></form>
-        <div class="sub" id="gh-out"></div>
-        <div class="sub" style="margin-top:8px">webhook <code>POST /v1/integrations/github/webhook</code><br>repo <code>GET /v1/projects/{id}/github</code></div>
+    <section class="page" id="page-home">
+      <div class="small-i">no screenshots, no keystrokes, just the loop</div>
+      <h1>keep track of your struggle time</h1>
+      <div class="sub">time spent actually struggling with ai, tracked passively while you code in your terminal. updates live.</div>
+      <div class="filters"><span><label for="proj-sel">project</label><select id="proj-sel"></select></span><span class="sub" id="fr-meta"></span></div>
+      <div class="stats">
+        <div class="stat"><div class="n" id="m-weighted">…</div><div class="l">weighted time, all projects</div></div>
+        <div class="stat"><div class="n" id="m-raw">…</div><div class="l">raw time tracked</div></div>
+        <div class="stat"><div class="n" id="m-trust">…</div><div class="l">counted after weighting</div></div>
+        <div class="stat"><div class="n" id="m-pending">…</div><div class="l">waiting for review</div></div>
       </div>
-      <div class="panel"><b>slack</b>
-        <div class="sub">submissions and reviews get posted to slack (queued here until a webhook is configured). link your slack id for the stats command.</div>
-        <form id="sl-form"><input id="sl-handle" placeholder="your handle" required><input id="sl-id" placeholder="slack user id" required><button>link</button></form>
-        <div class="sub" id="sl-out"></div>
-        <div class="sub" style="margin-top:8px">try <code>/struggletime stats</code><br>events <code>GET /v1/integrations/events</code></div>
-      </div>
-    </div>
+      <div class="sub" id="m-scale" style="margin-top:8px"></div>
+      <h2 id="friction">structural friction timeline</h2>
+      <div class="panel"><div id="fr-chart"><p class="empty">no data yet. run the daemon, break a build, fix it.</p></div>
+      <div class="sub">each bar is 5 minutes of metadata. tall = failures, retries, follow-through. ◆ = commit. grey = agent dump, discounted.</div></div>
+      <h2>how a minute earns its weight</h2>
+      <div class="panel" style="font-size:14px">steer (prompt or edit) → check (run it, failing counts) → follow through (edit again or commit). close the loop and the minute counts fully. leave an agent running on its own and it counts at 0.2×. go silent to debug and it fades out over 5 to 12 minutes instead of vanishing.</div>
+    </section>
 
-    <footer>struggletime · open source under agplv3 · logged time is private, submitted time is auditable · <span id="foot-note"></span></footer>
+    <section class="page" id="page-projects">
+      <h1>projects</h1><div class="sub">every project being struggled into existence.</div>
+      <div class="panel" style="margin-top:14px;padding-top:6px"><table><thead><tr><th>project</th><th class="n">weighted</th><th class="n">raw</th><th>flags</th></tr></thead><tbody id="proj-rows"><tr><td colspan="4" class="empty">loading…</td></tr></tbody></table></div>
+      <form id="proj-form"><input id="np-id" placeholder="project id" required><input id="np-name" placeholder="project name" required><input id="np-repo" placeholder="github repo url (optional)" size="30"><button>add project</button></form>
+      <div class="sub" id="proj-out"></div>
+    </section>
+
+    <section class="page" id="page-builders">
+      <h1>builders</h1><div class="sub">public by default. streaks, not surveillance.</div>
+      <div class="panel" id="builder-list" style="margin-top:14px"><p class="empty">loading…</p></div>
+    </section>
+
+    <section class="page" id="page-review">
+      <h1>review queue</h1><div class="sub">submitted hours are frozen evidence packs. approve, or deflate with a reason that teaches the next formula.</div>
+      <div class="panel" id="review-list" style="margin-top:14px"><p class="empty">nothing submitted yet.</p></div>
+    </section>
+
+    <section class="page" id="page-integrations">
+      <h1>integrations</h1><div class="sub">what is connected, and what has flowed through it. link accounts in <a href="/settings">settings</a>.</div>
+      <h2>github</h2><div class="panel" id="gh-status"><p class="empty">loading…</p></div>
+      <h2>slack</h2><div class="panel" id="slack-events"><p class="empty">loading…</p></div>
+    </section>
+
+    <section class="page" id="page-settings">
+      <h1>settings</h1><div class="sub">your account and connections. this page talks only to your server.</div>
+      <div class="setgrid" style="margin-top:16px">
+        <div class="panel"><h2>account</h2>
+          <div id="acct-state" class="sub">not signed in.</div>
+          <form id="create-form"><input id="c-handle" placeholder="pick a handle" required><button>create account</button></form>
+          <div class="sub" id="create-out"></div>
+          <form id="signin-form"><input id="s-handle" placeholder="handle" required><input id="s-token" placeholder="token" type="password" required size="24"><button class="dark">sign in</button></form>
+          <div class="sub" id="signin-out"></div>
+          <form id="signout-form" style="display:none"><button class="dark">sign out</button></form>
+        </div>
+        <div class="panel"><h2>github</h2>
+          <div class="sub">link your github username so repos and push webhooks line up with your projects. full oauth only makes sense once this is hosted with its own github app, so for now this is an honest username link, verified by webhook anchors.</div>
+          <form id="gh-form"><input id="gh-login" placeholder="github username" required><button>link github</button></form>
+          <div class="sub" id="gh-out"></div>
+          <div class="sub" style="margin-top:8px">repo webhook → <code>POST /v1/integrations/github/webhook</code><br>signed with <code>GITHUB_WEBHOOK_SECRET</code> on the server.</div>
+        </div>
+        <div class="panel"><h2>slack</h2>
+          <div class="sub">link your slack user id for <code>/struggletime stats</code>, and get submission + review notifications where your team actually reads.</div>
+          <form id="sl-form"><input id="sl-id" placeholder="slack user id (U…)" required><button>link slack</button></form>
+          <div class="sub" id="sl-out"></div>
+          <div class="sub" style="margin-top:8px">slash command → <code>POST /v1/integrations/slack/command</code><br>signed with <code>SLACK_SIGNING_SECRET</code>; notifications need <code>SLACK_WEBHOOK_URL</code>. both live in the server environment or secret store, never in this page.</div>
+        </div>
+        <div class="panel"><h2>your daemon</h2>
+          <div class="sub">run the helper on your machine. it only ever sends metadata buckets.</div>
+          <p><code id="daemon-cmd">struggletime-helper start --repo ~/my-project --user you</code></p>
+          <div class="sub">inspect before you trust: <code>make inspect REPO=~/my-project</code><br>full setup: <code>docs/setup.md</code> in the repo.</div>
+          <h2 style="margin-top:18px">privacy</h2>
+          <div class="sub">profile public by default, logged hours private, submitted hours auditable. prompts, code, commands and screenshots are rejected by the server schema even if something tried to send them.</div>
+        </div>
+      </div>
+    </section>
+
+    <footer>struggletime · open source under agplv3 · <span id="foot-note"></span></footer>
   </main>
 </div>
 <script>
 const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
 async function j(u,o){const r=await fetch(u,o);return [r.status,await r.json().catch(()=>({}))]}
 const fmt=(n,d=2)=>Number(n||0).toFixed(d); let selected="";
+const PAGE=(location.pathname.replace('/','')||'home'); const KNOWN=['home','projects','builders','review','integrations','settings'];
+document.querySelectorAll('.page').forEach(el=>el.classList.toggle('on', el.id==='page-'+(KNOWN.includes(PAGE)?PAGE:'home')));
+document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('on', a.dataset.nav===(KNOWN.includes(PAGE)?PAGE:'home')));
+const me=()=>localStorage.getItem('st_handle')||'', tok=()=>localStorage.getItem('st_token')||'';
+const auth=()=>tok()?{Authorization:'Bearer '+tok()}:{};
+function acctUI(p){
+  if(me()){$('acct-state').innerHTML='signed in as <b>@'+esc(me())+'</b>'+(p?(' · '+fmt(p.weighted_hours)+'h weighted · github '+(p.github_login?'github.com/'+esc(p.github_login):'not linked')+' · slack '+(p.slack_user_id?'linked':'not linked')):'');
+    $('signout-form').style.display='flex'; $('daemon-cmd').textContent='struggletime-helper start --repo ~/my-project --user '+me();}
+  else{$('acct-state').textContent='not signed in. create an account, or sign in with a handle + token you saved.';$('signout-form').style.display='none'}
+}
 async function refresh(){
-  const [os,ov]=await j('/v1/overview'),[ps,pr]=await j('/v1/projects'),[us,ur]=await j('/v1/users'),[ss,sr]=await j('/v1/submissions');
+  const [os,ov]=await j('/v1/overview'),[ps,pr]=await j('/v1/projects'),[us,ur]=await j('/v1/users'),[ss,sr]=await j('/v1/submissions'),[es,er]=await j('/v1/integrations/events');
   if(os!==200){$('live-txt').textContent='● offline';return}
   $('live-txt').textContent='● live';
   const wh=ov.weighted_hours||0, raw=(ov.raw_secs||0)/3600;
@@ -116,6 +150,7 @@ async function refresh(){
   $('foot-note').textContent=Object.entries(ov.by_state||{}).map(([k,v])=>k.replaceAll('_',' ').toLowerCase()+' ×'+v).join(' · ');
   const users=(ur.users||[]).slice().sort((a,b)=>b.weighted_hours-a.weighted_hours);
   if(users.length){$('who-name').textContent='@'+users[0].handle;$('who-streak').textContent='🔥 '+(users[0].current_streak_days||0)+' day streak · '+fmt(users[0].weighted_hours)+'h weighted'}
+  if(me()){const [s,p]=await j('/v1/users/'+encodeURIComponent(me())); if(s===200)acctUI(p); else acctUI(null)}
   const projs=pr.projects||[], withData=projs.filter(p=>p.buckets>0);
   if(!selected&&withData.length)selected=withData[0].id;
   $('proj-sel').innerHTML=withData.length?withData.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name||p.id)}</option>`).join(''):'<option value="">no projects yet</option>';
@@ -124,14 +159,20 @@ async function refresh(){
     return `<tr><td><b>${esc(p.name||p.id)}</b><br><span class="sub">${p.owner?'@'+esc(p.owner)+' · ':''}${p.repo_url?`<a href="${esc(p.repo_url)}" target="_blank" rel="noreferrer">github</a>`:'no repo linked'}</span><br>${Object.entries(p.by_state||{}).map(([k,v])=>`<span class="tag ${k.includes('DUMP')?'bad':k.includes('LOOP')?'ok':''}">${esc(k.replaceAll('_',' ').toLowerCase())} ×${v}</span>`).join(' · ')}</td><td class="n"><b>${fmt(p.weighted_hours)}h</b></td><td class="n">${fmt((p.raw_secs||0)/3600)}h</td><td>${flags||'<span class="sub">none</span>'}</td></tr>`}).join(''):'<tr><td colspan="4" class="empty">no projects yet.</td></tr>';
   await drawFriction();
   const max=users.length?users[0].weighted_hours||1:1;
-  $('builder-list').innerHTML=users.length?users.map(u=>`<div class="builder"><span style="min-width:110px"><b>@${esc(u.handle)}</b><br><span class="sub">${u.active_days}d active · 🔥 ${u.current_streak_days}${u.github_login?'<br>github.com/'+esc(u.github_login):''}</span></span><span class="bar"><i style="width:${Math.max(3,u.weighted_hours/max*100)}%"></i></span><b>${fmt(u.weighted_hours)}h</b></div>`).join(''):'<p class="empty">no builders yet.</p>';
+  $('builder-list').innerHTML=users.length?users.map(u=>`<div class="builder"><span style="min-width:130px"><b>@${esc(u.handle)}</b><br><span class="sub">${u.active_days}d active · 🔥 ${u.current_streak_days}${u.github_login?'<br>github.com/'+esc(u.github_login):''}</span></span><span class="bar"><i style="width:${Math.max(3,u.weighted_hours/max*100)}%"></i></span><b>${fmt(u.weighted_hours)}h</b></div>`).join(''):'<p class="empty">no builders yet.</p>';
   const subs=sr.submissions||[];
   $('review-list').innerHTML=subs.length?subs.map(s=>`<div class="review"><b>${esc(s.project_id)}</b> <span class="tag ${s.status=='approved'?'ok':s.status=='pending'?'':'bad'}">${esc(s.status)}</span>
     <span class="sub"> by ${esc(s.user_id||'unknown')} · claimed ${fmt(s.claimed_weighted_hours)}h · “${esc(s.ai_declaration)}”</span>${(s.flags||[]).map(f=>`<span class="flag">⚑ ${esc(f)}</span>`).join('')}
     ${s.status=='pending'?`<form onsubmit="return review(event,'${s.id}')"><input name="amt" type="number" min="0" step="0.01" value="${fmt(s.claimed_weighted_hours)}" style="width:84px" aria-label="approved hours">
     <select name="why"><option value="NONE">approve fully</option><option value="UNATTENDED_AGENT_DUMP">unattended agent dump</option><option value="IDLE_INFLATION">idle inflation</option><option value="NO_TEST_ITERATION">no test iteration</option><option value="BOILERPLATE_HEAVY">boilerplate heavy</option><option value="CHAIN_BROKEN">chain broken</option><option value="GIT_MISMATCH">git mismatch</option></select>
     <button>save review</button></form>`:''}</div>`).join(''):'<p class="empty">nothing submitted yet.</p>';
+  const ghProjects=projs.filter(p=>p.repo_url);
+  $('gh-status').innerHTML=ghProjects.length?ghProjects.map(p=>`<div class="event"><b>${esc(p.name||p.id)}</b> <span class="sub">${esc(p.repo_url)} · <a href="#" onclick="return ghInfo(event,'${esc(p.id)}')">check anchors</a></span><div class="sub" id="ghinfo-${esc(p.id)}"></div></div>`).join(''):'<p class="empty">no repos linked yet. add a repo url to a project, then point its webhook here.</p>';
+  const evs=er.events||[];
+  $('slack-events').innerHTML=evs.length?evs.map(e=>`<div class="event"><span class="tag ${e.delivered?'ok':'bad'}">${e.delivered?'sent to slack':'queued'}</span> <span>${esc(e.text)}</span></div>`).join(''):'<p class="empty">no slack events yet. submissions and reviews land here, delivered or queued.</p>';
 }
+window.ghInfo=async(e,id)=>{e.preventDefault();const [s,g]=await j('/v1/projects/'+encodeURIComponent(id)+'/github');
+  document.getElementById('ghinfo-'+id).textContent=s===200?('linked: '+g.owner+'/'+g.repo+' · webhook anchors stored: '+g.webhook_events.length):('nope: '+(g.error||s)); return false};
 async function drawFriction(){
   if(!selected)return; const [s,fr]=await j('/v1/projects/'+encodeURIComponent(selected)+'/friction'); if(s!==200)return;
   $('fr-meta').textContent='evidence '+(fr.evidence_bytes/1024).toFixed(1)+' kb of metadata · '+fr.commit_anchors.length+' commits in range';
@@ -142,11 +183,23 @@ window.review=async(e,id)=>{e.preventDefault();const f=e.target,amt=parseFloat(f
   const [s,r]=await j('/v1/submissions/'+id+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewer_id:'dashboard',approved_weighted_secs:Math.round(amt*3600),reason_code:why})});
   if(s!==200)alert('could not save: '+(r.error||s)); refresh(); return false};
 $('proj-sel').addEventListener('change',e=>{selected=e.target.value;drawFriction()});
-$('gh-form').addEventListener('submit',async e=>{e.preventDefault();const h=$('gh-handle').value.trim();
-  const [s,r]=await j('/v1/users/'+encodeURIComponent(h)+'/github',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({github_login:$('gh-login').value.trim()})});
+$('create-form').addEventListener('submit',async e=>{e.preventDefault();const h=$('c-handle').value.trim();
+  const [s,r]=await j('/v1/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:h})});
+  if(s===201){localStorage.setItem('st_handle',h);localStorage.setItem('st_token',r.token);$('create-out').innerHTML='account created. your token (save it, shown once): <code>'+esc(r.token)+'</code>';refresh()}
+  else $('create-out').textContent='nope: '+(r.error||s)});
+$('signin-form').addEventListener('submit',async e=>{e.preventDefault();const h=$('s-handle').value.trim(),t=$('s-token').value;
+  const [s,r]=await j('/v1/auth/signin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:h,token:t})});
+  if(s===200){localStorage.setItem('st_handle',h);localStorage.setItem('st_token',t);$('signin-out').textContent='signed in.';refresh()}
+  else $('signin-out').textContent='nope: '+(r.error||s)});
+$('signout-form').addEventListener('submit',e=>{e.preventDefault();localStorage.removeItem('st_handle');localStorage.removeItem('st_token');acctUI(null);refresh()});
+$('gh-form').addEventListener('submit',async e=>{e.preventDefault();if(!me()){$('gh-out').textContent='sign in first.';return}
+  const [s,r]=await j('/v1/users/'+encodeURIComponent(me())+'/github',{method:'POST',headers:{'Content-Type':'application/json',...auth()},body:JSON.stringify({github_login:$('gh-login').value.trim()})});
   $('gh-out').textContent=s===200?('linked: github.com/'+r.github_login):('nope: '+(r.error||s)); refresh()});
-$('sl-form').addEventListener('submit',async e=>{e.preventDefault();const h=$('sl-handle').value.trim();
-  const [s,r]=await j('/v1/users/'+encodeURIComponent(h)+'/slack',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({slack_user_id:$('sl-id').value.trim()})});
-  $('sl-out').textContent=s===200?'linked. try /struggletime stats in slack.':('nope: '+(r.error||s))});
-refresh(); setInterval(refresh,2000);
+$('sl-form').addEventListener('submit',async e=>{e.preventDefault();if(!me()){$('sl-out').textContent='sign in first.';return}
+  const [s,r]=await j('/v1/users/'+encodeURIComponent(me())+'/slack',{method:'POST',headers:{'Content-Type':'application/json',...auth()},body:JSON.stringify({slack_user_id:$('sl-id').value.trim()})});
+  $('sl-out').textContent=s===200?'linked. try /struggletime stats in slack.':('nope: '+(r.error||s)); refresh()});
+$('proj-form').addEventListener('submit',async e=>{e.preventDefault();
+  const [s,r]=await j('/v1/projects',{method:'POST',headers:{'Content-Type':'application/json',...auth()},body:JSON.stringify({id:$('np-id').value.trim(),name:$('np-name').value.trim(),repo_url:$('np-repo').value.trim()||null,owner_handle:me()||undefined})});
+  $('proj-out').textContent=s===201?'project added. point the daemon at its repo.':('nope: '+(r.error||s)); refresh()});
+acctUI(null); refresh(); setInterval(refresh,2000);
 </script></body></html>

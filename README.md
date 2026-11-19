@@ -15,7 +15,9 @@ shows it back as streaks and weighted hours worth chasing.
 ```bash
 make check                                   # python, git, test suite
 make server                                  # dashboard + API on :18765
-make daemon REPO=~/my-project USER=you       # in a second terminal
+sh daemon/install.sh   # once, per machine
+struggletime-helper start --repo ~/my-project --user you
+struggletime-helper status                   # logs: struggletime-helper logs
 ```
 
 Open http://127.0.0.1:18765 — projects, weighted hours, streaks, and

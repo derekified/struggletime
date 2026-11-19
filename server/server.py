@@ -107,7 +107,7 @@ class H(BaseHTTPRequestHandler):
     def _get(self):
         parsed = urlparse(self.path); p = parsed.path.strip("/").split("/") if parsed.path.strip("/") else []
         c = db()
-        if p == [] or p == ["index.html"]:
+        if p == [] or p == ["index.html"] or (len(p) == 1 and p[0] in ("projects", "builders", "review", "integrations", "settings")):
             f = STATIC / "index.html"
             if not f.exists(): return self.send_json(404, {"error": "no dashboard"})
             body = f.read_bytes(); self.send_response(200)
@@ -213,6 +213,15 @@ class H(BaseHTTPRequestHandler):
             except Exception as e: return self.send_json(500, {"error": f"internal: {type(e).__name__}"})
     def _post(self):
         p = urlparse(self.path).path.strip("/").split("/"); c = db()
+        if p == ["v1", "auth", "signin"]:
+            d = self.body(); handle = (d.get("handle") or "").strip(); token = d.get("token") or ""
+            u = c.execute("SELECT handle, token_hash, is_public FROM user WHERE handle=?", (handle,)).fetchone()
+            if not u or not hmac.compare_digest(u["token_hash"], hashlib.sha256(token.encode()).hexdigest()):
+                return self.send_json(401, {"error": "wrong handle or token"})
+            link = c.execute("SELECT github_login, slack_user_id FROM link WHERE handle=?", (handle,)).fetchone()
+            return self.send_json(200, {"handle": handle, "is_public": bool(u["is_public"]),
+                "github_login": link["github_login"] if link else None, "slack_user_id": link["slack_user_id"] if link else None,
+                **stats_for(c, user=handle)})
         if p == ["v1", "users"]:
             d = self.body(); handle = (d.get("handle") or "").strip()
             if not handle: return self.send_json(400, {"error": "handle required"})
