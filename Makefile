@@ -1,11 +1,12 @@
 PY ?= python3
 PORT ?= 18765
 
-.PHONY: help check test server daemon inspect demo clean
+.PHONY: help check test server daemon gui inspect demo clean
 help:
 	@echo "make check    verify python, git and the test suite"
 	@echo "make test     run all tests"
 	@echo "make server   start the server + dashboard on :$(PORT)"
+	@echo "make gui      open the daemon gui"
 	@echo "make daemon   track a repo:  make daemon REPO=~/my-project USER=you"
 	@echo "make demo     start a server with demo data on :18766"
 	@echo "make inspect  show what a repo would send:  make inspect REPO=~/my-project"
@@ -18,6 +19,9 @@ test:
 
 server:
 	PORT=$(PORT) $(PY) server/server.py
+
+gui:
+	$(PY) daemon/gui.py
 
 daemon:
 	@test -n "$(REPO)" || (echo "set REPO=path/to/repo" && exit 1)

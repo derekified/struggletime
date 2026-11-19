@@ -4,7 +4,8 @@ set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="$HOME/.local/bin"; mkdir -p "$BIN" "$HOME/.aitime"
 ln -sf "$ROOT/daemon/helper.py" "$BIN/struggletime-helper"
-chmod +x "$ROOT/daemon/helper.py"
+ln -sf "$ROOT/daemon/gui.py" "$BIN/struggletime"
+chmod +x "$ROOT/daemon/helper.py" "$ROOT/daemon/gui.py"
 case "$(uname -s)" in
   Linux)
     mkdir -p "$HOME/.config/systemd/user"
@@ -37,4 +38,5 @@ EOF
     ;;
 esac
 echo "shell hook (add to your .bashrc/.zshrc):  source $ROOT/daemon/hooks.sh"
+echo "gui:  struggletime   (or: python3 $ROOT/daemon/gui.py)"
 echo "run it now:  struggletime-helper start --repo ~/your-project --user you"

@@ -22,6 +22,20 @@ ledger, and posts the pending batch if a server is configured.
 
 ## running it
 
+the gui is the normal way. stdlib tkinter, no installs:
+
+```bash
+make gui                 # or: python3 daemon/gui.py
+```
+
+pick your handle, repo and server, press **start tracking**. it runs
+the same daemon underneath, shows its log live and how many sealed
+buckets are waiting to send, and remembers your settings in
+`~/.aitime/gui.json`. `inspect what would be sent` runs the inspect
+command from inside the window.
+
+headless or scripting, the cli is still there:
+
 ```bash
 python3 daemon/daemon.py --repo ~/my-project \
   --server http://127.0.0.1:18765 --user you
