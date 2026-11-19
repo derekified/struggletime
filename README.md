@@ -13,14 +13,20 @@ shows it back as streaks and weighted hours worth chasing.
 ## Run it (60 seconds)
 
 ```bash
-python3 server/server.py            # dashboard + API on :18765
-# in another terminal, track a real repo:
-AITIME_EXEC_LOG=~/.aitime/exec.jsonl python3 daemon/daemon.py --repo ~/my-project --server http://127.0.0.1:18765 --user you
-source daemon/hooks.sh              # bash/zsh (Windows: daemon/hooks.ps1)
+make check                                   # python, git, test suite
+make server                                  # dashboard + API on :18765
+make daemon REPO=~/my-project USER=you       # in a second terminal
 ```
 
 Open http://127.0.0.1:18765 — projects, weighted hours, streaks, and
 flags update live. No dependencies beyond Python 3.10+ (stdlib only).
+Just looking? `make demo` starts a seeded server on :18766.
+
+**docs:** [setup](docs/setup.md) · [daemon](docs/daemon.md) ·
+[api](docs/api.md) · [integrations](docs/integrations.md) ·
+[deployment](docs/deployment.md) · [architecture](docs/architecture.md) ·
+[troubleshooting](docs/troubleshooting.md) ·
+[contributing](CONTRIBUTING.md) · env vars: [`.env.example`](.env.example)
 
 ## How each bounty requirement is met
 
