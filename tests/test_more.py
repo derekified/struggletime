@@ -103,7 +103,7 @@ class TestMore(unittest.TestCase):
         ledger = json.loads((repo/".aitime-ledger.json").read_text()); payload = json.dumps(ledger["pending"])
         self.assertNotIn("secret_project", payload); self.assertNotIn(ledger["salt"], payload)
         self.assertTrue(all(len(f["file_id"]) == 16 for b in ledger["pending"] for f in b.get("files", [])))
-        r = subprocess.run([sys.executable, str(ROOT/"daemon/inspect.py"), str(repo)], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, str(ROOT/"daemon/tracker_inspect.py"), str(repo)], capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr); self.assertNotIn(ledger["salt"], r.stdout)
 
     def test_09_friction_empty_and_unknown(self):

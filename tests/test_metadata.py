@@ -47,7 +47,7 @@ class TestMetadata(unittest.TestCase):
         self.assertGreater(hard, dump); self.assertLessEqual(hard, 1.0)
 
     def test_inspect_cli(self):
-        r = subprocess.run([sys.executable, str(ROOT/"daemon/inspect.py"), str(ROOT/"examples/session-closed-loop.json")],
+        r = subprocess.run([sys.executable, str(ROOT/"daemon/tracker_inspect.py"), str(ROOT/"examples/session-closed-loop.json")],
                            capture_output=True, text=True)
         self.assertEqual(r.returncode, 0, r.stderr)
         self.assertIn("payload:", r.stdout); self.assertIn("allowlist: ok", r.stdout)

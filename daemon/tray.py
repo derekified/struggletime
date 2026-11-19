@@ -15,6 +15,7 @@ import importlib.util, json, subprocess, sys, threading, time, urllib.request, w
 from pathlib import Path
 
 HERE = Path(__file__).parent
+sys.path = [p for p in sys.path if Path(p or ".").resolve() != HERE.resolve()]
 spec = importlib.util.spec_from_file_location("st_gui", HERE / "gui.py")
 st_gui = importlib.util.module_from_spec(spec); spec.loader.exec_module(st_gui)
 
@@ -87,7 +88,7 @@ class Tray:
         self.proc = None; self._notify("stopped. sealed buckets stay in the repo ledger."); self._refresh()
 
     def _inspect(self, *_):
-        r = subprocess.run([sys.executable, str(HERE / "inspect.py"), self.s["repo"]], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, str(HERE / "tracker_inspect.py"), self.s["repo"]], capture_output=True, text=True)
         first = (r.stdout or r.stderr).strip().splitlines()
         self._notify(first[1] if len(first) > 1 else "nothing to inspect yet")
 

@@ -90,6 +90,6 @@ pixels or keystrokes:
   field outside `schemas/heartbeat.schema.json` — `prompt_text`,
   `command`, `content`, file paths, etc. get a 400 before chaining.
   Raw text/pixels are not merely unused; they are unrepresentable.
-- **Local inspect:** `python3 daemon/inspect.py <repo|buckets.json>`
+- **Local inspect:** `python3 daemon/tracker_inspect.py <repo|buckets.json>`
   prints byte-for-byte what will be sent, its size, chain validity, and
   allowlist status. Verify before you trust.

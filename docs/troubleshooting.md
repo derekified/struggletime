@@ -15,7 +15,7 @@ is the tamper evidence working as intended — don't silence it.
 **422 tampered / 400 allowlist**
 a bucket was modified after sealing, or something tried to send a field
 outside the schema (paths, prompt text, commands). run
-`daemon/inspect.py` locally; it shows the offending bucket byte-for-byte.
+`daemon/tracker_inspect.py` locally; it shows the offending bucket byte-for-byte.
 
 **github webhook 401**
 `GITHUB_WEBHOOK_SECRET` on the server ≠ the secret in the repo webhook

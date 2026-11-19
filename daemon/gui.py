@@ -12,6 +12,8 @@ sealed buckets are waiting to send. Nothing here records anything new.
 import argparse, json, os, queue, subprocess, sys, threading, time, webbrowser
 from pathlib import Path
 
+sys.path = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).parent.resolve()]
+
 try:
     import tkinter as tk
     from tkinter import filedialog, messagebox, scrolledtext
@@ -115,7 +117,7 @@ class App:
     def inspect(self):
         repo = self.vars["repo"].get().strip()
         if not repo: messagebox.showerror("struggletime", "pick a repo first"); return
-        r = subprocess.run([sys.executable, str(ROOT / "daemon" / "inspect.py"), repo], capture_output=True, text=True)
+        r = subprocess.run([sys.executable, str(ROOT / "daemon" / "tracker_inspect.py"), repo], capture_output=True, text=True)
         self.log.insert("end", "\n--- inspect ---\n" + (r.stdout or r.stderr) + "\n"); self.log.see("end")
 
     def _tick(self):

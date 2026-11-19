@@ -3,8 +3,8 @@
 """Local tracker inspect: show exactly what would leave this machine.
 
 Usage:
-  python3 daemon/inspect.py --repo ~/my-project
-  python3 daemon/inspect.py examples/session-closed-loop.json
+  python3 daemon/tracker_inspect.py --repo ~/my-project
+  python3 daemon/tracker_inspect.py examples/session-closed-loop.json
 """
 import argparse, hashlib, json, sys
 from pathlib import Path

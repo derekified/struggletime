@@ -10,6 +10,8 @@
 import argparse, os, signal, subprocess, sys, time
 from pathlib import Path
 
+sys.path = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).parent.resolve()]
+
 HOME = Path(os.environ.get("AITIME_HOME", Path.home() / ".aitime"))
 PIDF, LOGF, CFG = HOME / "daemon.pid", HOME / "daemon.log", HOME / "daemon.args"
 

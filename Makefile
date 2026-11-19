@@ -33,7 +33,7 @@ daemon:
 
 inspect:
 	@test -n "$(REPO)" || (echo "set REPO=path/to/repo" && exit 1)
-	$(PY) daemon/inspect.py "$(REPO)"
+	$(PY) daemon/tracker_inspect.py "$(REPO)"
 
 demo:
 	PORT=18766 SERVER_DB=/tmp/struggletime-demo.db $(PY) scripts/demo.py

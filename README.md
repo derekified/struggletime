@@ -39,7 +39,7 @@ Just looking? `make demo` starts a seeded server on :18766.
 | 3 | Motivating, not anti-fraud | Live dashboard: weighted h, streaks, weekly goal, public builder profiles |
 | 4 | Passive | Daemon + shell hook; no timers or start/stop |
 | 5 | Central server | Accounts (token auth), public-by-default profiles, projects + git linking, realtime stats + SSE, github linking + signed push webhooks, slack linking + `/struggletime stats` slash command + submission/review notifications (webhook env, queued otherwise) |
-| 6 | Privacy-friendly | metadata-only 5-min buckets (25–50 kb/session, anonymized file ids, line deltas, exit codes); strict schema allowlist rejects raw text/paths with 400; `daemon/inspect.py` shows byte-for-byte what leaves; logged ≠ submitted |
+| 6 | Privacy-friendly | metadata-only 5-min buckets (25–50 kb/session, anonymized file ids, line deltas, exit codes); strict schema allowlist rejects raw text/paths with 400; `daemon/tracker_inspect.py` shows byte-for-byte what leaves; logged ≠ submitted |
 | 7 | All models/harnesses | agent-first: layer-1 terminal+fs core (100%, most agent users never open an ide); l2 adapters are optional enrichment, incl. openclaw session log tailing (`adapters/`) |
 | 8 | Win/Mac/Linux, low-spec | Polling daemon, stdlib only, ~46 MB server RSS; hooks for bash/zsh/PowerShell |
 | 9 | Trustworthy | Hash-chain + git anchors + outlier flags + reason-coded review (`server/`) |

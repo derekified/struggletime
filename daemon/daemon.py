@@ -9,6 +9,7 @@ only counts, categories, exit codes and git totals are bucketed.
 import argparse, json, os, subprocess, sys, time, urllib.request, uuid
 from pathlib import Path
 
+sys.path = [p for p in sys.path if Path(p or ".").resolve() != Path(__file__).parent.resolve()]
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from verify import bucket_hash, anonymized_file_id, GENESIS
 
