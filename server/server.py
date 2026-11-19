@@ -114,8 +114,11 @@ def stats_for(c, project=None, user=None):
     streak, d = 0, date.today()
     while d.isoformat() in days: streak += 1; d -= timedelta(days=1)
     buckets = [json.loads(r["payload"]) for r in rows]
+    today = date.today().isoformat()
+    weighted_today = sum(r["weighted_secs"] for r in rows if date.fromtimestamp(r["bucket_start_wall"]).isoformat() == today)
     return {"buckets": len(rows), "raw_secs": sum(r["bucket_secs"] for r in rows),
             "weighted_secs": weighted, "weighted_hours": round(weighted / 3600, 4),
+            "weighted_today_secs": weighted_today, "weighted_today_hours": round(weighted_today / 3600, 4),
             "by_state": by_state, "active_days": len(days), "current_streak_days": streak,
             "flags": flags(buckets, weighted / 3600) if buckets else []}
 

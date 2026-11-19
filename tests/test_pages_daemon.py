@@ -40,7 +40,7 @@ class TestPagesDaemon(unittest.TestCase):
         self.assertEqual(s, 201); self.assertNotIn("token", u)
         self.assertEqual(req(self.port, "POST", "/v1/auth/signin", {"handle": "ghostuser"})[0], 404)
         s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})
-        self.assertEqual(s, 200); self.assertEqual(p["handle"], "signinuser")
+        self.assertEqual(s, 200); self.assertEqual(p["handle"], "signinuser"); self.assertIn("weighted_today_hours", p)
         req(self.port, "POST", "/v1/users/signinuser/github", {"github_login": "octocat"})
         s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})
         self.assertEqual(p["github_login"], "octocat")

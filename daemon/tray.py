@@ -33,8 +33,12 @@ def pending_count(repo):
     try: return len(json.loads((Path(repo).expanduser() / ".aitime-ledger.json").read_text()).get("pending", []))
     except Exception: return 0
 
-def weighted_title(hours, tracking):
-    return f"{hours:.1f}h" if tracking else ""
+def format_duration(hours):
+    mins = int(round((hours or 0) * 60)); h, m = divmod(mins, 60)
+    return f"{h}h {m:02d}m" if h and m else (f"{h}h" if h else f"{m}m")
+
+def weighted_title(hours, tracking=None):
+    return format_duration(hours)
 
 def make_icon(tracking):
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
@@ -49,7 +53,7 @@ class Tray:
         self.s = st_gui.load_settings()
         self.s.update({k: v for k, v in overrides.items() if v})
         self.proc, self.hours, self._icon_state = None, 0.0, None
-        self.icon = pystray.Icon("struggletime", make_icon(False), "struggletime", self._menu())
+        self.icon = pystray.Icon("struggletime", make_icon(False), weighted_title(0), self._menu())
         self._auto_start()
 
     def tracking(self): return self.proc is not None and self.proc.poll() is None
@@ -68,8 +72,8 @@ class Tray:
 
     def _status(self):
         if self.tracking():
-            return f"● tracking {Path(self.s['repo']).name} as @{self.s['handle']} · {self.hours:.2f}h weighted · {pending_count(self.s['repo'])} pending"
-        return "○ not tracking"
+            return f"● tracking {Path(self.s['repo']).name} as @{self.s['handle']} · {format_duration(self.hours)} today · {pending_count(self.s['repo'])} pending"
+        return f"○ not tracking · {format_duration(self.hours)} today"
 
     def _auto_start(self):
         if st_gui.validate(self.s): self._notify("not set up yet. open settings… from the tray menu."); return
@@ -108,16 +112,19 @@ class Tray:
         state = self.tracking()
         if state != self._icon_state:
             self._icon_state = state; self.icon.icon = make_icon(state)
-        self.icon.title = weighted_title(self.hours, state)
+        self.icon.title = weighted_title(self.hours)
+
+    def _fetch_hours(self):
+        if not self.s.get("handle"): return
+        try:
+            req = urllib.request.Request(self.s["server"].rstrip("/") + "/v1/users/" + self.s["handle"], headers={"X-Handle": self.s["handle"]})
+            with urllib.request.urlopen(req, timeout=4) as x:
+                d = json.loads(x.read()); self.hours = d.get("weighted_today_hours", d.get("weighted_hours", 0.0))
+        except Exception: pass
 
     def _poll(self):
         while True:
-            time.sleep(15)
-            if self.tracking() and self.s.get("handle"):
-                try:
-                    req = urllib.request.Request(self.s["server"].rstrip("/") + "/v1/users/" + self.s["handle"], headers={"X-Handle": self.s["handle"]})
-                    with urllib.request.urlopen(req, timeout=4) as x: self.hours = json.loads(x.read()).get("weighted_hours", 0.0)
-                except Exception: pass
+            time.sleep(15); self._fetch_hours()
             if self.proc is not None and not self.tracking():
                 self.proc = None; self._notify("daemon stopped unexpectedly. check ~/.aitime/daemon.log")
             self._refresh()
@@ -125,6 +132,7 @@ class Tray:
             except Exception: pass
 
     def run(self):
+        self._fetch_hours(); self._refresh()
         threading.Thread(target=self._poll, daemon=True).start()
         self.icon.run()
 
