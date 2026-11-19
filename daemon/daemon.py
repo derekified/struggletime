@@ -91,7 +91,7 @@ def main():
                 if e.get("category") == "ai_cli": counts["prompts"] += 1
                 if e.get("category") == "git" and e.get("verb") == "commit": counts["commits"] += 1
             state["exec_offset"] = len(lines)
-        if time.monotonic() - started_mono < a.bucket_secs and not a.once: continue
+        if time.monotonic() - started_mono < a.bucket_secs: continue
         counts["idle_secs"] = int(max(0, a.bucket_secs - (last_activity - started_mono))) if time.monotonic() - last_activity > 60 else 0
         anchor, files = git_anchor(repo, state["salt"], bursts)
         bucket = {"v": 1, "bucket_id": str(uuid.uuid4()), "install_id": os.environ.get("AITIME_INSTALL", "local"),

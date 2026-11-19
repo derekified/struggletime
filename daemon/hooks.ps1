@@ -7,7 +7,7 @@ function Global:prompt {
   $cmd = (Get-History -Count 1).CommandLine
   if ($cmd) {
     $name = ($cmd -split ' ')[0]
-    $cat = switch -Regex ($name) { '^git$' {'git'} '^(claude|codex|aider)$' {'ai_cli'} '^(pytest|npm|cargo|go|make|node|python)$' {'test_runner'} default {'other'} }
+    $cat = switch -Regex ($name) { '^git$' {'git'} '^(claude|codex|aider|opencode|openclaw|gemini|goose|amp|crush|copilot|cursor-agent|qwen|pi|cline|roo)$' {'ai_cli'} '^(pytest|npm|cargo|go|make|node|python)$' {'test_runner'} default {'other'} }
     "{`"ts`":$([DateTimeOffset]::Now.ToUnixTimeSeconds()),`"category`":`"$cat`",`"verb`":`"`",`"exit_code`":$ec}" | Add-Content $script:AitimeLog
   }
   "PS $($executionContext.SessionState.Path.CurrentLocation)> "
