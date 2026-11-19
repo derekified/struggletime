@@ -1,0 +1,70 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>StruggleTime — AI time tracking</title>
+<style>
+:root{--bg:#0f1115;--card:#1a1e27;--ink:#f2f4f8;--mut:#9aa3b2;--acc:#ff8c37;--grn:#3ecf8e;--line:#2a3040}
+*{box-sizing:border-box}body{margin:0;font:16px/1.5 system-ui,sans-serif;background:var(--bg);color:var(--ink)}
+main{max-width:980px;margin:0 auto;padding:28px 18px 60px}h1{font-size:34px;margin:4px 0}h2{margin:28px 0 10px}
+.sub{color:var(--mut);max-width:640px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:12px}
+.card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px}.big{font-size:30px;font-weight:700}
+.bar{height:10px;background:#262c3a;border-radius:99px;overflow:hidden}.bar i{display:block;height:100%;background:var(--acc)}
+.pill{display:inline-block;padding:2px 9px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--mut)}
+.flag{color:#ffb454;font-size:14px}table{width:100%;border-collapse:collapse}td,th{padding:8px;border-bottom:1px solid var(--line);text-align:left}
+input,button,select{font:inherit;padding:9px 12px;border-radius:9px;border:1px solid var(--line);background:#12151c;color:var(--ink)}
+button{background:var(--acc);color:#14100c;border:0;font-weight:700;cursor:pointer}form{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+a{color:var(--acc)}small{color:var(--mut)}
+</style></head><body><main>
+<p><span class="pill">AGPLv3 · passive · privacy-first</span></p>
+<h1>StruggleTime</h1>
+<p class="sub">Hours of <b>productive struggle</b> with AI — counted passively, weighted causally, proven cryptographically. Build in flow; we count the loop: prompt → test → fix → ship.</p>
+
+<div class="grid">
+  <div class="card"><small>Your weighted hours (all projects)</small><div class="big" id="hours">—</div><small id="raw"></small></div>
+  <div class="card"><small>Current streak</small><div class="big" id="streak">—</div><small>days with a closed loop</small></div>
+  <div class="card"><small>Weekly goal · 5 weighted h</small><div class="bar"><i id="goal" style="width:0%"></i></div><small id="goal-t"></small></div>
+  <div class="card"><small>Trust signal</small><div class="big" id="closed">—</div><small>buckets closing the causal loop</small></div>
+</div>
+
+<h2>Projects <small>(live — updates every 2s)</small></h2>
+<div id="projects" class="grid"><div class="card">No projects yet. Run the daemon below — your first closed loop appears here.</div></div>
+
+<h2>Builders</h2><div id="users" class="grid"></div>
+
+<h2>Try it in 60 seconds</h2>
+<div class="card">
+<form id="demo"><input id="handle" placeholder="your handle" required><button>Load demo builder</button></form>
+<small>Demo loads Rowan's browser CS2-style session: a struggle loop earns full weight, an unattended agent dump earns 0.20× and gets flagged. No prompts, code, commands, or keystrokes ever leave your machine — only 5-minute metadata buckets, hash-chained so tampering is obvious in review.</small>
+<p id="demo-out"></p></div>
+
+<h2>Submit for review</h2>
+<div class="card"><small>Logged hours stay private. Submitting freezes an evidence pack (weighted timeline + git anchors + your AI declaration) for reviewers &amp; Fraud Squad.</small>
+<form id="submit"><input id="proj" placeholder="project id" required><input id="decl" placeholder="How did you use AI?" required size="38"><button>Submit latest project hours</button></form><p id="submit-out"></p></div>
+
+<h2>Install (Win / Mac / Linux, low-spec)</h2>
+<div class="card"><code>python3 daemon/daemon.py --repo ~/my-project</code><br>
+<small>Layer 1 needs no plugins: filesystem watcher + shell hook work everywhere. VS Code/Cursor and Claude Code/Codex adapters only enrich it. <a href="https://www.gnu.org/licenses/agpl-3.0.html">AGPLv3</a> — inspect exactly what it sends.</small></div>
+</main>
+<script>
+const $=id=>document.getElementById(id);
+async function j(u,o){const r=await fetch(u,o);return [r.status,await r.json().catch(()=>({}))]}
+async function refresh(){
+ const [,ps]=await j('/v1/projects'); const [,us]=await j('/v1/users');
+ let wh=0,raw=0,closed=0,streak=0;
+ $('projects').innerHTML=ps.projects.length?ps.projects.map(p=>`<div class="card"><b>${p.name||p.id}</b> <span class="pill">${p.id}</span><div class="big">${p.weighted_hours} h</div><small>${p.raw_secs/3600} raw h · ${Object.entries(p.by_state).map(([k,v])=>k+' ×'+v).join(' · ')||'no buckets yet'}</small>${p.flags.map(f=>`<div class="flag">⚑ ${f}</div>`).join('')}</div>`).join(''):$('projects').innerHTML;
+ ps.projects.forEach(p=>{wh+=p.weighted_hours;raw+=p.raw_secs/3600;closed+=(p.by_state.CLOSED_LOOP||0)+(p.by_state.STRUGGLE_LOOP||0)});
+ us.users.forEach(u=>streak=Math.max(streak,u.current_streak_days||0));
+ $('hours').textContent=wh.toFixed(2)+' h'; $('raw').textContent=raw.toFixed(2)+' raw hours tracked passively';
+ $('streak').textContent=streak+' day'+(streak==1?'':'s'); $('closed').textContent=closed;
+ const pct=Math.min(100,wh/5*100); $('goal').style.width=pct+'%'; $('goal-t').textContent=wh.toFixed(2)+' / 5 weighted h this goal';
+ $('users').innerHTML=us.users.length?us.users.map(u=>`<div class="card"><b>@${u.handle}</b><div class="big">${u.weighted_hours} h</div><small>${u.active_days} active days · 🔥 ${u.current_streak_days}</small></div>`).join(''):'<div class="card">Be the first builder.</div>';
+}
+$('demo').onsubmit=async e=>{e.preventDefault();const h=$('handle').value.trim();
+ await j('/v1/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:h})});
+ await j('/v1/projects',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id:'cs2-browser',owner_handle:h,name:'CS2 Browser Port',repo_url:'https://github.com/example/cs2-browser'})});
+ $('demo-out').textContent='Builder @'+h+' created. Now run the daemon on a real repo, or ask for the seeded demo buckets.'; refresh()};
+$('submit').onsubmit=async e=>{e.preventDefault();
+ const [,ps]=await j('/v1/projects'); const p=ps.projects.find(x=>x.id===$('proj').value.trim());
+ if(!p){$('submit-out').textContent='Project not found yet — track something first.';return}
+ $('submit-out').textContent='Project "'+p.id+'" has '+p.weighted_hours+' weighted h ready. Submission API: POST /v1/submissions with your bucket range + declaration (see server/README.md).';};
+refresh(); setInterval(refresh,2000);
+</script></body></html>

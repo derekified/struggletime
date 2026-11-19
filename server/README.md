@@ -1,22 +1,24 @@
-# Server (test slice)
+# Server
 
-Stdlib-only Python + SQLite reference server. Production target is the
-same API on Go/Rust + Postgres (`schemas/server.sql`); SQLite here keeps
-the test slice zero-dependency.
+Stdlib-only Python + SQLite reference implementation. Production target
+is the same API on Go/Rust + Postgres (`schemas/server.sql`).
 
 ```bash
-PORT=18765 SERVER_DB=/tmp/test-server.db python3 server/server.py
-curl localhost:18765/health
+PORT=18765 SERVER_DB=/tmp/final.db python3 server/server.py
+# dashboard: http://127.0.0.1:18765
 ```
 
 | Endpoint | Behaviour |
 |---|---|
-| `POST /v1/buckets/batch` | Verifies hash chain continuing from stored head; 422 on tamper/broken chain, 409 on duplicates; applies `weighting/rules-v0.1.0.yaml`; returns weighted seconds added |
-| `GET /v1/projects/{id}/stats` | Buckets, raw vs weighted secs/hours, per-state counts, outlier flags (404 if unknown) |
-| `POST /v1/submissions` | Requires `ai_declaration`; claims weighted secs for bucket range; returns flags |
-| `POST /v1/submissions/{id}/review` | Validates reason code; sets approved/deflated/rejected from approved secs |
-| `GET /v1/submissions/{id}` | Submission + flags |
-| `GET /health` | `{"ok": true}` |
+| `GET /` | Live dashboard (weighted h, streak, goal, flags, builders) |
+| `POST /v1/users` | Create account, returns bearer token once; public by default, `is_public:false` opts out |
+| `GET /v1/users` / `GET /v1/users/{handle}` | Public builder board / profile with totals, streak, projects (403 if private) |
+| `POST /v1/projects` | Register project (token owner or `owner_handle`) |
+| `POST /v1/projects/{id}/git` | Link repo + `head_from..head_to` anchor range |
+| `POST /v1/buckets/batch` | Verify chain from stored head (422 tamper, 409 duplicate), weight, store |
+| `GET /v1/projects/{id}/stats` | Raw vs weighted, per-state, flags, streak |
+| `GET /v1/projects/{id}/stream?once=1` | SSE snapshot (omit `once` for keepalive stream) |
+| `POST /v1/submissions` | AI declaration required; claims weighted secs; git/flag checks |
+| `POST /v1/submissions/{id}/review` | Reason-coded approve / deflate / reject |
 
-Not yet: auth, public profiles, git-graph overlay, SSE. Those sit behind
-this ingest/verify contract and do not change it.
+Tests: `python3 -m unittest discover -s tests` — 18 passing.
