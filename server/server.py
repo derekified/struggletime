@@ -114,7 +114,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json(200, {"project_id": p[2], "buckets": buckets,
                                             "evidence_bytes": len(json.dumps(buckets).encode())})
             tl = friction_timeline(buckets)
-            commits = [{"at_bucket": t["bucket_id"], "head_commit": t["head_commit"]} for t in tl if t["commits"] or t["head_commit"]]
+            commits = [{"at_bucket": t["bucket_id"], "head_commit": t["head_commit"]} for t in tl if t["commits"]]
             return self.send_json(200, {"project_id": p[2], "timeline": tl, "commit_anchors": commits,
                                         "evidence_bytes": len(json.dumps(buckets).encode()),
                                         "budget": "target 25-50 kb per submitted session, hard cap 50 kb/hour of metadata"})
@@ -135,6 +135,17 @@ class H(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError): pass
                 finally: _LOCK.acquire()
             return
+        if p == ["v1", "overview"]:
+            st = stats_for(c)
+            subs = c.execute("SELECT status, COUNT(*) n FROM submission GROUP BY status").fetchall()
+            return self.send_json(200, {**st, "users": c.execute("SELECT COUNT(*) FROM user").fetchone()[0],
+                "projects_count": c.execute("SELECT COUNT(DISTINCT project_id) FROM bucket").fetchone()[0],
+                "submissions": {r["status"]: r["n"] for r in subs},
+                "pending_reviews": sum(r["n"] for r in subs if r["status"] == "pending")})
+        if p == ["v1", "submissions"]:
+            rows = c.execute("SELECT * FROM submission ORDER BY rowid DESC").fetchall()
+            return self.send_json(200, {"submissions": [{**dict(r), "flags": json.loads(r["flags"]),
+                "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4)} for r in rows]})
         if len(p) == 3 and p[:2] == ["v1", "submissions"]:
             r = c.execute("SELECT * FROM submission WHERE id=?", (p[2],)).fetchone()
             if not r: return self.send_json(404, {"error": "submission not found"})
