@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
+"""OpenClaw adapter: counts agent turns from local session logs.
+
+OpenClaw's gateway executes tools itself, so a shell hook never sees
+its prompts or exit codes. Its sessions are local JSONL though. This
+adapter tails those files and emits ONLY counts (turns, tool calls,
+failures) into the daemon's exec log. Message text, tool arguments,
+and file contents are parsed past and never written anywhere.
+"""
+import argparse, json, os, time
+from pathlib import Path
+
+def classify(entry):
+    s = json.dumps(entry).lower()
+    if '"toolresult"' in s or '"tool_result"' in s or '"tool result"' in s:
+        failed = '"iserror": true' in s or '"status": "error"' in s or '"exitcode": 1' in s
+        return {"category": "test_runner", "verb": "tool_result", "exit_code": 1 if failed else 0}
+    if '"toolcall"' in s or '"tool_call"' in s or '"tooluse"' in s:
+        return {"category": "ai_cli", "verb": "tool", "exit_code": 0}
+    role = str(entry.get("role", "")).lower() if isinstance(entry, dict) else ""
+    typ = str(entry.get("type", "")).lower() if isinstance(entry, dict) else ""
+    if role == "user" or typ in ("user_message", "human_turn"):
+        return {"category": "ai_cli", "verb": "prompt", "exit_code": 0}
+    return None
+
+def scan(sessions_dir, state):
+    events = []
+    for f in sorted(Path(sessions_dir).rglob("*.jsonl")):
+        lines = f.read_text(errors="ignore").splitlines()
+        start = state.get(str(f), 0)
+        for line in lines[start:]:
+            try: e = classify(json.loads(line))
+            except Exception: continue
+            if e: events.append(e)
+        state[str(f)] = len(lines)
+    return events
+
+def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--sessions-dir", default=os.environ.get("OPENCLAW_SESSIONS", str(Path.home() / ".openclaw" / "agents" / "main" / "sessions")))
+    ap.add_argument("--once", action="store_true")
+    a = ap.parse_args()
+    exec_log = Path(os.environ.get("AITIME_EXEC_LOG", Path.home() / ".aitime" / "exec.jsonl"))
+    exec_log.parent.mkdir(parents=True, exist_ok=True)
+    state_file = exec_log.parent / "openclaw-adapter-state.json"
+    state = json.loads(state_file.read_text()) if state_file.exists() else {}
+    while True:
+        if Path(a.sessions_dir).exists():
+            for e in scan(a.sessions_dir, state):
+                e["ts"] = int(time.time())
+                with open(exec_log, "a") as fh: fh.write(json.dumps(e) + "\n")
+                print(e, flush=True)
+            state_file.write_text(json.dumps(state))
+        if a.once: return
+        time.sleep(2)
+
+if __name__ == "__main__":
+    main()
