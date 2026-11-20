@@ -48,7 +48,7 @@ LEGACY_EDITORS_JSON = HOME / "editors.json"
 PAUSE_FLAG = HOME / "paused"
 
 # Public origin (IP + port-forward). Override via STRUGGLETIME_SERVER / OAUTH_REDIRECT_BASE.
-PUBLIC_SERVER = "http://62.83.116.143:18765"
+PUBLIC_SERVER = "https://62-83-116-143.sslip.io"
 
 DEFAULTS = {
     "handle": "",

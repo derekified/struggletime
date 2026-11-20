@@ -76,14 +76,14 @@ headless or scripting, the cli is still there:
 
 ```bash
 python3 daemon/daemon.py --repo ~/my-project \
-  --server http://62.83.116.143:18765 --user you
+  --server https://62-83-116-143.sslip.io --user you
 ```
 
 or via the helper (background + logs):
 
 ```bash
 python3 daemon/helper.py start --repo ~/my-project --user you \
-  --server http://62.83.116.143:18765 --token "$ST_API_KEY"
+  --server https://62-83-116-143.sslip.io --token "$ST_API_KEY"
 python3 daemon/helper.py status
 python3 daemon/helper.py sync --repo ~/my-project --user you   # flush pending now
 python3 daemon/helper.py pause

@@ -108,35 +108,40 @@ with exactly that domain. keep port 18765 firewalled off
 (`ufw allow OpenSSH`, `ufw allow 80,443/tcp`, nothing else) — the
 proxy is the only public door.
 
-**3. public IP + port forward** (no tunnel):
+**3. public IP + Caddy HTTPS (recommended — no Cloudflare tunnel):**
+
+Slack/GitHub require **HTTPS** redirect URIs. Put Caddy on `:443` in
+front of the app (systemd), using a stable hostname. On a bare IP,
+[sslip.io](https://sslip.io) works without buying a domain:
 
 ```bash
-# server listens on all interfaces (default BIND=0.0.0.0)
-PORT=18765 BIND=0.0.0.0 python3 server/server.py
+# /etc/caddy/Caddyfile
+62-83-116-143.sslip.io {
+  reverse_proxy 127.0.0.1:18765
+}
 ```
-
-set in `.env`:
 
 ```bash
-OAUTH_REDIRECT_BASE=http://YOUR.PUBLIC.IP:18765
-AITIME_SERVER=http://YOUR.PUBLIC.IP:18765
-STRUGGLETIME_SERVER=http://YOUR.PUBLIC.IP:18765
-BIND=0.0.0.0
+OAUTH_REDIRECT_BASE=https://62-83-116-143.sslip.io
+AITIME_SERVER=https://62-83-116-143.sslip.io
+STRUGGLETIME_SERVER=https://62-83-116-143.sslip.io
+BIND=127.0.0.1
 ```
 
-open TCP `18765` on the host/firewall and point router port-forwarding
-at the VPS. register Slack/GitHub OAuth callbacks as
-`http://YOUR.PUBLIC.IP:18765/v1/auth/<provider>/callback` (some
-providers require https — use a reverse proxy if they reject plain http).
+```bash
+systemctl enable --now caddy struggletime-server
+```
 
-**4. temporary public tunnel** (optional, if you need https quickly):
+Register OAuth callbacks **once** (they do not change on reboot):
+
+- `https://62-83-116-143.sslip.io/v1/auth/slack/callback`
+- `https://62-83-116-143.sslip.io/v1/auth/github/callback`
+
+**4. temporary public tunnel** (only for quick tests — URL changes every restart):
 
 ```bash
 ngrok http 18765        # or: cloudflared tunnel --url http://127.0.0.1:18765
 ```
-
-use the https address as `OAUTH_REDIRECT_BASE` and in the oauth app
-callbacks; redo both whenever the tunnel URL changes.
 
 ## operations
 
