@@ -1,8 +1,8 @@
 {
   "$schema": "struggletime-adapter/v1",
-  "description": "Claude Code enrichment: agent turn counts + editor/agent labels only. Merge into .claude/settings.json hooks.",
+  "description": "Claude Code enrichment: agent turn counts + editor/agent labels only. Merge into .claude/settings.json hooks. Writes ~/.aitime/agent_events.jsonl (no MCP, no paths/prompts).",
   "hooks": {
-    "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"category\":\"ai_cli\",\"verb\":\"tool\",\"editor\":\"claude-code\",\"agent\":\"claude\",\"op\":\"modified\",\"exit_code\":0}\\n' \"$(date +%s)\" >> \"${AITIME_EXEC_LOG:-$HOME/.aitime/exec.jsonl}\" "}]}],
-    "Stop": [{"hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"category\":\"ai_cli\",\"verb\":\"stop\",\"editor\":\"claude-code\",\"agent\":\"claude\",\"exit_code\":0}\\n' \"$(date +%s)\" >> \"${AITIME_EXEC_LOG:-$HOME/.aitime/exec.jsonl}\" "}]}]
+    "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"event_type\":\"tool\",\"category\":\"ai_cli\",\"verb\":\"tool\",\"editor\":\"claude-code\",\"agent\":\"claude\",\"op\":\"modified\",\"exit_code\":0,\"files_touched_count\":1,\"source\":\"adapter\"}\\n' \"$(date +%s)\" >> \"${AITIME_AGENT_EVENTS:-$HOME/.aitime/agent_events.jsonl}\" "}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"event_type\":\"stop\",\"category\":\"ai_cli\",\"verb\":\"stop\",\"editor\":\"claude-code\",\"agent\":\"claude\",\"exit_code\":0,\"files_touched_count\":0,\"source\":\"adapter\"}\\n' \"$(date +%s)\" >> \"${AITIME_AGENT_EVENTS:-$HOME/.aitime/agent_events.jsonl}\" "}]}]
   }
 }

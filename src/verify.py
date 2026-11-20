@@ -7,13 +7,18 @@ import hashlib, json, sys
 
 GENESIS = "0" * 64
 
-ALLOWED_TOP = {"v","bucket_id","install_id","project_id","repo_remote_hash","bucket_start_wall","bucket_secs","mono_delta_ms","counts","git","files","exec_categories","editors","agents","formula_version","prev_hash","hash","signature"}
+ALLOWED_TOP = {
+    "v","bucket_id","install_id","project_id","repo_remote_hash","bucket_start_wall","bucket_secs",
+    "mono_delta_ms","counts","git","files","exec_categories","editors","agents","languages",
+    "os","os_detail","formula_version","prev_hash","hash","signature",
+}
 ALLOWED_COUNTS = {"human_edits","ai_writes","prompts","executions","exec_failures","commits","dwell_diff_secs","idle_secs"}
 ALLOWED_GIT = {"head_commit","lines_added","lines_deleted","dirty_files"}
-# op/editor/agent/source are metadata labels only — never raw paths or content
-ALLOWED_FILE = {"file_id","added","deleted","bursts","op","editor","agent","source"}
+# op/editor/agent/source/language are metadata labels only — never raw paths or content
+ALLOWED_FILE = {"file_id","added","deleted","bursts","op","editor","agent","source","language"}
 ALLOWED_FILE_OP = {"created","modified","deleted"}
 ALLOWED_FILE_SOURCE = {"layer1","adapter"}
+ALLOWED_OS_DETAIL = {"id","release","arch"}
 FORBIDDEN = {"content","text","code","prompt_text","command","args","keystrokes","screenshot","image","path","filepath","file_path","raw","transcript"}
 
 def anonymized_file_id(rel_path, salt):
@@ -36,10 +41,10 @@ def validate_allowlist(bucket):
             errs.append(f"files[{i}].op: must be created|modified|deleted")
         if "source" in f and f["source"] not in ALLOWED_FILE_SOURCE:
             errs.append(f"files[{i}].source: must be layer1|adapter")
-        for label in ("editor", "agent"):
+        for label in ("editor", "agent", "language"):
             if label in f and (not isinstance(f[label], str) or len(f[label]) > 32 or "/" in f[label] or " " in f[label]):
                 errs.append(f"files[{i}].{label}: short metadata label only")
-    for agg in ("editors", "agents"):
+    for agg in ("editors", "agents", "languages"):
         obj = bucket.get(agg)
         if obj is None: continue
         if not isinstance(obj, dict):
@@ -50,6 +55,20 @@ def validate_allowlist(bucket):
                 errs.append(f"{agg}.{k}: short metadata label only")
             if not isinstance(v, int) or v < 0:
                 errs.append(f"{agg}.{k}: count must be non-negative int")
+    if "os" in bucket:
+        os_id = bucket["os"]
+        if not isinstance(os_id, str) or not os_id or len(os_id) > 32 or "/" in os_id or " " in os_id:
+            errs.append("os: short platform label only")
+        if os_id == "untracked":
+            errs.append("os: must not be untracked")
+    if "os_detail" in bucket:
+        detail = bucket["os_detail"]
+        if not isinstance(detail, dict):
+            errs.append("os_detail: must be object")
+        else:
+            for k in detail:
+                if k not in ALLOWED_OS_DETAIL:
+                    errs.append(f"os_detail.{k}: not in allowlist")
     return errs
 
 def is_silent(bucket):

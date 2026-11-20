@@ -42,7 +42,12 @@ def main():
     ap.add_argument("--sessions-dir", default=os.environ.get("OPENCLAW_SESSIONS", str(Path.home() / ".openclaw" / "agents" / "main" / "sessions")))
     ap.add_argument("--once", action="store_true")
     a = ap.parse_args()
-    exec_log = Path(os.environ.get("AITIME_EXEC_LOG", Path.home() / ".aitime" / "exec.jsonl"))
+    # Unified bridge (agent_events.jsonl); fall back to legacy exec.jsonl only if forced
+    exec_log = Path(
+        os.environ.get("AITIME_AGENT_EVENTS")
+        or os.environ.get("AITIME_EXEC_LOG")
+        or (Path.home() / ".aitime" / "agent_events.jsonl")
+    )
     exec_log.parent.mkdir(parents=True, exist_ok=True)
     state_file = exec_log.parent / "openclaw-adapter-state.json"
     state = json.loads(state_file.read_text()) if state_file.exists() else {}
@@ -50,6 +55,10 @@ def main():
         if Path(a.sessions_dir).exists():
             for e in scan(a.sessions_dir, state):
                 e["ts"] = int(time.time())
+                e["event_type"] = e.get("verb") or "tool"
+                e["files_touched_count"] = 1 if e.get("op") else 0
+                e["source"] = "adapter"
+                # Never write message text / tool args — classify() already returns labels only
                 with open(exec_log, "a") as fh: fh.write(json.dumps(e) + "\n")
                 print(e, flush=True)
             state_file.write_text(json.dumps(state))

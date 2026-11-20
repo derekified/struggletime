@@ -1,11 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Layer-1 aitime daemon: polling watcher + exec log -> chained 5-min buckets.
+"""Layer-1 aitime daemon: polling watcher + agent event bridge -> chained buckets.
 
-Stdlib only, cross-platform (no native file watchers). Metadata only —
+Stdlib only, cross-platform (no native file watchers, no MCP). Metadata only —
 raw paths never leave this process (anonymized file ids in the ledger salt).
+
+Drains ~/.aitime/agent_events.jsonl (adapters + agent-event CLI) and legacy
+exec.jsonl on each poll tick; falls back to process/workspace inference when
+no adapter fired in the window.
 """
-import argparse, json, os, signal, subprocess, sys, time, urllib.error, urllib.request, uuid
+import argparse, json, os, platform, signal, subprocess, sys, time, urllib.error, urllib.request, uuid
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -14,6 +18,7 @@ sys.path.insert(0, str(HERE.parent / "src"))
 sys.path.insert(0, str(HERE))
 from verify import bucket_hash, anonymized_file_id, GENESIS
 import config as dcfg
+import agent_event as agent_evt
 
 IGNORE = {".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".aitime"}
 _STOP = False
@@ -29,6 +34,20 @@ EXEC_CATS = {
     "claude": "ai_cli", "codex": "ai_cli", "aider": "ai_cli", "opencode": "ai_cli", "openclaw": "ai_cli",
     "gemini": "ai_cli", "goose": "ai_cli", "amp": "ai_cli", "crush": "ai_cli", "copilot": "ai_cli",
     "cursor-agent": "ai_cli", "qwen": "ai_cli", "cline": "ai_cli", "roo": "ai_cli",
+}
+
+# Extension → language (never send paths; only this label)
+LANG_EXT = {
+    ".py": "python", ".pyi": "python", ".js": "javascript", ".jsx": "javascript",
+    ".ts": "typescript", ".tsx": "typescript", ".mjs": "javascript", ".cjs": "javascript",
+    ".go": "go", ".rs": "rust", ".rb": "ruby", ".php": "php", ".java": "java",
+    ".kt": "kotlin", ".swift": "swift", ".c": "c", ".h": "c", ".cpp": "cpp", ".cc": "cpp",
+    ".hpp": "cpp", ".cs": "csharp", ".fs": "fsharp", ".scala": "scala", ".lua": "lua",
+    ".r": "r", ".jl": "julia", ".sh": "shell", ".bash": "shell", ".zsh": "shell",
+    ".ps1": "powershell", ".sql": "sql", ".html": "html", ".css": "css", ".scss": "css",
+    ".md": "markdown", ".json": "json", ".yaml": "yaml", ".yml": "yaml", ".toml": "toml",
+    ".xml": "xml", ".vue": "vue", ".svelte": "svelte", ".dart": "dart", ".ex": "elixir",
+    ".exs": "elixir", ".hs": "haskell", ".ml": "ocaml", ".zig": "zig", ".nim": "nim",
 }
 
 def env(*keys, default=""):
@@ -56,13 +75,13 @@ def git_anchor(repo, salt=None, bursts=None, file_meta=None):
                 rel = p[2]
                 fid = anonymized_file_id(rel, salt)
                 row = {"file_id": fid, "added": a, "deleted": d, "bursts": (bursts or {}).get(rel, 0)}
-                row.update({k: v for k, v in (file_meta.get(rel) or {}).items() if k in ("op", "editor", "agent", "source")})
+                row.update({k: v for k, v in (file_meta.get(rel) or {}).items() if k in ("op", "editor", "agent", "source", "language")})
                 files[fid] = row
     for rel, n in (bursts or {}).items():
         fid = anonymized_file_id(rel, salt) if salt else None
         if salt and fid not in files:
             row = {"file_id": fid, "added": 0, "deleted": 0, "bursts": n}
-            row.update({k: v for k, v in (file_meta.get(rel) or {}).items() if k in ("op", "editor", "agent", "source")})
+            row.update({k: v for k, v in (file_meta.get(rel) or {}).items() if k in ("op", "editor", "agent", "source", "language")})
             files[fid] = row
     # deleted files may only appear in file_meta
     for rel, meta in file_meta.items():
@@ -71,7 +90,7 @@ def git_anchor(repo, salt=None, bursts=None, file_meta=None):
         fid = anonymized_file_id(rel, salt)
         if fid not in files:
             row = {"file_id": fid, "added": 0, "deleted": 0, "bursts": (bursts or {}).get(rel, 0)}
-            row.update({k: v for k, v in meta.items() if k in ("op", "editor", "agent", "source")})
+            row.update({k: v for k, v in meta.items() if k in ("op", "editor", "agent", "source", "language")})
             files[fid] = row
     dirty = len([l for l in git(repo, "status", "--porcelain").splitlines() if l])
     anchor = {
@@ -105,26 +124,82 @@ def _clean_label(v, default="unknown"):
     return s
 
 def classify_exec(line):
-    """Parse shell-hook / adapter JSONL. Never keep args or paths."""
+    """Parse shell-hook / adapter / agent_events JSONL. Never keep args or paths."""
     e = json.loads(line)
     if not isinstance(e, dict):
         raise ValueError("exec line must be object")
+    # Prefer unified agent_event allowlist when keys look like bridge events
+    if any(k in e for k in ("event_type", "editor", "agent", "files_touched_count")):
+        ok, cleaned = agent_evt.validate_event(e)
+        if ok:
+            return cleaned
     cat = e.get("category") or classify_name(e.get("name") or e.get("cmd"))
     if cat not in ("git", "test_runner", "compiler", "ai_cli", "other", "editor"):
         cat = "other"
-    verb = e.get("verb") or ""
+    verb = e.get("verb") or e.get("event_type") or ""
     if " " in verb or "/" in verb or len(verb) > 32:
         verb = ""
     return {
         "category": cat,
         "verb": verb,
+        "event_type": _clean_label(e.get("event_type") or verb, "exec"),
         "exit_code": int(e.get("exit_code") or 0),
         "ts": e.get("ts"),
         "editor": _clean_label(e.get("editor"), "") or None,
         "agent": _clean_label(e.get("agent"), "") or None,
         "op": e.get("op") if e.get("op") in ("created", "modified", "deleted") else None,
+        "files_touched_count": int(e.get("files_touched_count") or 0),
         "source": "adapter" if e.get("editor") or e.get("agent") or cat == "editor" else "layer1",
     }
+
+def drain_event_log(path, offset_key, state, counts, exec_categories, attr_hint):
+    """Read new JSONL lines from an event bridge file; mutate counts/hint. Returns updated hint."""
+    path = Path(path)
+    if not path.exists():
+        return attr_hint
+    try:
+        lines = path.read_text().splitlines()
+    except Exception:
+        return attr_hint
+    start = int(state.get(offset_key) or 0)
+    for line in lines[start:]:
+        try:
+            e = classify_exec(line)
+        except Exception:
+            continue
+        counts["executions"] += 1
+        cat = e.get("category") or "other"
+        exec_categories[cat] = exec_categories.get(cat, 0) + 1
+        if e.get("exit_code"):
+            counts["exec_failures"] += 1
+        if cat == "ai_cli":
+            counts["prompts"] += 1
+            attr_hint = {
+                "agent": e.get("agent") or _clean_label(e.get("verb") or "ai-cli", "unknown-agent"),
+                "editor": e.get("editor") or attr_hint.get("editor"),
+                "source": "adapter",
+            }
+        if cat == "editor":
+            eds = detect_running_editors()
+            attr_hint = {
+                "editor": e.get("editor") or (eds[0] if eds else "unknown"),
+                "agent": e.get("agent") or "human",
+                "source": "adapter",
+            }
+        if cat == "git" and e.get("verb") == "commit":
+            counts["commits"] += 1
+        # files_touched_count from adapters can reinforce burst attribution without paths
+        n = int(e.get("files_touched_count") or 0)
+        if n >= 5 and cat in ("editor", "ai_cli"):
+            counts["ai_writes"] += max(1, n // 5)
+            if not attr_hint.get("agent") or attr_hint.get("agent") == "human":
+                attr_hint = {
+                    **attr_hint,
+                    "agent": e.get("agent") or (detect_running_agents() or ["unknown-agent"])[0],
+                    "source": attr_hint.get("source") or "adapter",
+                }
+    state[offset_key] = len(lines)
+    return attr_hint
 
 def empty():
     return {
@@ -136,20 +211,23 @@ def classify_burst(n_changed):
     """1–2 files = human; 5+ files = agent/formatter."""
     return "ai" if n_changed >= 5 else "human"
 
-def detect_running_editors():
-    """Stdlib process scan → editor labels (no paths)."""
+def _process_blob():
     try:
         if sys.platform.startswith("win"):
-            out = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=3).stdout.lower()
-        else:
-            out = subprocess.run(["ps", "-ax", "-o", "comm="], capture_output=True, text=True, timeout=3).stdout.lower()
+            return subprocess.run(["tasklist"], capture_output=True, text=True, timeout=3).stdout.lower()
+        return subprocess.run(["ps", "-ax", "-o", "comm="], capture_output=True, text=True, timeout=3).stdout.lower()
     except Exception:
-        out = ""
+        return ""
+
+def detect_running_editors():
+    """Stdlib process scan → editor labels (never 'local-daemon' when a known IDE is up)."""
+    out = _process_blob()
     found = []
     checks = (
         ("cursor", "cursor"), ("code helper", "vscode"), ("visual studio code", "vscode"),
-        ("code.exe", "vscode"), ("nvim", "neovim"), ("vim", "vim"), ("emacs", "emacs"),
-        ("sublime_text", "sublime"), ("zed", "zed"), ("idea", "jetbrains"),
+        ("code.exe", "vscode"), ("code -", "vscode"), ("nvim", "neovim"), ("vim", "vim"),
+        ("emacs", "emacs"), ("sublime_text", "sublime"), ("zed", "zed"), ("idea", "jetbrains"),
+        ("webstorm", "jetbrains"), ("pycharm", "jetbrains"),
     )
     for needle, label in checks:
         if needle in out and label not in found:
@@ -159,17 +237,61 @@ def detect_running_editors():
         found.insert(0, env_ed)
     return found
 
+def detect_running_agents():
+    """Stdlib process scan → agent labels (claude-code, codex, openclaw, …)."""
+    out = _process_blob()
+    found = []
+    checks = (
+        ("claude", "claude"), ("codex", "codex"), ("openclaw", "openclaw"),
+        ("aider", "aider"), ("cursor-agent", "cursor-agent"), ("gemini", "gemini"),
+        ("opencode", "opencode"), ("goose", "goose"), ("amp", "amp"),
+    )
+    for needle, label in checks:
+        if needle in out and label not in found:
+            found.append(label)
+    env_ag = _clean_label(env("STRUGGLETIME_AGENT", "AITIME_AGENT", default=""), "")
+    if env_ag and env_ag not in found:
+        found.insert(0, env_ag)
+    return found
+
+def host_os():
+    """Populate os via stdlib platform — never 'untracked'."""
+    sysname = (platform.system() or "").lower()
+    if sysname == "darwin":
+        label = "macos"
+    elif sysname.startswith("win"):
+        label = "windows"
+    else:
+        label = "linux"
+    return {
+        "id": label,
+        "release": _clean_label(platform.release(), "unknown")[:32] or "unknown",
+        "arch": _clean_label(platform.machine(), "unknown")[:16] or "unknown",
+    }
+
+def language_from_rel(rel):
+    """Infer language from file extension only (path never stored)."""
+    ext = Path(rel or "").suffix.lower()
+    return LANG_EXT.get(ext) or "other"
+
 def default_attr(burst_kind="human", hint=None):
     hint = hint or {}
-    editor = hint.get("editor") or (detect_running_editors() or ["unknown"])[0]
+    editors = detect_running_editors()
+    agents_running = detect_running_agents()
+    editor = hint.get("editor") or (editors[0] if editors else "unknown")
+    # Never stick on a fake local-daemon label when a real IDE is running
+    if editor in ("", "unknown", "local-daemon", "local_daemon") and editors:
+        editor = editors[0]
     if hint.get("agent"):
         agent = hint["agent"]
     elif burst_kind == "ai":
-        agent = "unknown-agent"
+        agent = agents_running[0] if agents_running else "unknown-agent"
+    elif agents_running and burst_kind == "ai":
+        agent = agents_running[0]
     else:
         agent = "human"
     source = hint.get("source") or ("adapter" if hint.get("editor") or hint.get("agent") else "layer1")
-    return _clean_label(editor), _clean_label(agent, "human"), source
+    return _clean_label(editor, "unknown"), _clean_label(agent, "human"), source
 
 def diff_ops(prev_snap, snap):
     """Return {rel: op} for created / modified / deleted in this poll."""
@@ -229,8 +351,10 @@ def _on_signal(signum, _frame):
     elif hasattr(signal, "SIGUSR2") and signum == signal.SIGUSR2:
         os.environ["_ST_FLUSH_NOW"] = "1"
 
-def seal_bucket(state, repo, project, bucket_secs, started_wall, started_mono, counts, bursts, install_id, file_meta=None, exec_categories=None):
+def seal_bucket(state, repo, project, bucket_secs, started_wall, started_mono, counts, bursts, install_id, file_meta=None, exec_categories=None, rel_langs=None, attr_hint=None):
     file_meta = file_meta or {}
+    rel_langs = rel_langs or {}
+    attr_hint = attr_hint or {}
     anchor, files = git_anchor(repo, state["salt"], bursts, file_meta=file_meta)
     if (anchor["lines_added"] + anchor["lines_deleted"]) >= 200 and counts["human_edits"] > 0 and counts["ai_writes"] == 0:
         counts = dict(counts)
@@ -238,19 +362,42 @@ def seal_bucket(state, repo, project, bucket_secs, started_wall, started_mono, c
         counts["human_edits"] = 0
         for meta in file_meta.values():
             if meta.get("agent") == "human":
-                meta["agent"] = "unknown-agent"
-    editors, agents = {}, {}
+                meta["agent"] = (detect_running_agents() or ["unknown-agent"])[0]
+    # Attach language labels onto anonymized file rows (extension-derived only)
+    fid_lang = {}
+    for rel, lang in rel_langs.items():
+        fid_lang[anonymized_file_id(rel, state["salt"])] = lang
+    for f in files:
+        lang = fid_lang.get(f.get("file_id"))
+        if lang:
+            f["language"] = lang
+    editors, agents, languages = {}, {}, {}
     for f in files:
         ed, ag = f.get("editor") or "unknown", f.get("agent") or "unknown"
+        if ed in ("local-daemon", "local_daemon", ""):
+            ed = (detect_running_editors() or ["unknown"])[0]
+            f["editor"] = ed
         editors[ed] = editors.get(ed, 0) + 1
         agents[ag] = agents.get(ag, 0) + 1
+        lang = f.get("language") or "other"
+        languages[lang] = languages.get(lang, 0) + 1
+    if not editors:
+        # Prefer adapter hint, then running IDE — never invent local-daemon
+        ed, ag, _ = default_attr("human", attr_hint)
+        editors[ed] = 1
+        if ag and ag not in agents:
+            agents[ag] = agents.get(ag, 0) + 1
+    if not languages:
+        languages["other"] = 1
+    os_info = host_os()
     bucket = {
         "v": 1, "bucket_id": str(uuid.uuid4()), "install_id": install_id,
         "project_id": project, "repo_remote_hash": None, "bucket_start_wall": started_wall,
         "bucket_secs": bucket_secs, "mono_delta_ms": int((time.monotonic() - started_mono) * 1000),
         "counts": counts, "git": anchor, "files": files,
         "exec_categories": exec_categories or {},
-        "editors": editors, "agents": agents,
+        "editors": editors, "agents": agents, "languages": languages,
+        "os": os_info["id"], "os_detail": os_info,
         "formula_version": "v0.1.0-alpha", "prev_hash": state["prev_hash"],
     }
     bucket["hash"] = bucket_hash(bucket)
@@ -295,11 +442,13 @@ def main():
     else:
         bucket_secs = max(1, int(rt["bucket_mins"]) * 60)
 
-    exec_log = Path(env("STRUGGLETIME_EXEC_LOG", "AITIME_EXEC_LOG", default=str(dcfg.HOME / "exec.jsonl")))
+    exec_log = Path(env("STRUGGLETIME_EXEC_LOG", "AITIME_EXEC_LOG", default=str(agent_evt.EXEC_LOG)))
+    agent_log = Path(env("AITIME_AGENT_EVENTS", "STRUGGLETIME_AGENT_EVENTS", default=str(agent_evt.EVENT_LOG)))
     ledger = repo / ".aitime-ledger.json"
     state = json.loads(ledger.read_text()) if ledger.exists() else {"prev_hash": GENESIS, "pending": [], "exec_offset": 0}
     state.setdefault("pending", [])
     state.setdefault("exec_offset", 0)
+    state.setdefault("agent_offset", 0)
     state.setdefault("prev_hash", GENESIS)
     if "salt" not in state:
         state["salt"] = uuid.uuid4().hex
@@ -324,12 +473,13 @@ def main():
         return 0 if not state.get("pending") else 1
 
     bursts, counts, prev_snap, last_activity = {}, empty(), snapshot(repo), time.monotonic()
-    file_meta, exec_categories = {}, {}
+    file_meta, exec_categories, rel_langs = {}, {}, {}
     attr_hint = {}  # latest adapter/layer1 editor+agent hint for this bucket
     started_wall, started_mono = int(time.time()), time.monotonic()
     install_id = env("STRUGGLETIME_INSTALL", "AITIME_INSTALL", default="local")
     print(
         f"watching {repo} project={project} bucket={bucket_secs}s server={server or 'offline'}"
+        f" os={host_os()['id']} agents={agent_log.name}+{exec_log.name}"
         f"{' PAUSED' if was_paused else ''}",
         flush=True,
     )
@@ -345,41 +495,13 @@ def main():
             was_paused = paused_now
             if not paused_now:
                 started_wall, started_mono = int(time.time()), time.monotonic()
-                counts, bursts, file_meta, exec_categories, attr_hint = empty(), {}, {}, {}, {}
+                counts, bursts, file_meta, exec_categories, rel_langs, attr_hint = empty(), {}, {}, {}, {}, {}
         if paused_now:
             continue
 
-        if exec_log.exists():
-            try:
-                lines = exec_log.read_text().splitlines()
-            except Exception:
-                lines = []
-            for line in lines[state["exec_offset"]:]:
-                try:
-                    e = classify_exec(line)
-                except Exception:
-                    continue
-                counts["executions"] += 1
-                cat = e.get("category") or "other"
-                exec_categories[cat] = exec_categories.get(cat, 0) + 1
-                if e.get("exit_code"):
-                    counts["exec_failures"] += 1
-                if cat == "ai_cli":
-                    counts["prompts"] += 1
-                    attr_hint = {
-                        "agent": e.get("agent") or _clean_label(e.get("verb") or "ai-cli", "unknown-agent"),
-                        "editor": e.get("editor") or attr_hint.get("editor"),
-                        "source": "adapter" if e.get("source") == "adapter" or e.get("editor") else "layer1",
-                    }
-                if cat == "editor":
-                    attr_hint = {
-                        "editor": e.get("editor") or "unknown",
-                        "agent": e.get("agent") or "human",
-                        "source": "adapter",
-                    }
-                if cat == "git" and e.get("verb") == "commit":
-                    counts["commits"] += 1
-            state["exec_offset"] = len(lines)
+        # Unified agent_events bridge first, then legacy exec.jsonl
+        attr_hint = drain_event_log(agent_log, "agent_offset", state, counts, exec_categories, attr_hint)
+        attr_hint = drain_event_log(exec_log, "exec_offset", state, counts, exec_categories, attr_hint)
 
         snap = snapshot(repo)
         ops = diff_ops(prev_snap, snap)
@@ -394,12 +516,14 @@ def main():
                 counts["human_edits"] += max(n_touch, 1)
             for rel, op in ops.items():
                 bursts[rel] = bursts.get(rel, 0) + (0 if op == "deleted" else 1)
-                # adapter hint wins when present; else layer1 process/burst inference
+                lang = language_from_rel(rel)
+                rel_langs[rel] = lang
                 file_meta[rel] = {
                     "op": op,
                     "editor": editor,
-                    "agent": agent if op != "deleted" or kind == "ai" else agent,
+                    "agent": agent,
                     "source": source,
+                    "language": lang,
                 }
         prev_snap = snap
 
@@ -411,13 +535,14 @@ def main():
         )
         bucket = seal_bucket(
             state, repo, project, bucket_secs, started_wall, started_mono, counts, bursts, install_id,
-            file_meta=file_meta, exec_categories=exec_categories,
+            file_meta=file_meta, exec_categories=exec_categories, rel_langs=rel_langs, attr_hint=attr_hint,
         )
-        bursts, file_meta, exec_categories, attr_hint = {}, {}, {}, {}
+        bursts, file_meta, exec_categories, rel_langs, attr_hint = {}, {}, {}, {}, {}
         save_ledger(ledger, state)
         print(
             f"bucket {bucket['bucket_id'][:8]} sealed {bucket['counts']} "
-            f"editors={bucket.get('editors')} agents={bucket.get('agents')}",
+            f"editors={bucket.get('editors')} agents={bucket.get('agents')} "
+            f"os={bucket.get('os')} languages={bucket.get('languages')}",
             flush=True,
         )
         flush_pending(state, server, user, token, ledger)

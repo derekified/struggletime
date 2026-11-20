@@ -19,12 +19,19 @@ class TestMetadata(unittest.TestCase):
 
     def test_allowlist_accepts_file_op_editor_agent(self):
         b = bucket()
-        b["files"][0].update({"op": "modified", "editor": "cursor", "agent": "human", "source": "layer1"})
+        b["files"][0].update({"op": "modified", "editor": "cursor", "agent": "human", "source": "layer1", "language": "python"})
         b["editors"] = {"cursor": 1}
         b["agents"] = {"human": 1}
+        b["languages"] = {"python": 1}
+        b["os"] = "linux"
+        b["os_detail"] = {"id": "linux", "release": "6.12", "arch": "x86_64"}
         self.assertEqual(verify.validate_allowlist(b), [])
         b["files"][0]["op"] = "rewrite"
         self.assertTrue(any("op" in e for e in verify.validate_allowlist(b)))
+
+    def test_allowlist_rejects_untracked_os(self):
+        b = bucket(); b["os"] = "untracked"
+        self.assertTrue(any("untracked" in e for e in verify.validate_allowlist(b)))
 
     def test_allowlist_rejects_raw_content(self):
         for field, val in (("prompt_text", "write me code"), ("command", "rm -rf"), ("content", "secret code")):

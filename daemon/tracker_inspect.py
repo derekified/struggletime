@@ -33,11 +33,17 @@ def main():
     print(f"allowlist: {'ok — metadata only, no raw text/pixels can be represented' if not errs else errs}")
     for b, (w, state) in zip(buckets, weight_sequence(buckets)):
         print(f"  {b['bucket_id'][:8]} {state:<22} w={w:<5} friction={friction(b):<5} files={[f['file_id'] for f in b.get('files', [])]} head={(b['git'].get('head_commit') or '')[:8]}")
-        if b.get("editors") or b.get("agents"):
-            print(f"           editors={b.get('editors')} agents={b.get('agents')} exec_categories={b.get('exec_categories')}")
+        if b.get("editors") or b.get("agents") or b.get("os") or b.get("languages"):
+            print(
+                f"           editors={b.get('editors')} agents={b.get('agents')} "
+                f"os={b.get('os')} languages={b.get('languages')} exec_categories={b.get('exec_categories')}"
+            )
         for f in b.get("files") or []:
-            if any(k in f for k in ("op", "editor", "agent")):
-                print(f"           {f.get('file_id')} op={f.get('op')} editor={f.get('editor')} agent={f.get('agent')} source={f.get('source')}")
+            if any(k in f for k in ("op", "editor", "agent", "language")):
+                print(
+                    f"           {f.get('file_id')} op={f.get('op')} editor={f.get('editor')} "
+                    f"agent={f.get('agent')} language={f.get('language')} source={f.get('source')}"
+                )
     print("this is byte-for-byte what the server receives. nothing else leaves this machine.")
     return 1 if errs else 0
 

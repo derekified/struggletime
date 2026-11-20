@@ -266,8 +266,21 @@ def _range_cut(range_key):
         return None, "all time"
     return (today - timedelta(days=6)).isoformat(), "last 7 days"
 
+def _payload_share(mapping, weight_secs):
+    """Split weighted secs across label→count shares from a bucket payload."""
+    if not isinstance(mapping, dict) or not mapping:
+        return {}
+    total = sum(max(0, int(v or 0)) for v in mapping.values()) or 1
+    out = {}
+    for k, v in mapping.items():
+        label = str(k or "unknown").lower().replace(" ", "-")[:32]
+        if not label or label == "untracked":
+            continue
+        out[label] = out.get(label, 0.0) + weight_secs * (max(0, int(v or 0)) / total)
+    return out
+
 def build_analytics(c, user=None, range_key="7d", project=None, category=None, language=None, os_name=None, editor=None, tz_offset=0):
-    """Dashboard analytics from real buckets. Language/OS/editor are typed fallbacks until daemon emits them."""
+    """Dashboard analytics from real buckets — os/language/editor from daemon payloads."""
     cut, label = _range_cut(range_key)
     q, args = "SELECT * FROM bucket WHERE 1=1", []
     if user:
@@ -277,7 +290,6 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
     rows = c.execute(q, args).fetchall()
 
     def local_parts(ts):
-        # tz_offset is minutes east of UTC (clients send -new Date().getTimezoneOffset())
         local_dt = datetime.fromtimestamp(ts, tz=timezone.utc) + timedelta(minutes=int(tz_offset))
         d = local_dt.date()
         return d.isoformat(), d.weekday() % 7, local_dt.hour
@@ -289,17 +301,28 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
             continue
         if category and category not in ("", "all") and r["state"] != category:
             continue
-        # TODO: wire backend metric — language / OS / editor filters once daemon sends them
-        if language and language not in ("", "all", "untracked"):
-            continue
-        if os_name and os_name not in ("", "all", "untracked"):
-            continue
-        if editor and editor not in ("", "all", "local-daemon"):
-            continue
-        filtered.append((r, day, wd, hour))
+        try:
+            payload = json.loads(r["payload"])
+        except Exception:
+            payload = {}
+        langs = payload.get("languages") or {}
+        editors_map = payload.get("editors") or {}
+        os_id = (payload.get("os") or (payload.get("os_detail") or {}).get("id") or "unknown")
+        os_id = str(os_id).lower().replace(" ", "-")
+        if language and language not in ("", "all"):
+            if language not in langs and not any(str(k).lower() == language for k in langs):
+                continue
+        if os_name and os_name not in ("", "all"):
+            if os_id != os_name:
+                continue
+        if editor and editor not in ("", "all"):
+            if editor not in editors_map and not any(str(k).lower() == editor for k in editors_map):
+                continue
+        filtered.append((r, day, wd, hour, payload, os_id))
 
     proj_meta = {row["id"]: dict(row) for row in c.execute("SELECT * FROM project")}
     by_project, by_state, by_day = {}, {}, {}
+    by_language, by_os, by_editor = {}, {}, {}
     rhythm = [[0.0 for _ in range(24)] for _ in range(7)]
     human_w = ai_w = 0.0
     total_w = 0.0
@@ -307,7 +330,7 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
     today_w = 0.0
     day_totals = {}
 
-    for r, day, wd, hour in filtered:
+    for r, day, wd, hour, payload, os_id in filtered:
         w = float(r["weighted_secs"] or 0)
         total_w += w
         by_project[r["project_id"]] = by_project.get(r["project_id"], 0) + w
@@ -317,8 +340,13 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         rhythm[wd][hour] += w / 3600
         if day == today_s:
             today_w += w
+        for k, share in _payload_share(payload.get("languages") or {}, w).items():
+            by_language[k] = by_language.get(k, 0) + share
+        for k, share in _payload_share(payload.get("editors") or {}, w).items():
+            by_editor[k] = by_editor.get(k, 0) + share
+        if os_id and os_id != "untracked":
+            by_os[os_id] = by_os.get(os_id, 0) + w
         try:
-            payload = json.loads(r["payload"])
             counts = payload.get("counts") or {}
             he = float(counts.get("human_edits") or 0)
             aw = float(counts.get("ai_writes") or 0)
@@ -341,11 +369,9 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
 
     projects = ranked(by_project, lambda pid: (proj_meta.get(pid) or {}).get("name") or pid)
     categories = ranked(by_state, lambda s: STATE_LABELS.get(s, (s or "unknown").replace("_", " ").lower()))
-
-    # TODO: wire backend metric — language / OS / editor from daemon heartbeat enrichment
-    languages = [{"id": "untracked", "label": "untracked", "secs": round(total_w, 2), "hours": round(total_w / 3600, 4), "pct": 100 if total_w else 0, "missing": True}]
-    oses = [{"id": "untracked", "label": "untracked", "secs": round(total_w, 2), "hours": round(total_w / 3600, 4), "pct": 100 if total_w else 0, "missing": True}]
-    editors = [{"id": "local-daemon", "label": "local daemon", "secs": round(total_w, 2), "hours": round(total_w / 3600, 4), "pct": 100 if total_w else 0, "missing": True}]
+    languages = ranked(by_language, lambda s: s)
+    oses = ranked(by_os, lambda s: s)
+    editors = ranked(by_editor, lambda s: s.replace("-", " "))
 
     series = [{"day": d, "hours": round(by_day.get(d, 0) / 3600, 4)} for d in sorted(by_day)]
     prior_days = [v for d, v in day_totals.items() if d != today_s]
@@ -366,7 +392,6 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         {"id": p["id"], "label": p["name"] or p["id"]} for p in sorted(proj_meta.values(), key=lambda x: (x.get("name") or x["id"]))
         if (not user) or p.get("owner") == user or p["id"] in by_project
     ]
-    # if signed in, prefer owner's projects even with zero time in range
     if user:
         owned = [dict(r) for r in c.execute("SELECT * FROM project WHERE owner=?", (user,))]
         seen = {x["id"] for x in filter_projects}
@@ -387,9 +412,9 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         "filters": {
             "projects": filter_projects,
             "categories": [{"id": "all", "label": "all modes"}] + [{"id": c["id"], "label": c["label"]} for c in categories],
-            "languages": [{"id": "all", "label": "all languages"}, {"id": "untracked", "label": "untracked"}],
-            "oses": [{"id": "all", "label": "all OS"}, {"id": "untracked", "label": "untracked"}],
-            "editors": [{"id": "all", "label": "all editors"}, {"id": "local-daemon", "label": "local daemon"}],
+            "languages": [{"id": "all", "label": "all languages"}] + [{"id": x["id"], "label": x["label"]} for x in languages],
+            "oses": [{"id": "all", "label": "all OS"}] + [{"id": x["id"], "label": x["label"]} for x in oses],
+            "editors": [{"id": "all", "label": "all editors"}] + [{"id": x["id"], "label": x["label"]} for x in editors],
             "ranges": [
                 {"id": "today", "label": "today"}, {"id": "7d", "label": "7 days"},
                 {"id": "30d", "label": "30 days"}, {"id": "all", "label": "all time"},

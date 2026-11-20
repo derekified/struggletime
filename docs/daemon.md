@@ -55,7 +55,8 @@ menu fallback when headless.
 make gui                 # or: python3 daemon/gui.py
 ```
 
-**set API key** (from Settings on the dashboard), pick your repo, start
+**set API key** (from Settings on the dashboard), then **link / create
+project** (project + optional GitHub / None + local directory), start
 tracking. settings are stored in `~/.aitime/gui.json`, which the tray
 and Layer-1 daemon read too. `inspect what would be sent` shows a
 native alert with the inspect output.
@@ -108,17 +109,22 @@ SIGTERM/SIGINT flush pending then exit. if you kill the daemon
 mid-bucket, that partial bucket is lost and nothing else is. the hash
 chain makes both facts visible in review.
 
-## adapters (optional enrichment)
+## adapters (optional enrichment — no MCP)
 
-the daemon counts everything above with zero plugins. adapters only
-sharpen the signal:
+adapters emit compact allowlisted lines into `~/.aitime/agent_events.jsonl`
+(or via `python3 daemon/agent_event.py …`). the daemon drains that file on
+each poll tick, then falls back to stdlib process/workspace inference so
+`os` / `language` / `editor` / `agent` are never stuck on `untracked` /
+`local daemon` when a known IDE or agent is running. there is **no MCP
+server** and no raw paths, prompts, or keystrokes in the bridge.
 
 | adapter | what it adds | setup |
 |---|---|---|
-| vscode / cursor (`adapters/vscode`) | human vs programmatic edits, window focus | load `extension.js` as an extension |
-| claude code (`adapters/claude-code`) | exact agent turn boundaries | merge `hooks.json` into `.claude/settings.json` |
-| codex / any cli (`adapters/codex`) | turn boundaries for cli agents | shell wrapper in its readme |
-| openclaw (`adapters/openclaw`) | turns + tool results from local session logs, counts only | `python3 adapters/openclaw/adapter.py` |
+| vscode / cursor (`adapters/vscode`) | human edits, focus, file op counts | load `extension.js` as an extension |
+| claude code (`adapters/claude-code`) | agent turn boundaries | merge `hooks.json` into `.claude/settings.json` |
+| codex / any cli (`adapters/codex`) | turn boundaries for cli agents | shell wrapper / `agent_event.py` in its readme |
+| openclaw (`adapters/openclaw`) | turns + tool result counts from local session logs | `python3 adapters/openclaw/adapter.py` |
 
-if an adapter breaks when its tool updates, layer 1 keeps counting.
-that is the whole point of the split.
+legacy `~/.aitime/exec.jsonl` is still drained for older hooks. if an
+adapter breaks when its tool updates, layer 1 keeps counting — that is
+the whole point of the split.
