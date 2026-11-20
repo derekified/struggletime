@@ -639,8 +639,20 @@ class H(BaseHTTPRequestHandler):
         if p == [] or p == ["index.html"] or (len(p) == 1 and p[0] in pages):
             f = STATIC / "index.html"
             if not f.exists(): return self.send_json(404, {"error": "no dashboard"})
-            body = f.read_bytes(); self.send_response(200)
-            self.send_header("Content-Type", "text/html"); self.send_header("Content-Length", str(len(body)))
+            # Bust browser caches so dashboard JS/CSS updates land without a manual hard-refresh
+            def _asset_v(name):
+                try: return str(int((STATIC / name).stat().st_mtime))
+                except Exception: return "0"
+            html = f.read_text(encoding="utf-8")
+            for asset in ("styles.css", "ui.js", "app.js"):
+                ver = _asset_v(asset)
+                html = html.replace(f'href="/{asset}"', f'href="/{asset}?v={ver}"')
+                html = html.replace(f'src="/{asset}"', f'src="/{asset}?v={ver}"')
+            body = html.encode("utf-8")
+            self.send_response(200)
+            self.send_header("Content-Type", "text/html; charset=utf-8")
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("Content-Length", str(len(body)))
             self.end_headers(); self.wfile.write(body); return
         if len(p) == 1 and p[0] in ("ui.js", "app.js", "styles.css"):
             f = STATIC / p[0]
@@ -648,7 +660,7 @@ class H(BaseHTTPRequestHandler):
             ctype = "application/javascript" if p[0].endswith(".js") else "text/css"
             body = f.read_bytes(); self.send_response(200)
             self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
-            self.send_header("Cache-Control", "no-cache")
+            self.send_header("Cache-Control", "no-store")
             self.end_headers(); self.wfile.write(body); return
         if len(p) == 2 and p[0] == "img" and re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}\.(svg|png|webp|jpe?g)", p[1], re.I):
             f = STATIC / "img" / p[1]
@@ -966,6 +978,19 @@ class H(BaseHTTPRequestHandler):
             if not c.execute("SELECT 1 FROM bucket WHERE project_id=? LIMIT 1", (p[2],)).fetchone():
                 return self.send_json(404, {"error": "project not found"})
             return self.send_json(200, {"project_id": p[2], **stats_for(c, project=p[2])})
+        if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "chain":
+            # Daemon continues an existing hash chain after a fresh local ledger.
+            who = self.auth_handle(c)
+            if not who: return self.send_json(401, {"error": "sign in required"})
+            row = c.execute("SELECT * FROM project WHERE id=?", (p[2],)).fetchone()
+            if row and row["owner"] and row["owner"] != who:
+                return self.send_json(403, {"error": "not your project"})
+            head = c.execute("SELECT last_hash FROM chain_head WHERE project_id=?", (p[2],)).fetchone()
+            return self.send_json(200, {
+                "project_id": p[2],
+                "last_hash": head["last_hash"] if head else GENESIS,
+                "genesis": GENESIS,
+            })
         if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "stream":
             if not c.execute("SELECT 1 FROM bucket WHERE project_id=? LIMIT 1", (p[2],)).fetchone():
                 return self.send_json(404, {"error": "project not found"})

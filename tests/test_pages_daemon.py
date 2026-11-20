@@ -94,9 +94,13 @@ class TestPagesDaemon(unittest.TestCase):
 
     def test_installers_parse(self):
         self.assertEqual(subprocess.run(["sh", "-n", str(ROOT/"daemon/install.sh")]).returncode, 0)
+        self.assertEqual(subprocess.run(["sh", "-n", str(ROOT/"daemon/autostart.sh")]).returncode, 0)
         self.assertIn("ScheduledTask", (ROOT/"daemon/install.ps1").read_text())
-        self.assertIn("LaunchAgents", (ROOT/"daemon/install.sh").read_text())
-        self.assertIn("systemd", (ROOT/"daemon/install.sh").read_text())
+        # install.sh delegates login wiring to autostart.sh (LaunchAgents / systemd --user)
+        self.assertIn("autostart.sh", (ROOT/"daemon/install.sh").read_text())
+        auto = (ROOT/"daemon/autostart.sh").read_text()
+        self.assertIn("LaunchAgents", auto)
+        self.assertIn("systemd", auto)
 
 if __name__ == "__main__":
     unittest.main()

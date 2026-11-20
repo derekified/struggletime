@@ -77,6 +77,9 @@ def normalize_server(url, fallback=None):
         return fallback
     if "<ngrok" in low or "nothing after" in low:
         return fallback
+    # Ephemeral tunnels die when the process exits — never keep them as the daemon target
+    if "trycloudflare.com" in low or "cfargotunnel.com" in low or ".loca.lt" in low:
+        return fallback
     if not raw.startswith(("http://", "https://")):
         return fallback
     try:

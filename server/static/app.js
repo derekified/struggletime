@@ -11,26 +11,31 @@ const token = () => localStorage.getItem("st_token") || "";
 const setToken = (t) => { if (t) localStorage.setItem("st_token", t); else localStorage.removeItem("st_token"); };
 const authHdr = () => (token() ? { Authorization: "Bearer " + token() } : {});
 async function j(u, o = {}) {
+  const { cookieOnly, noCookieRetry, timeout = 12000, ...fetchOpts } = o;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), timeout);
   try {
-    const headers = { ...(o.headers || {}) };
-    if (!o.cookieOnly) Object.assign(headers, authHdr());
+    const headers = { ...(fetchOpts.headers || {}) };
+    if (!cookieOnly) Object.assign(headers, authHdr());
     else delete headers.Authorization;
-    const { cookieOnly, ...fetchOpts } = o;
     const r = await fetch(u, {
       credentials: "same-origin",
       ...fetchOpts,
       headers,
+      signal: fetchOpts.signal || ctrl.signal,
     });
     let status = r.status;
     let body = await r.json().catch(() => ({}));
     // Stale localStorage bearer must not blank projects/analytics when the Slack cookie is valid
-    if (status === 401 && token() && !cookieOnly && !o.noCookieRetry) {
+    if (status === 401 && token() && !cookieOnly && !noCookieRetry) {
       setToken("");
       return j(u, { ...o, cookieOnly: true, noCookieRetry: true });
     }
     return [status, body];
   } catch (_) {
     return [0, { error: "network error" }];
+  } finally {
+    clearTimeout(timer);
   }
 }
 
@@ -48,6 +53,7 @@ let selected = "", authStatus = null, meProfile = null, ghReposCache = null, ghR
 let lbPeriod = "week", lbQuery = "";
 let analytics = null, projectsCache = [];
 let meLoaded = false, authStatusLoaded = false, booted = false;
+let softRefreshQueued = false;
 const STALE_FILTER = new Set(["untracked", "local-daemon", "local_daemon", ""]);
 function sanitizeFilter(v, fallback = "all") {
   const s = String(v == null ? "" : v).trim();
@@ -112,6 +118,7 @@ function clearClientSession() {
   analytics = null;
   selected = "";
   fakeStatsMode = false;
+  filtersBeforeFake = null;
   try { sessionStorage.removeItem("st_fake_stats"); } catch (_) {}
   paintFakeBadge();
   if ($("nav-stats")) $("nav-stats").hidden = true;
@@ -148,18 +155,17 @@ async function doLogout() {
 
 let activePage = pathToPage(location.pathname);
 
-function showPage(page, { push = false } = {}) {
+function showPage(page, { push = false, load = true } = {}) {
   if (page === "signout" || page === "logout") {
     doLogout();
     return;
   }
   if (!KNOWN.includes(page)) page = "landing";
-  if (PROTECTED.has(page) && !isSignedIn() && !pendingAuthCode()) {
-    // token present but profile still loading: wait for refresh; otherwise send to hero
-    if (!token() || meLoaded) {
-      navigate("/");
-      return;
-    }
+  // Only bounce after /v1/auth/me has resolved. Cookie sessions often have no
+  // localStorage token — redirecting earlier sent /home → / and left data blank.
+  if (PROTECTED.has(page) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
+    page = "landing";
+    push = true;
   }
   activePage = page;
   const path = page === "landing" ? "/" : "/" + page;
@@ -173,7 +179,7 @@ function showPage(page, { push = false } = {}) {
   paintNavAuth();
   paintLogin();
   if (page === "settings") paintSettingsForm();
-  softRefresh();
+  if (load) loadActivePageData();
 }
 
 function navigate(url) {
@@ -1036,33 +1042,65 @@ async function restoreProject(p) {
 
 async function renderLeaderboard() {
   const box = $("lb-list"); if (!box) return;
-  const [s, r] = await j("/v1/leaderboard?period=" + encodeURIComponent(lbPeriod));
-  if (s !== 200) { box.replaceChildren(empty("Could not load leaderboard")); return; }
-  $("lb-meta").textContent = `${r.label} · ${r.total} builders`;
-  let entries = r.entries || [];
-  const q = lbQuery.trim().toLowerCase();
-  if (q) entries = entries.filter((e) => [e.handle, e.github_login, e.active_project, e.slack_name].filter(Boolean).join(" ").toLowerCase().includes(q));
-  if (!entries.length) { box.replaceChildren(empty("No activity in this period.")); return; }
-  const max = entries[0].weighted_hours || 1;
-  box.replaceChildren(...entries.map((e) => {
-    const flag = flagEmoji(e.country);
-    const nameKids = [];
-    if (flag) nameKids.push(el("span", { className: "lb-flag", text: flag, title: e.country || "" }));
-    nameKids.push(document.createTextNode("@" + e.handle));
-    return el("div", { className: "lb-row" }, [
-      el("div", { className: `lb-rank ${e.rank <= 3 ? "top" : ""}`, text: "#" + e.rank }),
-      avatar(e.slack_avatar, e.handle),
-      el("div", { className: "lb-user" }, [
-        el("b", {}, nameKids),
-        el("span", { className: "sub", text: [
-          e.active_project ? "/" + String(e.active_project).split("/").pop() : null,
-          e.streak ? `${e.streak}d streak` : null,
-        ].filter(Boolean).join(" · ") || " " }),
-        el("div", { className: "lb-bar" }, [el("i", { style: `width:${Math.max(4, (e.weighted_hours / max) * 100)}%` })]),
-      ]),
-      el("div", { className: "lb-hours", text: fmt(e.weighted_hours) + "h" }),
-    ]);
-  }));
+  try {
+    const [s, r] = await j("/v1/leaderboard?period=" + encodeURIComponent(lbPeriod));
+    if (s !== 200) {
+      box.replaceChildren(empty(r?.error || "Could not load leaderboard"));
+      if ($("lb-meta")) $("lb-meta").textContent = "";
+      return;
+    }
+    if ($("lb-meta")) $("lb-meta").textContent = `${r.label || lbPeriod} · ${r.total || 0} builders`;
+    let entries = r.entries || [];
+    const q = lbQuery.trim().toLowerCase();
+    if (q) entries = entries.filter((e) => [e.handle, e.github_login, e.active_project, e.slack_name].filter(Boolean).join(" ").toLowerCase().includes(q));
+    if (!entries.length) { box.replaceChildren(empty("No activity in this period.")); return; }
+    const max = entries[0].weighted_hours || 1;
+    box.replaceChildren(...entries.map((e) => {
+      const flag = flagEmoji(e.country);
+      const nameKids = [];
+      if (flag) nameKids.push(el("span", { className: "lb-flag", text: flag, title: e.country || "" }));
+      nameKids.push(document.createTextNode("@" + e.handle));
+      return el("div", { className: "lb-row" }, [
+        el("div", { className: `lb-rank ${e.rank <= 3 ? "top" : ""}`, text: "#" + e.rank }),
+        avatar(e.slack_avatar, e.handle),
+        el("div", { className: "lb-user" }, [
+          el("b", {}, nameKids),
+          el("span", { className: "sub", text: [
+            e.active_project ? "/" + String(e.active_project).split("/").pop() : null,
+            e.streak ? `${e.streak}d streak` : null,
+          ].filter(Boolean).join(" · ") || " " }),
+          el("div", { className: "lb-bar" }, [el("i", { style: `width:${Math.max(4, (e.weighted_hours / max) * 100)}%` })]),
+        ]),
+        el("div", { className: "lb-hours", text: fmt(e.weighted_hours) + "h" }),
+      ]);
+    }));
+  } catch (err) {
+    console.error("renderLeaderboard failed", err);
+    box.replaceChildren(empty("Could not load leaderboard"));
+  }
+}
+
+async function loadReviewQueue() {
+  const box = $("review-list"); if (!box) return;
+  if (!isSignedIn()) {
+    box.innerHTML = '<p class="ui-empty">sign in to see the review queue</p>';
+    return;
+  }
+  try {
+    const [ss, sr] = await j("/v1/submissions");
+    if (ss !== 200) {
+      box.innerHTML = `<p class="ui-empty">${esc(sr?.error || "could not load queue")}</p>`;
+      return;
+    }
+    const subs = sr.submissions || [];
+    box.innerHTML = subs.length
+      ? subs.map((s) => `<div class="event"><b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span>
+          <span class="sub"> ${fmt(s.claimed_weighted_hours)}h · ${esc(s.user_id || "")}</span></div>`).join("")
+      : '<p class="ui-empty">Nothing submitted yet.</p>';
+  } catch (err) {
+    console.error("loadReviewQueue failed", err);
+    box.innerHTML = '<p class="ui-empty">could not load queue</p>';
+  }
 }
 
 function analyticsQS() {
@@ -1085,8 +1123,23 @@ let konamiBuf = [];
 try {
   sessionStorage.removeItem("st_fake_stats");
   localStorage.removeItem("st_fake_stats");
+  // Sticky demo/dimension filters blank the first real analytics fetch; Konami OFF
+  // recovered via resetDashboardFilters — clear them up front so mount matches that path.
+  ["st_filter_language", "st_filter_os", "st_filter_editor", "st_filter_category"].forEach((k) => {
+    localStorage.removeItem(k);
+  });
 } catch (_) {}
 let fakeStatsMode = false;
+let filtersBeforeFake = null;
+filters.project = "all";
+filters.language = "all";
+filters.os = "all";
+filters.editor = "all";
+filters.category = "all";
+if (filters.range === "today") {
+  filters.range = "7d";
+  try { localStorage.setItem("st_range", "7d"); } catch (_) {}
+}
 
 function buildFakeAnalytics() {
   const days = [];
@@ -1175,8 +1228,42 @@ function paintFakeBadge() {
   if (!badge.hidden) hydrateNavIcons(badge);
 }
 
+/**
+ * Load whatever the active route needs.
+ * Konami OFF ends here with fakeStatsMode=false — that is the working real-data path.
+ * Boot and every navigation must use this same function.
+ */
+async function loadActivePageData() {
+  booted = true;
+  softRefreshQueued = false;
+  try {
+    if (activePage === "home") {
+      await loadAnalytics();
+      if (!fakeStatsMode && isSignedIn()) await drawFriction();
+    } else if (activePage === "projects") {
+      await loadProjectsView();
+    } else if (activePage === "builders") {
+      await renderLeaderboard();
+    } else if (activePage === "review") {
+      await loadReviewQueue();
+    }
+  } catch (err) {
+    console.error("loadActivePageData failed", err);
+  }
+  paintHeroCta();
+  paintFakeBadge();
+}
+
 function setFakeStatsMode(on) {
-  fakeStatsMode = !!on;
+  const next = !!on;
+  if (next && !fakeStatsMode) {
+    filtersBeforeFake = { ...filters };
+  }
+  fakeStatsMode = next;
+  if (!fakeStatsMode && filtersBeforeFake) {
+    Object.assign(filters, filtersBeforeFake);
+    filtersBeforeFake = null;
+  }
   try {
     if (fakeStatsMode) sessionStorage.setItem("st_fake_stats", "1");
     else {
@@ -1186,7 +1273,8 @@ function setFakeStatsMode(on) {
   } catch (_) {}
   paintFakeBadge();
   toast(fakeStatsMode ? "Sample stats on" : "Back to your real stats", { kind: fakeStatsMode ? "info" : "ok", glyph: fakeStatsMode ? "sticker" : "checkmark" });
-  loadAnalytics();
+  // ON → fake paint via loadAnalytics; OFF → real data (same as page load)
+  loadActivePageData();
 }
 
 function onKonamiKey(e) {
@@ -1225,7 +1313,11 @@ function renderFilterStrip(meta) {
   filters.os = coerceFilterValue(f.oses, filters.os);
   filters.editor = coerceFilterValue(f.editors, filters.editor);
   filters.category = coerceFilterValue(f.categories, filters.category);
-  const persist = (key, v) => { try { localStorage.setItem(key, v); } catch (_) {} };
+  // Never persist demo-mode picks into sticky real-data filters
+  const persist = (key, v) => {
+    if (fakeStatsMode) return;
+    try { localStorage.setItem(key, v); } catch (_) {}
+  };
   box.replaceChildren(
     selectField({ label: "Range", glyph: "clock", options: f.ranges || [], value: filters.range, onChange: (v) => { filters.range = v; persist("st_range", v); loadAnalytics(); } }),
     selectField({ label: "Project", glyph: "briefcase", options: f.projects || [{ id: "all", label: "all projects" }], value: filters.project, onChange: (v) => { filters.project = v; loadAnalytics(); } }),
@@ -1424,32 +1516,52 @@ function resetDashboardFilters({ range = "7d" } = {}) {
   } catch (_) {}
 }
 
+function filtersAreDefault() {
+  return (filters.project || "all") === "all"
+    && sanitizeFilter(filters.language, "all") === "all"
+    && sanitizeFilter(filters.os, "all") === "all"
+    && sanitizeFilter(filters.editor, "all") === "all"
+    && sanitizeFilter(filters.category, "all") === "all";
+}
+
+function analyticsHours(a) {
+  return Number(a?.total_hours || a?.weighted_hours || 0);
+}
+
 async function loadAnalytics() {
+  // fakeStatsMode ON → sample; OFF (default / Konami off) → real API paint
   if (fakeStatsMode && activePage === "home") {
     paintHomeAnalytics(buildFakeAnalytics());
     return;
   }
   let [s, a] = await j("/v1/me/analytics?" + analyticsQS());
-  // Streak comes from unfiltered /v1/auth/me. Sticky filters (today+TZ, language, os,
-  // category, project) can zero analytics while streak still looks fine — recover once.
-  const empty = s === 200 && a && Number(a.total_hours || a.weighted_hours || 0) === 0;
-  if (empty && profileHasActivity()) {
-    const before = analyticsQS();
+  // Sticky filters can zero analytics while streak still looks fine — recover once.
+  let empty = s === 200 && a && analyticsHours(a) === 0;
+  if (empty && (profileHasActivity() || !filtersAreDefault())) {
     resetDashboardFilters({ range: filters.range === "today" ? "7d" : (filters.range || "7d") });
-    const after = analyticsQS();
-    if (after !== before) {
-      const [s2, a2] = await j("/v1/me/analytics?" + after);
-      if (s2 === 200 && a2 && Number(a2.total_hours || a2.weighted_hours || 0) > 0) {
-        s = s2; a = a2;
+    if (filtersAreDefault() && filters.range !== "all" && analyticsHours(a) === 0) {
+      // still empty on defaults — try all-time once
+    }
+    const [s2, a2] = await j("/v1/me/analytics?" + analyticsQS());
+    if (s2 === 200 && a2 && analyticsHours(a2) > 0) {
+      s = s2; a = a2;
+      toast("Cleared filters that hid your hours", { kind: "info" });
+    } else if (s2 === 200 && a2 && analyticsHours(a2) === 0 && filters.range !== "all") {
+      resetDashboardFilters({ range: "all" });
+      const [s3, a3] = await j("/v1/me/analytics?" + analyticsQS());
+      if (s3 === 200 && a3 && analyticsHours(a3) > 0) {
+        s = s3; a = a3;
         toast("Cleared filters that hid your hours", { kind: "info" });
       }
     }
-  } else if (empty && filters.range === "today") {
+    empty = s === 200 && a && analyticsHours(a) === 0;
+  }
+  if (empty && filters.range === "today") {
     const [s2, a2] = await j("/v1/me/analytics?" + new URLSearchParams({
       range: "7d", project: "all", language: "all", os: "all", editor: "all", category: "all",
       tz_offset: String(TZ_OFFSET),
     }).toString());
-    if (s2 === 200 && a2 && Number(a2.total_hours || 0) > 0) {
+    if (s2 === 200 && a2 && analyticsHours(a2) > 0) {
       resetDashboardFilters({ range: "7d" });
       s = s2; a = a2;
       toast("Showing last 7 days — nothing in today yet", { kind: "info" });
@@ -1569,34 +1681,44 @@ function renderProjectCards(list, rangeAnalytics) {
 }
 
 async function loadProjectsView() {
-  const [ps, pr] = await j("/v1/projects");
-  if (ps === 401) {
-    console.warn("projects 401 — session missing");
-    renderProjectCards([], null);
-    return;
-  }
-  if (ps !== 200) {
-    console.warn("projects failed", ps, pr);
-    if ($("project-grid")) {
-      $("project-grid").replaceChildren(el("div", { className: "ui-panel" }, [
-        empty(pr.error || "Could not load projects"),
+  const grid = $("project-grid");
+  try {
+    const [ps, pr] = await j("/v1/projects");
+    if (ps === 401) {
+      console.warn("projects 401 — session missing");
+      renderProjectCards([], null);
+      return;
+    }
+    if (ps !== 200) {
+      console.warn("projects failed", ps, pr);
+      if (grid) {
+        grid.replaceChildren(el("div", { className: "ui-panel" }, [
+          empty(pr.error || "Could not load projects"),
+        ]));
+      }
+      return;
+    }
+    projectsCache = pr.projects || [];
+    window._projects = projectsCache;
+    let range = projSearch.range || "7d";
+    let [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(range)}&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
+    // Same streak-vs-empty trap: today+TZ can zero project hours while cards still exist
+    if (as === 200 && ar && Number(ar.total_hours || 0) === 0 && range === "today" && projectsCache.some((p) => Number(p.weighted_hours || p.buckets || 0) > 0)) {
+      range = "7d";
+      projSearch.range = "7d";
+      try { localStorage.setItem("st_proj_range", "7d"); } catch (_) {}
+      if ($("proj-range")) $("proj-range").value = "7d";
+      [as, ar] = await j(`/v1/me/analytics?range=7d&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
+    }
+    renderProjectCards(projectsCache, as === 200 ? ar : null);
+  } catch (err) {
+    console.error("loadProjectsView failed", err);
+    if (grid) {
+      grid.replaceChildren(el("div", { className: "ui-panel" }, [
+        empty("Could not load projects"),
       ]));
     }
-    return;
   }
-  projectsCache = pr.projects || [];
-  window._projects = projectsCache;
-  let range = projSearch.range || "7d";
-  let [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(range)}&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
-  // Same streak-vs-empty trap: today+TZ can zero project hours while cards still exist
-  if (as === 200 && ar && Number(ar.total_hours || 0) === 0 && range === "today" && projectsCache.some((p) => Number(p.weighted_hours || p.buckets || 0) > 0)) {
-    range = "7d";
-    projSearch.range = "7d";
-    try { localStorage.setItem("st_proj_range", "7d"); } catch (_) {}
-    if ($("proj-range")) $("proj-range").value = "7d";
-    [as, ar] = await j(`/v1/me/analytics?range=7d&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
-  }
-  renderProjectCards(projectsCache, as === 200 ? ar : null);
 }
 
 async function drawFriction() {
@@ -1617,29 +1739,12 @@ async function drawFriction() {
 }
 
 async function softRefresh() {
-  // page-local data only — does not re-hit /v1/auth/me or /v1/auth/status
-  if (!booted) return;
-  if (PROTECTED.has(activePage) && !isSignedIn() && !pendingAuthCode()) {
-    paintHeroCta();
-    paintFakeBadge();
+  // Alias kept for call sites — always the Konami-OFF / real-data page loader.
+  if (!booted) {
+    softRefreshQueued = true;
     return;
   }
-  if (activePage === "home") await loadAnalytics();
-  if (activePage === "projects") await loadProjectsView();
-  if (activePage === "home" && !fakeStatsMode) await drawFriction();
-  if (activePage === "builders") await renderLeaderboard();
-  if (activePage === "review") {
-    const [ss, sr] = await j("/v1/submissions");
-    if ($("review-list") && ss === 200) {
-      const subs = sr.submissions || [];
-      $("review-list").innerHTML = subs.length
-        ? subs.map((s) => `<div class="event"><b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span>
-            <span class="sub"> ${fmt(s.claimed_weighted_hours)}h · ${esc(s.user_id || "")}</span></div>`).join("")
-        : '<p class="ui-empty">Nothing submitted yet.</p>';
-    }
-  }
-  paintHeroCta();
-  paintFakeBadge();
+  await loadActivePageData();
 }
 
 function paintHeroCta() {
@@ -1674,10 +1779,17 @@ async function refresh({ forceAuth = false } = {}) {
   await loadMe(forceAuth);
   paintAccount();
 
+  booted = true;
+  if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
+    showPage("landing", { push: true, load: false });
+  }
+
   const [os] = await j("/v1/overview");
   const [ps, pr] = await j("/v1/projects");
-  if (os !== 200) { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--danger)"; }
-  else { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--accent)"; }
+  if ($("live-txt")) {
+    if (os !== 200) { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--danger)"; }
+    else { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--accent)"; }
+  }
 
   // Never wipe a good cache with an auth failure (looks like projects were deleted)
   if (ps === 200) {
@@ -1694,12 +1806,8 @@ async function refresh({ forceAuth = false } = {}) {
       : '<option value="">no projects yet</option>';
   }
 
-  booted = true;
-  if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
-    navigate("/");
-    return;
-  }
-  await softRefresh();
+  // Real data for the active page — same function Konami OFF uses
+  await loadActivePageData();
 }
 
 /* wire controls */
@@ -1873,12 +1981,16 @@ if ($("btn-api-key-copy")) $("btn-api-key-copy").addEventListener("click", async
   // Exchange OAuth code before any auth-gated redirect can strip ?auth=
   await consumeAuthCode();
   await refresh({ forceAuth: true });
+  // refresh() already awaited loadActivePageData(). If we landed on login/hero while
+  // signed in, move to dashboard and load real data again (Konami-OFF path).
   if (isSignedIn() && (activePage === "login" || activePage === "landing")) {
-    navigate("/home");
+    showPage("home", { push: true, load: false });
+    await loadActivePageData();
   } else if (PROTECTED.has(activePage) && meLoaded && !isSignedIn()) {
-    navigate("/");
+    showPage("landing", { push: true, load: false });
   } else {
-    showPage(activePage, { push: false });
+    // Ensure real data once more after auth (Konami-OFF path) even if refresh raced
+    await loadActivePageData();
   }
   setInterval(() => refresh({ forceAuth: false }), 15000);
 })();

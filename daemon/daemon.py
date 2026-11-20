@@ -278,10 +278,49 @@ def post_buckets(server, user, token, buckets, retries=4):
         time.sleep(min(2 ** attempt, 8))
     return False, last_err or "upload failed"
 
+def fetch_chain_head(server, token, project):
+    """Return server last_hash for project, or None if unreachable/unauthorized."""
+    if not server or not project:
+        return None
+    url = server.rstrip("/") + "/v1/projects/" + urllib.request.quote(project, safe="") + "/chain"
+    headers = {}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    try:
+        req = urllib.request.Request(url, headers=headers)
+        with urllib.request.urlopen(req, timeout=10) as resp:
+            data = json.loads(resp.read().decode())
+            return data.get("last_hash") or GENESIS
+    except Exception:
+        return None
+
+def adopt_chain_head(state, server, token, project, ledger=None):
+    """Align local prev_hash with the server so a fresh ledger can continue a project."""
+    head = fetch_chain_head(server, token, project)
+    if head is None:
+        return False
+    if state.get("prev_hash") == head:
+        return False
+    # Only auto-adopt when we have nothing pending, or pending still starts at GENESIS
+    pending = state.get("pending") or []
+    if pending and pending[0].get("prev_hash") not in (GENESIS, head):
+        return False
+    dropped = len(pending)
+    state["pending"] = []
+    state["prev_hash"] = head
+    if ledger is not None:
+        save_ledger(ledger, state)
+    print(
+        f"adopted server chain head for {project}"
+        + (f" (dropped {dropped} unsynced bucket(s))" if dropped else ""),
+        flush=True,
+    )
+    return True
+
 def save_ledger(ledger, state):
     ledger.write_text(json.dumps(state, indent=2))
 
-def flush_pending(state, server, user, token, ledger):
+def flush_pending(state, server, user, token, ledger, project=None):
     if not server or not state.get("pending"):
         return False
     ok, msg = post_buckets(server, user, token, state["pending"])
@@ -291,6 +330,10 @@ def flush_pending(state, server, user, token, ledger):
         save_ledger(ledger, state)
         return True
     print(f"sync deferred ({len(state['pending'])} pending): {msg}", flush=True)
+    # Fresh ledger vs existing server chain — adopt head so the next seal can sync
+    if "prev_hash mismatch" in (msg or "") and project:
+        if adopt_chain_head(state, server, token, project, ledger):
+            return False
     return False
 
 def _on_signal(signum, _frame):
@@ -418,7 +461,10 @@ def main():
             pass
 
     was_paused = dcfg.is_paused()
-    flush_pending(state, server, user, token, ledger)
+    # Continue an existing server-side chain when this machine's ledger is fresh
+    if server and (state.get("prev_hash") == GENESIS or not state.get("pending")):
+        adopt_chain_head(state, server, token, project, ledger)
+    flush_pending(state, server, user, token, ledger, project=project)
     if a.flush_only:
         return 0 if not state.get("pending") else 1
 
@@ -437,7 +483,7 @@ def main():
         time.sleep(1)
 
         if os.environ.pop("_ST_FLUSH_NOW", None):
-            flush_pending(state, server, user, token, ledger)
+            flush_pending(state, server, user, token, ledger, project=project)
 
         paused_now = dcfg.is_paused()
         if paused_now != was_paused:
@@ -495,13 +541,13 @@ def main():
             f"os={bucket.get('os')} languages={bucket.get('languages')}",
             flush=True,
         )
-        flush_pending(state, server, user, token, ledger)
+        flush_pending(state, server, user, token, ledger, project=project)
         if a.once:
             return 0
         counts, started_wall, started_mono = empty(), int(time.time()), time.monotonic()
 
     print("shutdown: flushing pending…", flush=True)
-    flush_pending(state, server, user, token, ledger)
+    flush_pending(state, server, user, token, ledger, project=project)
     save_ledger(ledger, state)
     return 0
 
