@@ -77,7 +77,7 @@ class TestTray(unittest.TestCase):
         )
         self.assertEqual(dcfg.normalize_server(""), dcfg.PUBLIC_SERVER.rstrip("/"))
         self.assertEqual(dcfg.normalize_server("not-a-url"), dcfg.PUBLIC_SERVER.rstrip("/"))
-        self.assertTrue(dcfg.PUBLIC_SERVER.startswith("https://rap-minds-question-representatives.trycloudflare.com"))
+        self.assertTrue(dcfg.PUBLIC_SERVER.startswith("http://62.83.116.143:18765"))
         with tempfile.TemporaryDirectory() as d:
             home = pathlib.Path(d) / "aitime"
             cfg = pathlib.Path(d) / "config"

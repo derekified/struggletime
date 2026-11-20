@@ -97,7 +97,7 @@ def mint_api_key():
     return raw, hash_token(raw), raw[:11] + "…"
 
 def session_cookie(token="", *, clear=False):
-    """Set/clear st_session. Secure when the public redirect base is https (Cloudflare/ngrok)."""
+    """Set/clear st_session. Secure only for https public bases (not plain IP:port)."""
     if clear or not token:
         base = "st_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
     else:
@@ -1374,5 +1374,7 @@ class H(BaseHTTPRequestHandler):
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", "18765"))
-    print(f"listening on 127.0.0.1:{port} db={DB}", flush=True)
-    ThreadingHTTPServer(("127.0.0.1", port), H).serve_forever()
+    # BIND=0.0.0.0 for public IP / port-forward; default loopback for local-only
+    host = (os.environ.get("BIND") or os.environ.get("HOST") or "0.0.0.0").strip() or "0.0.0.0"
+    print(f"listening on {host}:{port} db={DB}", flush=True)
+    ThreadingHTTPServer((host, port), H).serve_forever()

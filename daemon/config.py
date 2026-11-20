@@ -47,8 +47,8 @@ EDITORS_JSON = CONFIG_HOME / "editors.json"
 LEGACY_EDITORS_JSON = HOME / "editors.json"
 PAUSE_FLAG = HOME / "paused"
 
-# Public Cloudflare tunnel (replaces stale <NGROK …> / localhost defaults).
-PUBLIC_SERVER = "https://rap-minds-question-representatives.trycloudflare.com"
+# Public origin (IP + port-forward). Override via STRUGGLETIME_SERVER / OAUTH_REDIRECT_BASE.
+PUBLIC_SERVER = "http://62.83.116.143:18765"
 
 DEFAULTS = {
     "handle": "",
