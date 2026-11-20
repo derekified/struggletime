@@ -19,7 +19,7 @@ def _load_dotenv():
 _load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS
+from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS, billable_secs
 
 
 def oauth_config(provider):
@@ -1390,7 +1390,7 @@ class H(BaseHTTPRequestHandler):
             for b in fresh: silent_end = silent_end + b["bucket_secs"] if is_silent(b) else 0
             c.execute("INSERT INTO silent_streak VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET silent_secs=excluded.silent_secs", (project, silent_end))
             for b, (w, state) in zip(fresh, seq):
-                ws = b["bucket_secs"] * w; total += ws
+                ws = billable_secs(b) * w; total += ws
                 c.execute("INSERT INTO bucket VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (b["bucket_id"], user, project, b["bucket_start_wall"], b["bucket_secs"], state, w, ws, b["hash"], b["prev_hash"], json.dumps(b)))
             c.execute("INSERT INTO chain_head VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET last_hash=excluded.last_hash", (project, prev)); c.commit()

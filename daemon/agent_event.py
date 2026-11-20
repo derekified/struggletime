@@ -21,7 +21,7 @@ import config as dcfg
 # Compact allowlist — never paths, prompts, args, screenshots, keystrokes.
 ALLOWED_EVENT_KEYS = {
     "ts", "event_type", "category", "verb", "exit_code",
-    "editor", "agent", "op", "files_touched_count", "source",
+    "editor", "agent", "op", "files_touched_count", "source", "project_id",
 }
 ALLOWED_EVENT_TYPES = {
     "edit", "focus", "blur", "tool", "prompt", "stop", "start", "exec", "created", "modified", "deleted",
@@ -64,7 +64,7 @@ def validate_event(raw):
     if event_type and event_type not in ALLOWED_EVENT_TYPES:
         event_type = "exec"
     cat = evt.get("category") or EVENT_TO_CATEGORY.get(event_type) or "other"
-    if cat not in ("git", "test_runner", "compiler", "ai_cli", "other", "editor"):
+    if cat not in ("git", "test_runner", "compiler", "ai_cli", "other", "editor", "formatter"):
         cat = "other"
     op = evt.get("op") if evt.get("op") in ALLOWED_OPS else None
     if not op and event_type in ALLOWED_OPS:
@@ -94,6 +94,9 @@ def validate_event(raw):
         "files_touched_count": files_n,
         "source": "adapter",
     }
+    pid = _clean_label(evt.get("project_id"), "")
+    if pid:
+        out["project_id"] = pid
     return True, out
 
 

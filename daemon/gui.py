@@ -29,7 +29,9 @@ DEFAULTS = dict(dcfg.DEFAULTS)
 
 def load_settings(path=None):
     s = dcfg.load_settings(path or dcfg.GUI_SETTINGS)
-    return {**DEFAULTS, **{k: s.get(k, DEFAULTS.get(k, "")) for k in DEFAULTS}, "token": s.get("token", "")}
+    out = {**DEFAULTS, **{k: s.get(k, DEFAULTS.get(k, "")) for k in DEFAULTS}, "token": s.get("token", "")}
+    out["projects"] = list(s.get("projects") or dcfg.linked_projects(s))
+    return out
 
 def save_settings(s, path=None):
     dcfg.save_settings(s, path or dcfg.GUI_SETTINGS)
@@ -37,17 +39,24 @@ def save_settings(s, path=None):
 def validate(s):
     errs = []
     if not s["handle"].strip(): errs.append("set your API key (handle is filled from the key)")
-    repo = Path(s["repo"]).expanduser()
-    if not s["repo"].strip() or not repo.is_dir(): errs.append("pick a repo folder that exists")
+    linked = dcfg.linked_projects(s)
+    ok_paths = [p for p in linked if Path(p["path"]).expanduser().is_dir()]
+    if not ok_paths:
+        errs.append("link at least one project folder that exists")
     if not s["server"].startswith(("http://", "https://")): errs.append("server should start with http:// or https://")
     return errs
 
 def daemon_cmd(s):
     server = dcfg.normalize_server(s.get("server"))
-    cmd = [sys.executable, str(ROOT / "daemon" / "daemon.py"), "--repo", str(Path(s["repo"]).expanduser()),
+    cmd = [sys.executable, str(ROOT / "daemon" / "daemon.py"),
            "--server", server, "--user", s["handle"].strip(),
            "--bucket-secs", str(max(1, int(s.get("bucket_mins") or 5)) * 60)]
-    if s.get("project"): cmd += ["--project", str(s["project"])]
+    for row in dcfg.linked_projects(s):
+        path = Path(row["path"]).expanduser()
+        if path.is_dir():
+            cmd += ["--repo", str(path)]
+            if row.get("id"):
+                cmd += ["--project-map", f"{path}={row['id']}"]
     if s.get("token"): cmd += ["--token", str(s["token"])]
     return cmd
 

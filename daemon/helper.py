@@ -55,6 +55,9 @@ def cmd_start(a):
     core = _core(a)
     if a.bucket_secs:
         core.s["bucket_mins"] = max(1, int(a.bucket_secs) // 60)
+    if dcfg.read_daemon_pid():
+        print(f"already running (pid {dcfg.read_daemon_pid()})")
+        return 0
     # Legacy/offline: allow start with --repo/--user and no API key (tests + local)
     if not core.s.get("token"):
         repo = (a.repo or core.s.get("repo") or "").strip()
@@ -65,14 +68,14 @@ def cmd_start(a):
         if not user:
             print("pass --user HANDLE or set an API key so the handle is known")
             return 1
-        if dcfg.read_daemon_pid():
-            print(f"already running (pid {dcfg.read_daemon_pid()})")
-            return 0
         core.s["repo"] = str(Path(repo).expanduser())
         core.s["handle"] = user
         core.s["server"] = dcfg.normalize_server(a.server or core.s.get("server"))
         if a.project:
             core.s["project"] = a.project
+        # Persist so multi-project watch list includes this root
+        core.s = dcfg.upsert_linked_project(core.s, project_id=core.s.get("project") or "", local_path=core.s["repo"])
+        dcfg.save_settings(core.s)
         dcfg.HOME.mkdir(parents=True, exist_ok=True)
         cmd = [
             sys.executable, str(HERE / "daemon.py"),

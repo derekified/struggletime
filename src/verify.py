@@ -7,12 +7,19 @@ import hashlib, json, sys
 
 GENESIS = "0" * 64
 
+# Quiet follow-up after real work: keep partial credit for 5–12 minutes, then AFK=0.
+SILENT_FULL_SECS = 300   # ≤5m still counts as silent debugging
+SILENT_ZERO_SECS = 720   # ≥12m dead air → 0
+
 ALLOWED_TOP = {
     "v","bucket_id","install_id","project_id","repo_remote_hash","bucket_start_wall","bucket_secs",
     "mono_delta_ms","counts","git","files","exec_categories","editors","agents","languages",
     "os","os_detail","formula_version","prev_hash","hash","signature",
 }
-ALLOWED_COUNTS = {"human_edits","ai_writes","prompts","executions","exec_failures","commits","dwell_diff_secs","idle_secs"}
+ALLOWED_COUNTS = {
+    "human_edits","ai_writes","prompts","executions","exec_failures","commits","dwell_diff_secs",
+    "idle_secs","active_secs","first_event_ts","last_event_ts",
+}
 ALLOWED_GIT = {"head_commit","lines_added","lines_deleted","dirty_files"}
 # op/editor/agent/source/language are metadata labels only — never raw paths or content
 ALLOWED_FILE = {"file_id","added","deleted","bursts","op","editor","agent","source","language"}
@@ -71,14 +78,20 @@ def validate_allowlist(bucket):
                     errs.append(f"os_detail.{k}: not in allowlist")
     return errs
 
+def _has_activity(c):
+    return any(c.get(k) for k in ("human_edits", "ai_writes", "prompts", "executions", "commits"))
+
 def is_silent(bucket):
-    c = bucket["counts"]
-    return not any(c[k] for k in ("human_edits","ai_writes","prompts","executions","commits")) and c["idle_secs"] < 240
+    """No edit/exec/prompt/commit signals — quiet stretch (reading, thinking, AFK)."""
+    return not _has_activity(bucket.get("counts") or {})
 
 def decay_weight(silent_secs):
-    if silent_secs <= 300: return 0.70
-    if silent_secs >= 720: return 0.0
-    return round(0.70 * (720 - silent_secs) / 420, 4)
+    """5–12 minute gradual decay for quiet follow-up; >12m → 0."""
+    if silent_secs <= SILENT_FULL_SECS:
+        return 0.70
+    if silent_secs >= SILENT_ZERO_SECS:
+        return 0.0
+    return round(0.70 * (SILENT_ZERO_SECS - silent_secs) / (SILENT_ZERO_SECS - SILENT_FULL_SECS), 4)
 
 def weight_sequence(buckets, initial_silent_secs=0):
     out, silent = [], initial_silent_secs
@@ -90,6 +103,23 @@ def weight_sequence(buckets, initial_silent_secs=0):
         silent = 0
         out.append(weight(b))
     return out
+
+def billable_secs(bucket):
+    """Active-span billing: short bursts credit their span; silent windows still use wall secs."""
+    secs = int(bucket.get("bucket_secs") or 0)
+    c = bucket.get("counts") or {}
+    if is_silent(bucket):
+        return max(0, secs)
+    active = c.get("active_secs")
+    if active is None:
+        return max(0, secs)
+    try:
+        active = int(active)
+    except (TypeError, ValueError):
+        return max(0, secs)
+    if active <= 0:
+        return max(0, secs)
+    return max(0, min(secs, active))
 
 def friction(bucket):
     c = bucket["counts"]
@@ -123,29 +153,66 @@ def verify_chain(buckets):
         prev, last_mono = b["hash"], b["mono_delta_ms"]
     return errors
 
+def _idle_decay_factor(idle_secs):
+    """Within-bucket quiet after last event: gradual 5–12m curve, not a 240s cliff."""
+    idle = int(idle_secs or 0)
+    if idle <= SILENT_FULL_SECS:
+        return 1.0
+    if idle >= SILENT_ZERO_SECS:
+        return 0.0
+    return round((SILENT_ZERO_SECS - idle) / (SILENT_ZERO_SECS - SILENT_FULL_SECS), 4)
+
 def weight(bucket):
-    c, secs = bucket["counts"], bucket["bucket_secs"]
-    followup = c["human_edits"] > 0 or c["commits"] > 0
-    steering = c["prompts"] > 0 or c["human_edits"] > 0
-    if c["idle_secs"] >= 240:
-        return 0.0, "IDLE"
-    if c["ai_writes"] > 0 and c["human_edits"] == 0 and c["executions"] == 0 and c["dwell_diff_secs"] < 30:
-        return 0.20, "OPEN_LOOP_AGENT_DUMP"
-    if c["exec_failures"] > 0 and c["executions"] > 1 and followup:
-        return 1.0, "STRUGGLE_LOOP"
-    if steering and c["executions"] > 0 and followup:
-        return 1.0, "CLOSED_LOOP"
-    if c["ai_writes"] > 0 and c["dwell_diff_secs"] >= 30 and followup:
-        return 0.85, "AI_REVIEWED"
-    if c["human_edits"] > 0:
-        return 0.70, "HUMAN_UNVERIFIED"
-    if c["ai_writes"] > 0:
-        return 0.25, "AI_UNREVIEWED"
-    if c["executions"] > 0:
-        return 0.50, "EXEC_ONLY"
-    if is_silent(bucket):
-        return 0.70, "SILENT_DEBUG"
-    return 0.0, "FALLBACK"
+    """Causal weight from fused passive signals — not raw file-count heuristics."""
+    c = bucket["counts"]
+    cats = bucket.get("exec_categories") or {}
+    followup = c.get("human_edits", 0) > 0 or c.get("commits", 0) > 0
+    steering = c.get("prompts", 0) > 0 or c.get("human_edits", 0) > 0
+    verified_loop = (
+        c.get("exec_failures", 0) > 0
+        and c.get("executions", 0) > 1
+        and followup
+    )
+    closed = steering and c.get("executions", 0) > 0 and followup
+    formatterish = int(cats.get("formatter", 0) or 0) > 0
+
+    # Unverified bulk AI: multi-file agent dump with no test/build/edit follow-up
+    open_loop = (
+        c.get("ai_writes", 0) > 0
+        and c.get("human_edits", 0) == 0
+        and c.get("executions", 0) == 0
+        and c.get("dwell_diff_secs", 0) < 30
+        and not formatterish
+    )
+
+    if verified_loop:
+        w, state = 1.0, "STRUGGLE_LOOP"
+    elif closed:
+        w, state = 1.0, "CLOSED_LOOP"
+    elif c.get("ai_writes", 0) > 0 and c.get("dwell_diff_secs", 0) >= 30 and followup:
+        w, state = 0.85, "AI_REVIEWED"
+    elif open_loop:
+        w, state = 0.20, "OPEN_LOOP_AGENT_DUMP"
+    elif c.get("human_edits", 0) > 0:
+        w, state = 0.70, "HUMAN_UNVERIFIED"
+    elif c.get("ai_writes", 0) > 0:
+        w, state = 0.25, "AI_UNREVIEWED"
+    elif c.get("executions", 0) > 0:
+        w, state = 0.50, "EXEC_ONLY"
+    elif is_silent(bucket):
+        w, state = 0.70, "SILENT_DEBUG"
+    else:
+        w, state = 0.0, "FALLBACK"
+
+    # Gradual idle decay after the active span (replaces idle_secs >= 240 → 0 cliff)
+    if state not in ("SILENT_DEBUG", "FALLBACK") and c.get("idle_secs", 0) > SILENT_FULL_SECS:
+        factor = _idle_decay_factor(c.get("idle_secs", 0))
+        w = round(w * factor, 4)
+        if factor <= 0:
+            state = "IDLE"
+        elif factor < 1.0:
+            state = state + "_DECAY"
+    return w, state
 
 def flags(buckets, weighted_hours):
     total = lambda k: sum(b["counts"][k] for b in buckets)
@@ -162,7 +229,7 @@ def flags(buckets, weighted_hours):
 def score(buckets):
     rows, weighted = [], 0.0
     for b, (w, state) in zip(buckets, weight_sequence(buckets)):
-        weighted += b["bucket_secs"] * w
+        weighted += billable_secs(b) * w
         rows.append({"bucket": b["bucket_id"][:8], "state": state, "weight": w, "friction": friction(b)})
     return rows, weighted / 3600
 

@@ -286,7 +286,8 @@ class TrayCore:
         self.proc = subprocess.Popen(cmd, **kwargs)
         dcfg.write_daemon_pid(self.proc.pid, cmd)
         who = self.s.get("handle") or "?"
-        return True, f"started (pid {self.proc.pid}) tracking {self.s['repo']} as @{who}"
+        n = len(dcfg.linked_projects(self.s)) or (1 if self.s.get("repo") else 0)
+        return True, f"started (pid {self.proc.pid}) watching {n} project(s) as @{who}"
 
     def stop_daemon(self):
         pid = None
@@ -319,16 +320,23 @@ class TrayCore:
         dcfg.set_paused(False)
 
     def flush(self):
-        repo = self.s.get("repo")
-        if not repo:
+        linked = dcfg.linked_projects(self.s)
+        if not linked and self.s.get("repo"):
+            linked = [{"id": self.s.get("project") or "", "path": self.s["repo"]}]
+        if not linked:
             return False, "no repo configured"
         cmd = [
             sys.executable, str(HERE / "daemon.py"),
-            "--repo", str(Path(repo).expanduser()),
             "--server", self.s["server"].rstrip("/"),
             "--user", self.s.get("handle") or "",
             "--flush-only",
         ]
+        for row in linked:
+            path = Path(row["path"]).expanduser()
+            if path.is_dir():
+                cmd += ["--repo", str(path)]
+                if row.get("id"):
+                    cmd += ["--project-map", f"{path}={row['id']}"]
         if self.s.get("token"):
             cmd += ["--token", self.s["token"]]
         r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)

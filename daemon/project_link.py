@@ -78,10 +78,7 @@ def save_local_mapping(settings, *, project_id, local_path, repo_url=None, path=
     """Write project + directory into settings.json (and optional handle/server)."""
     s = dict(settings or {})
     s["server"] = dcfg.normalize_server(s.get("server"))
-    if project_id:
-        s["project"] = project_id
-    if local_path:
-        s["repo"] = str(Path(local_path).expanduser())
+    s = dcfg.upsert_linked_project(s, project_id=project_id or "", local_path=local_path or "")
     dcfg.save_settings(s, path)
     return s
 

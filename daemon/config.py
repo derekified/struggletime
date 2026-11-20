@@ -60,6 +60,7 @@ DEFAULTS = {
     "token": "",
     "bucket_mins": 5,
     "project": "",
+    "projects": [],  # [{id, path}, ...] — all linked roots the daemon watches
 }
 
 def env(*keys, default=""):
@@ -130,14 +131,54 @@ def settings_path(path=None):
     _migrate_legacy_settings()
     return GUI_SETTINGS
 
+def _normalize_projects(raw_projects, primary_repo="", primary_project=""):
+    """Dedupe linked {id, path} rows; always include legacy primary repo/project."""
+    out, seen = [], set()
+
+    def add(pid, path):
+        path = str(path or "").strip()
+        if not path:
+            return
+        try:
+            key = str(Path(path).expanduser().resolve())
+        except Exception:
+            key = str(Path(path).expanduser())
+        if key in seen:
+            # Prefer filling in a missing id on an existing row
+            if pid:
+                for row in out:
+                    try:
+                        same = str(Path(row["path"]).expanduser().resolve()) == key
+                    except Exception:
+                        same = row["path"] == path
+                    if same and not row.get("id"):
+                        row["id"] = str(pid)
+            return
+        seen.add(key)
+        out.append({"id": str(pid or "").strip(), "path": path})
+
+    if isinstance(raw_projects, list):
+        for row in raw_projects:
+            if isinstance(row, dict):
+                add(row.get("id") or row.get("project"), row.get("path") or row.get("repo"))
+            elif isinstance(row, str):
+                add("", row)
+    if primary_repo:
+        add(primary_project, primary_repo)
+    return out
+
 def load_settings(path=None):
     p = settings_path(path)
     data = dict(DEFAULTS)
+    data["projects"] = []
     raw_server = None
     try:
         raw = json.loads(p.read_text())
         data.update({k: raw[k] for k in raw if k in DEFAULTS or k == "token"})
         raw_server = raw.get("server")
+        data["projects"] = _normalize_projects(
+            raw.get("projects"), raw.get("repo") or "", raw.get("project") or "",
+        )
     except Exception:
         pass
     data["server"] = env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=data.get("server") or DEFAULTS["server"])
@@ -148,6 +189,7 @@ def load_settings(path=None):
     data["token"] = env("STRUGGLETIME_TOKEN", "AITIME_TOKEN", default=data.get("token") or "")
     data["handle"] = env("STRUGGLETIME_USER", "AITIME_USER", default=data.get("handle") or "")
     data["repo"] = env("STRUGGLETIME_REPO", "AITIME_REPO", default=data.get("repo") or "")
+    data["projects"] = _normalize_projects(data.get("projects"), data.get("repo") or "", data.get("project") or "")
     if p.exists() and raw_server is not None:
         if data["server"] != (raw_server or "").strip().rstrip("/"):
             try:
@@ -160,10 +202,13 @@ def save_settings(s, path=None):
     p = settings_path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     HOME.mkdir(parents=True, exist_ok=True)
-    keep = {k: s.get(k, DEFAULTS.get(k, "")) for k in DEFAULTS}
+    keep = {k: s.get(k, DEFAULTS.get(k, "")) for k in DEFAULTS if k != "projects"}
     keep["server"] = normalize_server(keep.get("server"))
     if s.get("token"):
         keep["token"] = s["token"]
+    keep["projects"] = _normalize_projects(
+        s.get("projects"), keep.get("repo") or "", keep.get("project") or "",
+    )
     p.write_text(json.dumps(keep, indent=1) + "\n")
     # Keep a compatibility copy for older tooling that still reads ~/.aitime/gui.json
     try:
@@ -172,6 +217,67 @@ def save_settings(s, path=None):
             LEGACY_GUI_SETTINGS.write_text(p.read_text())
     except Exception:
         pass
+
+def linked_projects(settings=None):
+    """Return [{id, path}, ...] for every directory the daemon should watch."""
+    s = settings if settings is not None else load_settings()
+    return _normalize_projects(s.get("projects"), s.get("repo") or "", s.get("project") or "")
+
+def upsert_linked_project(settings, *, project_id, local_path):
+    """Add/update a linked project root and set it as the primary repo/project."""
+    s = dict(settings or {})
+    path = str(Path(local_path).expanduser()) if local_path else ""
+    pid = str(project_id or "").strip()
+    rows = [r for r in (s.get("projects") or []) if isinstance(r, dict)]
+    if path:
+        try:
+            key = str(Path(path).expanduser().resolve())
+        except Exception:
+            key = path
+        updated = False
+        for row in rows:
+            try:
+                same = str(Path(row.get("path") or "").expanduser().resolve()) == key
+            except Exception:
+                same = (row.get("path") or "") == path
+            if same:
+                row["path"] = path
+                if pid:
+                    row["id"] = pid
+                updated = True
+                break
+        if not updated:
+            rows.append({"id": pid, "path": path})
+        s["repo"] = path
+    if pid:
+        s["project"] = pid
+    s["projects"] = _normalize_projects(rows, s.get("repo") or "", s.get("project") or "")
+    return s
+
+def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_project=""):
+    """Merge CLI > env > settings.json."""
+    s = load_settings()
+    server = normalize_server(cli_server or s.get("server") or DEFAULTS["server"])
+    token = cli_token or s.get("token") or ""
+    user = cli_user or s.get("handle") or ""
+    repo = cli_repo or s.get("repo") or ""
+    project = cli_project or s.get("project") or ""
+    projects = linked_projects(s)
+    if cli_repo:
+        projects = _normalize_projects(
+            projects + [{"id": cli_project or "", "path": cli_repo}],
+            cli_repo, cli_project or "",
+        )
+    return {
+        "server": server,
+        "public_url": public_url(server),
+        "token": token,
+        "handle": user,
+        "repo": repo,
+        "project": project,
+        "projects": projects,
+        "bucket_mins": int(s.get("bucket_mins") or 5),
+    }
 
 def is_paused(path=None):
     return Path(path or PAUSE_FLAG).exists()
@@ -183,24 +289,6 @@ def set_paused(paused, path=None):
         p.write_text("1\n")
     else:
         p.unlink(missing_ok=True)
-
-def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_project=""):
-    """Merge CLI > env > settings.json."""
-    s = load_settings()
-    server = normalize_server(cli_server or s.get("server") or DEFAULTS["server"])
-    token = cli_token or s.get("token") or ""
-    user = cli_user or s.get("handle") or ""
-    repo = cli_repo or s.get("repo") or ""
-    project = cli_project or s.get("project") or ""
-    return {
-        "server": server,
-        "public_url": public_url(server),
-        "token": token,
-        "handle": user,
-        "repo": repo,
-        "project": project,
-        "bucket_mins": int(s.get("bucket_mins") or 5),
-    }
 
 def editors_path():
     _migrate_legacy_editors()

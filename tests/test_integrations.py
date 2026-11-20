@@ -20,22 +20,47 @@ def seed_user(db, handle="rowan", slack_id="U123"):
     c.execute("INSERT OR REPLACE INTO link(handle, github_login, slack_user_id, github_token, slack_avatar, slack_name) VALUES (?,?,?,?,?,?)",
               (handle, None, slack_id, None, None, None))
     c.execute("INSERT INTO session VALUES (?,?,?,?,?,?,?)", (th, handle, slack_id, "", "", now, now + 86400))
-    c.execute("INSERT OR IGNORE INTO project VALUES (?,?,?,?,?,?)", ("cs2", handle, "CS2", "https://github.com/rowan/cs2-browser", None, None))
+    c.execute(
+        "INSERT OR IGNORE INTO project(id, owner, name, repo_url, head_from, head_to) VALUES (?,?,?,?,?,?)",
+        ("cs2", handle, "CS2", "https://github.com/rowan/cs2-browser", None, None),
+    )
     c.commit(); c.close()
     return token
 
 class TestIntegrations(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.mkdtemp(); cls.port = 18807; cls.db = f"{cls.tmp}/t.db"
+        cls.tmp = tempfile.mkdtemp()
+        # Bind an ephemeral port so leftover test servers cannot steal traffic
+        import socket
+        with socket.socket() as s:
+            s.bind(("127.0.0.1", 0))
+            cls.port = s.getsockname()[1]
+        cls.db = f"{cls.tmp}/t.db"
         env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db,
                "GITHUB_WEBHOOK_SECRET": "ghsecret", "SLACK_SIGNING_SECRET": "slsecret",
                "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        for _ in range(50):
+        ready = False
+        for _ in range(100):
             try:
-                if req(cls.port, "GET", "/health")[0] == 200: break
-            except Exception: time.sleep(0.1)
+                if req(cls.port, "GET", "/health")[0] != 200:
+                    raise RuntimeError("not up")
+                # /health skips DB — poke an authenticated-ish route to create schema
+                req(cls.port, "GET", "/v1/projects")
+                if pathlib.Path(cls.db).exists():
+                    c = sqlite3.connect(cls.db)
+                    try:
+                        c.execute("SELECT 1 FROM user LIMIT 1")
+                        ready = True
+                        break
+                    finally:
+                        c.close()
+            except Exception:
+                pass
+            time.sleep(0.1)
+        if not ready:
+            raise RuntimeError(f"integrations server failed to init on :{cls.port} db={cls.db}")
         cls.token = seed_user(cls.db)
     @classmethod
     def tearDownClass(cls): cls.proc.terminate()
