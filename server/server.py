@@ -287,8 +287,12 @@ STATE_LABELS = {
     "SILENT_DEBUG": "silent debug",
 }
 
-def _range_cut(range_key):
-    today = date.today()
+def _local_today(tz_offset=0):
+    """Calendar date in the viewer's timezone (tz_offset = minutes east of UTC)."""
+    return (datetime.now(timezone.utc) + timedelta(minutes=int(tz_offset or 0))).date()
+
+def _range_cut(range_key, tz_offset=0):
+    today = _local_today(tz_offset)
     if range_key in ("today", "1d", "24h"):
         return today.isoformat(), "today"
     if range_key in ("30d", "month"):
@@ -312,7 +316,7 @@ def _payload_share(mapping, weight_secs):
 
 def build_analytics(c, user=None, range_key="7d", project=None, category=None, language=None, os_name=None, editor=None, tz_offset=0):
     """Dashboard analytics from real buckets — os/language/editor from daemon payloads."""
-    cut, label = _range_cut(range_key)
+    cut, label = _range_cut(range_key, tz_offset)
     q, args = "SELECT * FROM bucket WHERE 1=1", []
     if user:
         q += " AND user_id=?"; args.append(user)
@@ -376,7 +380,7 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
     rhythm = [[0.0 for _ in range(24)] for _ in range(7)]
     human_w = ai_w = 0.0
     total_w = 0.0
-    today_s = date.today().isoformat()
+    today_s = _local_today(tz_offset).isoformat()
     today_w = 0.0
     day_totals = {}
 
@@ -835,7 +839,8 @@ class H(BaseHTTPRequestHandler):
         if p == ["v1", "projects"]:
             who = self.auth_handle(c)
             if not who:
-                return self.send_json(200, {"projects": []})
+                # Empty list looks like "all projects deleted" — force the client to sign in
+                return self.send_json(401, {"error": "not signed in", "projects": []})
             out = []
             for r in c.execute("SELECT * FROM project WHERE owner=?", (who,)):
                 out.append({
@@ -849,11 +854,36 @@ class H(BaseHTTPRequestHandler):
                     **stats_for(c, project=r["id"]),
                 })
             known = {x["id"] for x in out}
+            # Promote bucket-only project ids into the project table so they don't look "gone"
             for r in c.execute("SELECT DISTINCT project_id FROM bucket WHERE user_id=?", (who,)):
-                if r[0] not in known:
-                    out.append({"id": r[0], "owner": who, "name": r[0], "repo_url": None, "repo_slug": None,
+                pid = r[0]
+                if pid in known:
+                    continue
+                try:
+                    c.execute(
+                        "INSERT OR IGNORE INTO project(id, owner, name, repo_url, head_from, head_to) VALUES (?,?,?,?,?,?)",
+                        (pid, who, pid, None, None, None),
+                    )
+                    c.commit()
+                except Exception:
+                    pass
+                row = c.execute("SELECT * FROM project WHERE id=?", (pid,)).fetchone()
+                if row and row["owner"] == who:
+                    out.append({
+                        **dict(row),
+                        "registered": True,
+                        "archived": bool(_urow(row, "archived", 0)),
+                        "deleted": bool(_urow(row, "deleted", 0)),
+                        "last_repo_url": _urow(row, "last_repo_url"),
+                        "local_path": _urow(row, "local_path"),
+                        "repo_slug": repo_slug(row["repo_url"]) or repo_slug(_urow(row, "last_repo_url")),
+                        **stats_for(c, project=pid),
+                    })
+                else:
+                    out.append({"id": pid, "owner": who, "name": pid, "repo_url": None, "repo_slug": None,
                                 "archived": False, "deleted": False, "last_repo_url": None, "local_path": None,
-                                "registered": False, **stats_for(c, project=r[0])})
+                                "registered": False, **stats_for(c, project=pid)})
+                known.add(pid)
             return self.send_json(200, {"projects": out})
         if p == ["v1", "leaderboard"]:
             period = parse_qs(parsed.query).get("period", ["week"])[0]

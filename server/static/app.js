@@ -1363,10 +1363,29 @@ async function loadAnalytics() {
     paintHomeAnalytics(buildFakeAnalytics());
     return;
   }
-  const [s, a] = await j("/v1/me/analytics?" + analyticsQS());
+  let [s, a] = await j("/v1/me/analytics?" + analyticsQS());
+  // If "today" is empty only because of timezone edge, fall back to 7d once so data doesn't look deleted
+  if (s === 200 && a && Number(a.total_hours || 0) === 0 && filters.range === "today") {
+    const [s2, a2] = await j("/v1/me/analytics?" + new URLSearchParams({
+      range: "7d", project: filters.project || "all",
+      language: sanitizeFilter(filters.language, "all"),
+      os: sanitizeFilter(filters.os, "all"),
+      editor: sanitizeFilter(filters.editor, "all"),
+      category: sanitizeFilter(filters.category, "all"),
+      tz_offset: String(TZ_OFFSET),
+    }).toString());
+    if (s2 === 200 && a2 && Number(a2.total_hours || 0) > 0) {
+      filters.range = "7d";
+      try { localStorage.setItem("st_range", "7d"); } catch (_) {}
+      s = s2; a = a2;
+      toast("Showing last 7 days — nothing in today yet", { kind: "info" });
+    }
+  }
   if (s !== 200 || !a || typeof a !== "object") {
     if ($("kpi-strip")) {
-      $("kpi-strip").replaceChildren(compactEmpty(s === 0 ? "could not reach server" : "could not load analytics"));
+      $("kpi-strip").replaceChildren(compactEmpty(
+        s === 0 ? "could not reach server" : s === 401 ? "sign in to see your hours" : "could not load analytics"
+      ));
     }
     return;
   }
@@ -1474,8 +1493,14 @@ function renderProjectCards(list, rangeAnalytics) {
 
 async function loadProjectsView() {
   const [ps, pr] = await j("/v1/projects");
-  projectsCache = pr.projects || [];
-  window._projects = projectsCache;
+  if (ps === 401) {
+    renderProjectCards([], null);
+    return;
+  }
+  if (ps === 200) {
+    projectsCache = pr.projects || [];
+    window._projects = projectsCache;
+  }
   const [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(projSearch.range)}&tz_offset=${TZ_OFFSET}`);
   renderProjectCards(projectsCache, as === 200 ? ar : null);
 }
@@ -1560,9 +1585,12 @@ async function refresh({ forceAuth = false } = {}) {
   if (os !== 200) { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--danger)"; }
   else { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--accent)"; }
 
-  const projs = pr.projects || [];
-  window._projects = projs;
-  projectsCache = projs;
+  // Never wipe a good cache with an auth failure (looks like projects were deleted)
+  if (ps === 200) {
+    projectsCache = pr.projects || [];
+    window._projects = projectsCache;
+  }
+  const projs = projectsCache;
   fillAttachProjects();
   const withData = projs.filter((p) => p.buckets > 0);
   if (!selected && withData.length) selected = withData[0].id;
