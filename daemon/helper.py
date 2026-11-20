@@ -1,105 +1,223 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Manage the struggletime daemon as a background helper.
+"""CLI twin of the StruggleTime tray.
 
-  python3 daemon/helper.py start --repo ~/my-project --user you
-  python3 daemon/helper.py status
-  python3 daemon/helper.py logs
-  python3 daemon/helper.py stop
-  python3 daemon/helper.py sync   # flush pending ledger buckets now
+Same settings file and daemon control as tray.py / TrayCore:
+
+  struggletime-helper status
+  struggletime-helper start [--repo PATH] [--project ID]
+  struggletime-helper stop | pause | resume | sync
+  struggletime-helper apikey <st_…>
+  struggletime-helper clear-key
+  struggletime-helper link [project] | create
+  struggletime-helper dashboard | config | logs
+  struggletime-helper server [URL]
+
+Defaults come from ~/.config/struggletime/settings.json (server normalized
+to the stable sslip.io public URL — never ephemeral Cloudflare tunnels).
 """
-import argparse, json, os, signal, subprocess, sys, time, urllib.error, urllib.request
+import argparse, os, signal, subprocess, sys, time
 from pathlib import Path
 
 HERE = Path(__file__).parent
 sys.path = [p for p in sys.path if Path(p or ".").resolve() != HERE.resolve()]
 sys.path.insert(0, str(HERE))
 import config as dcfg
+import tray as st_tray
 
-HOME = dcfg.HOME
-PIDF, LOGF, CFG = HOME / "daemon.pid", HOME / "daemon.log", HOME / "daemon.args"
-
-def env(*keys, default=""):
-    return dcfg.env(*keys, default=default)
-
-def alive(pid):
-    try: os.kill(pid, 0); return True
-    except Exception: return False
-
-def read_pid():
-    try: return int(PIDF.read_text().strip())
-    except Exception: return None
-
-def cmd_start(a):
-    HOME.mkdir(parents=True, exist_ok=True)
-    pid = read_pid()
-    if pid and alive(pid): print(f"already running (pid {pid})"); return 0
-    args = [sys.executable, str(Path(__file__).parent / "daemon.py"), "--repo", a.repo, "--user", a.user,
-            "--server", a.server, "--bucket-secs", str(a.bucket_secs)]
-    if a.project: args += ["--project", a.project]
-    if a.token: args += ["--token", a.token]
-    CFG.write_text("\n".join(args))
-    with open(LOGF, "a") as log:
-        p = subprocess.Popen(args, stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True)
-    PIDF.write_text(str(p.pid)); print(f"started (pid {p.pid}) logging to {LOGF}"); return 0
-
-def cmd_stop(a):
-    pid = read_pid()
-    if not pid or not alive(pid): print("not running"); PIDF.unlink(missing_ok=True); return 0
-    os.kill(pid, signal.SIGTERM)
-    for _ in range(30):
-        if not alive(pid): break
-        time.sleep(0.1)
-    if alive(pid): os.kill(pid, signal.SIGKILL)
-    PIDF.unlink(missing_ok=True); print(f"stopped (pid {pid})"); return 0
+def _core(a=None):
+    overrides = {}
+    if a is not None:
+        if getattr(a, "repo", None): overrides["repo"] = a.repo
+        if getattr(a, "user", None): overrides["handle"] = a.user
+        if getattr(a, "server", None): overrides["server"] = dcfg.normalize_server(a.server)
+        if getattr(a, "token", None): overrides["token"] = a.token
+        if getattr(a, "project", None): overrides["project"] = a.project
+    core = st_tray.TrayCore(overrides)
+    core.s["server"] = dcfg.normalize_server(core.s.get("server"))
+    return core
 
 def cmd_status(a):
-    pid = read_pid()
-    if pid and alive(pid):
-        print(f"running (pid {pid})"); print(CFG.read_text() if CFG.exists() else ""); return 0
-    print("not running"); return 1
+    core = _core(a)
+    core.fetch_hours()
+    print(core.status_line())
+    pid = dcfg.read_daemon_pid()
+    if pid:
+        print(f"running (pid {pid})")
+        if dcfg.DAEMON_ARGS.exists():
+            print(dcfg.DAEMON_ARGS.read_text().strip())
+    else:
+        print("not running")
+    print(f"server {core.s.get('server')}")
+    return 0 if pid else 1
 
-def cmd_logs(a):
-    if not LOGF.exists(): print("no logs yet"); return 0
-    lines = LOGF.read_text(errors="ignore").splitlines()
-    print("\n".join(lines[-a.lines:])); return 0
+def cmd_start(a):
+    core = _core(a)
+    if a.bucket_secs:
+        core.s["bucket_mins"] = max(1, int(a.bucket_secs) // 60)
+    # Legacy/offline: allow start with --repo/--user and no API key (tests + local)
+    if not core.s.get("token"):
+        repo = (a.repo or core.s.get("repo") or "").strip()
+        user = (a.user or core.s.get("handle") or "").strip()
+        if not repo or not Path(repo).expanduser().is_dir():
+            print("set an API key first (struggletime-helper apikey <st_…>) or pass --repo")
+            return 1
+        if not user:
+            print("pass --user HANDLE or set an API key so the handle is known")
+            return 1
+        if dcfg.read_daemon_pid():
+            print(f"already running (pid {dcfg.read_daemon_pid()})")
+            return 0
+        core.s["repo"] = str(Path(repo).expanduser())
+        core.s["handle"] = user
+        core.s["server"] = dcfg.normalize_server(a.server or core.s.get("server"))
+        if a.project:
+            core.s["project"] = a.project
+        dcfg.HOME.mkdir(parents=True, exist_ok=True)
+        cmd = [
+            sys.executable, str(HERE / "daemon.py"),
+            "--repo", core.s["repo"], "--user", user,
+            "--server", core.s["server"],
+            "--bucket-secs", str(a.bucket_secs or max(1, int(core.s.get("bucket_mins") or 5) * 60)),
+        ]
+        if core.s.get("project"):
+            cmd += ["--project", core.s["project"]]
+        if a.token:
+            cmd += ["--token", a.token]
+        with open(dcfg.DAEMON_LOG, "a") as log:
+            p = subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL, start_new_session=True)
+        dcfg.write_daemon_pid(p.pid, cmd)
+        print(f"started (pid {p.pid}) logging to {dcfg.DAEMON_LOG}")
+        return 0
+    ok, msg = core.spawn()
+    print(msg)
+    return 0 if ok else 1
 
-def cmd_sync(a):
-    """Flush pending buckets via daemon --flush-only (same path as tray force sync)."""
-    rt = dcfg.resolve_runtime(cli_server=a.server, cli_token=a.token, cli_user=a.user, cli_repo=a.repo)
-    repo = Path(a.repo or rt["repo"]).expanduser().resolve()
-    if not repo.is_dir():
-        print(f"repo not found: {repo}"); return 1
-    cmd = [sys.executable, str(HERE / "daemon.py"), "--repo", str(repo),
-           "--server", (a.server or rt["server"]).rstrip("/"), "--user", a.user or rt["handle"],
-           "--flush-only"]
-    tok = a.token or rt["token"]
-    if tok: cmd += ["--token", tok]
-    r = subprocess.run(cmd, capture_output=True, text=True, timeout=60)
-    out = (r.stdout or r.stderr or "").strip()
-    if out: print(out)
-    return r.returncode
+def cmd_stop(a):
+    core = _core(a)
+    pid = core.stop_daemon()
+    if pid:
+        print(f"stopped (pid {pid})")
+    else:
+        print("not running")
+        dcfg.clear_daemon_pid()
+    return 0
 
 def cmd_pause(a):
-    dcfg.set_paused(True); print("paused"); return 0
+    _core(a).pause(); print("paused"); return 0
 
 def cmd_resume(a):
-    dcfg.set_paused(False); print("resumed"); return 0
+    _core(a).resume(); print("resumed"); return 0
+
+def cmd_sync(a):
+    ok, msg = _core(a).flush()
+    print(msg)
+    return 0 if ok else 1
+
+def cmd_apikey(a):
+    ok, msg = _core(a).set_api_key(a.key)
+    print(msg)
+    return 0 if ok else 1
+
+def cmd_clear_key(a):
+    print(_core(a).clear_api_key()); return 0
+
+def cmd_link(a):
+    core = _core(a)
+    if a.project:
+        ok, msg = core.link_project(a.project, local_path=a.repo or None)
+    elif sys.stdin.isatty() and not a.repo:
+        ok, msg = core.link_project_interactive(prefer_create=False)
+    else:
+        ok, msg = core.link_project(None, local_path=a.repo or None)
+    print(msg)
+    return 0 if ok else 1
+
+def cmd_create(a):
+    ok, msg = _core(a).link_project_interactive(prefer_create=True)
+    print(msg)
+    return 0 if ok else 1
+
+def cmd_dashboard(a):
+    try:
+        _core(a).open_dashboard(); print("opened dashboard")
+        return 0
+    except Exception as e:
+        print(f"could not open browser: {e}"); return 1
+
+def cmd_config(a):
+    print(_core(a).open_config()); return 0
+
+def cmd_logs(a):
+    if not dcfg.DAEMON_LOG.exists():
+        print("no logs yet"); return 0
+    lines = dcfg.DAEMON_LOG.read_text(errors="ignore").splitlines()
+    print("\n".join(lines[-a.lines:])); return 0
+
+def cmd_server(a):
+    """Show or set the public server URL (always normalized; tunnels rejected)."""
+    core = _core(a)
+    if a.url:
+        core.s["server"] = dcfg.normalize_server(a.url)
+        core.persist()
+        print(f"server set to {core.s['server']}")
+        if a.url.rstrip("/") != core.s["server"]:
+            print("(ephemeral tunnel / invalid URL was replaced with the stable public host)")
+        return 0
+    print(dcfg.normalize_server(core.s.get("server")))
+    return 0
 
 def main():
-    ap = argparse.ArgumentParser(prog="struggletime-helper")
+    dcfg.ensure_public_server()
+    ap = argparse.ArgumentParser(
+        prog="struggletime-helper",
+        description="CLI twin of the StruggleTime tray (same settings + daemon control)",
+    )
     sub = ap.add_subparsers(dest="cmd", required=True)
-    st = sub.add_parser("start"); st.add_argument("--repo", required=True); st.add_argument("--user", default="")
-    st.add_argument("--server", default=env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=dcfg.PUBLIC_SERVER))
-    st.add_argument("--token", default=env("STRUGGLETIME_TOKEN", "AITIME_TOKEN"))
-    st.add_argument("--project", default=None); st.add_argument("--bucket-secs", type=int, default=300); st.set_defaults(fn=cmd_start)
-    for name, fn in (("stop", cmd_stop), ("status", cmd_status), ("pause", cmd_pause), ("resume", cmd_resume)):
-        sp = sub.add_parser(name); sp.set_defaults(fn=fn)
-    lg = sub.add_parser("logs"); lg.add_argument("--lines", type=int, default=30); lg.set_defaults(fn=cmd_logs)
-    sy = sub.add_parser("sync"); sy.add_argument("--repo", required=True); sy.add_argument("--user", default="")
-    sy.add_argument("--server", default=env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=dcfg.PUBLIC_SERVER))
-    sy.add_argument("--token", default=env("STRUGGLETIME_TOKEN", "AITIME_TOKEN")); sy.set_defaults(fn=cmd_sync)
-    a = ap.parse_args(); return a.fn(a)
+
+    def add_common(sp):
+        sp.add_argument("--repo", default="")
+        sp.add_argument("--user", default="")
+        sp.add_argument("--server", default="")
+        sp.add_argument("--token", default="")
+        sp.add_argument("--project", default="")
+        return sp
+
+    st = add_common(sub.add_parser("start", help="start tracking (same as tray Start)"))
+    st.add_argument("--bucket-secs", type=int, default=None)
+    st.set_defaults(fn=cmd_start)
+
+    for name, fn, help_ in (
+        ("stop", cmd_stop, "stop the tracker daemon"),
+        ("status", cmd_status, "show tray-equivalent status"),
+        ("pause", cmd_pause, "pause sealing (still watching)"),
+        ("resume", cmd_resume, "resume sealing"),
+        ("sync", cmd_sync, "flush pending ledger buckets"),
+        ("dashboard", cmd_dashboard, "open the web dashboard"),
+        ("config", cmd_config, "print settings path / open config"),
+        ("clear-key", cmd_clear_key, "remove the API key from this machine"),
+        ("create", cmd_create, "create/link a project interactively"),
+    ):
+        sp = add_common(sub.add_parser(name, help=help_))
+        sp.set_defaults(fn=fn)
+
+    lg = add_common(sub.add_parser("logs", help="tail daemon.log"))
+    lg.add_argument("--lines", type=int, default=30)
+    lg.set_defaults(fn=cmd_logs)
+
+    ak = add_common(sub.add_parser("apikey", help="save a StruggleTime API key (st_…)"))
+    ak.add_argument("key")
+    ak.set_defaults(fn=cmd_apikey)
+
+    lk = add_common(sub.add_parser("link", help="link a local directory to a project"))
+    lk.set_defaults(fn=cmd_link)
+
+    sv = add_common(sub.add_parser("server", help="show or set the public server URL"))
+    sv.add_argument("url", nargs="?", default="")
+    sv.set_defaults(fn=cmd_server)
+
+    a = ap.parse_args()
+    return a.fn(a)
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(main() or 0)

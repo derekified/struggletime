@@ -137,7 +137,14 @@ class TrayCore:
         st_gui.save_settings(save)
 
     def tracking(self):
-        return self.proc is not None and self.proc.poll() is None
+        if self.proc is not None and self.proc.poll() is None:
+            return True
+        # Helper CLI / another tray instance may own the daemon via shared pid file
+        pid = dcfg.read_daemon_pid()
+        if pid:
+            return True
+        self.proc = None
+        return False
 
     def paused(self):
         return dcfg.is_paused()
@@ -188,9 +195,13 @@ class TrayCore:
         key = (raw or "").strip()
         if not key:
             return False, "no key entered"
-        if key.startswith("<") or "ngrok" in key.lower():
+        if key.startswith("<") or "ngrok" in key.lower() or "trycloudflare" in key.lower():
             return False, "that looks like a placeholder — paste the real st_… key from Settings"
+        before = (self.s.get("server") or "").rstrip("/")
         self.s["server"] = dcfg.normalize_server(self.s.get("server"))
+        if before and before != self.s["server"] and ("trycloudflare" in before or "ngrok" in before):
+            # Keep going — key check uses the rewritten stable host
+            pass
         code, data = api_json(self.s["server"], "GET", "/v1/auth/me", token=key)
         if code == 0:
             err = (data.get("error") if isinstance(data, dict) else None) or "network error"
@@ -253,30 +264,53 @@ class TrayCore:
 
     def spawn(self):
         self.reload_settings()
+        self.s["server"] = dcfg.normalize_server(self.s.get("server"))
         errs = st_gui.validate(self.s)
         if errs:
             return False, "; ".join(errs)
         if not self.s.get("token"):
             return False, "set an API key first"
+        if self.tracking():
+            pid = dcfg.read_daemon_pid() or (self.proc.pid if self.proc else "?")
+            return True, f"already running (pid {pid})"
         self.persist()
         dcfg.HOME.mkdir(parents=True, exist_ok=True)
-        log = open(dcfg.HOME / "daemon.log", "a")
+        log = open(dcfg.DAEMON_LOG, "a")
         cmd = st_gui.daemon_cmd(self.s)
-        if self.s.get("token"):
+        if self.s.get("token") and "--token" not in cmd:
             cmd += ["--token", self.s["token"]]
-        kwargs = {"stdout": log, "stderr": log, "stdin": subprocess.DEVNULL}
+        kwargs = {"stdout": log, "stderr": log, "stdin": subprocess.DEVNULL, "start_new_session": True}
         if sys.platform.startswith("win"):
             kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            kwargs.pop("start_new_session", None)
         self.proc = subprocess.Popen(cmd, **kwargs)
+        dcfg.write_daemon_pid(self.proc.pid, cmd)
         who = self.s.get("handle") or "?"
-        return True, f"tracking {self.s['repo']} as @{who}"
+        return True, f"started (pid {self.proc.pid}) tracking {self.s['repo']} as @{who}"
 
     def stop_daemon(self):
-        if self.tracking():
+        pid = None
+        if self.proc is not None and self.proc.poll() is None:
+            pid = self.proc.pid
             self.proc.terminate()
             try: self.proc.wait(timeout=5)
             except Exception: self.proc.kill()
+        else:
+            pid = dcfg.read_daemon_pid()
+            if pid:
+                try:
+                    os.kill(pid, signal.SIGTERM)
+                    for _ in range(30):
+                        if not dcfg.daemon_alive(pid):
+                            break
+                        time.sleep(0.1)
+                    if dcfg.daemon_alive(pid):
+                        os.kill(pid, signal.SIGKILL)
+                except Exception:
+                    pass
         self.proc = None
+        dcfg.clear_daemon_pid()
+        return pid
 
     def pause(self):
         dcfg.set_paused(True)

@@ -43,8 +43,9 @@ def validate(s):
     return errs
 
 def daemon_cmd(s):
+    server = dcfg.normalize_server(s.get("server"))
     cmd = [sys.executable, str(ROOT / "daemon" / "daemon.py"), "--repo", str(Path(s["repo"]).expanduser()),
-           "--server", s["server"].rstrip("/"), "--user", s["handle"].strip(),
+           "--server", server, "--user", s["handle"].strip(),
            "--bucket-secs", str(max(1, int(s.get("bucket_mins") or 5)) * 60)]
     if s.get("project"): cmd += ["--project", str(s["project"])]
     if s.get("token"): cmd += ["--token", str(s["token"])]

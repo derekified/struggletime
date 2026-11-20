@@ -46,6 +46,9 @@ LEGACY_GUI_SETTINGS = HOME / "gui.json"
 EDITORS_JSON = CONFIG_HOME / "editors.json"
 LEGACY_EDITORS_JSON = HOME / "editors.json"
 PAUSE_FLAG = HOME / "paused"
+DAEMON_PID = HOME / "daemon.pid"
+DAEMON_LOG = HOME / "daemon.log"
+DAEMON_ARGS = HOME / "daemon.args"
 
 # Public origin (IP + port-forward). Override via STRUGGLETIME_SERVER / OAUTH_REDIRECT_BASE.
 PUBLIC_SERVER = "https://62-83-116-143.sslip.io"
@@ -202,3 +205,39 @@ def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_p
 def editors_path():
     _migrate_legacy_editors()
     return Path(os.environ.get("AITIME_EDITORS_JSON") or EDITORS_JSON)
+
+def daemon_alive(pid=None):
+    """True if the tracker daemon pid is still running."""
+    if pid is None:
+        try:
+            pid = int(DAEMON_PID.read_text().strip())
+        except Exception:
+            return False
+    try:
+        os.kill(pid, 0)
+        return True
+    except Exception:
+        return False
+
+def read_daemon_pid():
+    try:
+        pid = int(DAEMON_PID.read_text().strip())
+    except Exception:
+        return None
+    return pid if daemon_alive(pid) else None
+
+def write_daemon_pid(pid, args=None):
+    HOME.mkdir(parents=True, exist_ok=True)
+    DAEMON_PID.write_text(str(int(pid)))
+    if args is not None:
+        DAEMON_ARGS.write_text("\n".join(str(x) for x in args) + "\n")
+
+def clear_daemon_pid():
+    DAEMON_PID.unlink(missing_ok=True)
+
+def ensure_public_server(path=None):
+    """Rewrite settings.json if it still points at a dead ephemeral tunnel."""
+    s = load_settings(path)
+    # load_settings already normalizes + may rewrite; force another save for legacy copies
+    save_settings(s, path)
+    return s["server"]
