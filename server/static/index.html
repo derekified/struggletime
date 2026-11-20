@@ -1,212 +1,315 @@
 <!doctype html>
-<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StruggleTime</title>
-<style>
-:root{--bg:#0d0c0a;--panel:#191817;--panel2:#211f1d;--line:#2e2b28;--ink:#f2efe9;--mut:#a39e93;--lime:#d7ff6a;--orange:#ff8c37;--grey:#57534c}
-*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.5 "Spline Sans",-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif}
-a{color:var(--lime)}button,input,select{font:inherit}
-.top{display:flex;align-items:center;gap:12px;padding:14px 22px;border-bottom:1px solid var(--line)}
-.mark{width:30px;height:30px;border-radius:50%;background:var(--lime);color:#111;display:grid;place-items:center;font-weight:900}
-.word{font-size:19px;font-weight:700}.top nav{margin-left:auto;display:flex;gap:18px;align-items:center}
-.top nav a{color:var(--mut);text-decoration:none;font-size:14px}.live{font-size:13px;color:var(--lime)}
-.layout{display:grid;grid-template-columns:190px 1fr;max-width:1180px;margin:0 auto}
-@media(max-width:760px){.layout{grid-template-columns:1fr}.side{display:none}}
-.side{padding:22px 14px;border-right:1px solid var(--line);min-height:calc(100vh - 60px)}
-.side a{display:block;color:var(--mut);text-decoration:none;padding:7px 12px;border-radius:8px;font-size:14px;margin-bottom:2px}
-.side a.on{background:var(--lime);color:#111;font-weight:700}.side a:hover:not(.on){color:var(--ink)}
-.side .who{padding:4px 12px 16px}.side .who div{color:var(--orange);font-size:13px}
-main{padding:26px 28px 60px;min-width:0}.page{display:none}.page.on{display:block}
-h1{font-size:24px;margin:2px 0}h2{font-size:17px;margin:26px 0 8px}
-.sub{color:var(--mut);font-size:13.5px}.small-i{font-style:italic;color:var(--mut);font-size:13px}
-.filters{display:flex;gap:8px;flex-wrap:wrap;margin:18px 0 12px;align-items:end}
-.filters label{font-size:11px;color:var(--mut);display:block}
-select,input{background:var(--panel2);color:var(--ink);border:1px solid var(--line);border-radius:7px;padding:7px 9px;font-size:14px}
-.stats{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:10px}
-.stat,.panel{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
-.stat .n{font-size:23px;font-weight:700}.stat .l{color:var(--mut);font-size:12.5px}
-table{width:100%;border-collapse:collapse;font-size:13.5px}th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}
-th{color:var(--mut);font-weight:500;font-size:12px}tr:last-child td{border-bottom:0}td.n,th.n{text-align:right}
-.tag{font-size:12px;color:var(--mut)}.tag.ok{color:var(--lime)}.tag.bad{color:var(--orange)}
-.flag{display:block;color:var(--orange);font-size:12.5px}
-.builder{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--line);font-size:14px}.builder:last-child{border:0}
-.builder .bar{flex:1;background:var(--panel2);height:5px;border-radius:99px;margin-top:8px}.builder .bar i{display:block;height:100%;background:var(--lime);border-radius:99px}
-.review,.event{padding:10px 0;border-bottom:1px solid var(--line);font-size:14px}.review:last-child,.event:last-child{border:0}
-button{background:var(--lime);color:#111;border:0;border-radius:7px;padding:7px 13px;font-weight:700;cursor:pointer;font-size:14px}
-button.dark{background:var(--panel2);color:var(--ink);border:1px solid var(--line)}
-form{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px;align-items:center}
-code{font-family:ui-monospace,Menlo,monospace;font-size:12.5px;color:var(--mut)}
-.empty{color:var(--mut)}footer{margin-top:36px;color:var(--mut);font-size:13px;border-top:1px solid var(--line);padding-top:14px}
-.setgrid{display:grid;grid-template-columns:1fr 1fr;gap:12px}@media(max-width:860px){.setgrid{grid-template-columns:1fr}}
-.setgrid h2{margin-top:0}
-</style></head><body>
-<div class="top"><div class="mark">s</div><div class="word">StruggleTime</div>
-<nav><a href="/settings">settings</a><span class="live" id="live-txt">● connecting</span></nav></div>
-<div class="layout">
-  <aside class="side">
-    <div class="who"><b id="who-name">not signed in</b><div id="who-streak">pick a handle to start</div><a id="who-action" href="/settings">claim a handle</a></div>
-    <a data-nav="home" href="/">home</a><a data-nav="projects" href="/projects">projects</a><a data-nav="builders" href="/builders">builders</a><a data-nav="review" href="/review">review queue</a><a data-nav="integrations" href="/integrations">integrations</a><a data-nav="settings" href="/settings">settings</a>
-  </aside>
+<link rel="stylesheet" href="/styles.css">
+</head><body>
+<header class="top">
+  <a class="brand" href="/" data-nav-link>
+    <span class="mark">s</span>
+    <span class="word">StruggleTime</span>
+  </a>
+  <nav class="top-nav" id="top-nav">
+    <a href="/home" data-top="home" data-nav-link data-nav="home" data-auth="required">home</a>
+    <a href="/projects" data-top="projects" data-nav-link data-nav="projects" data-auth="required">projects</a>
+    <a href="/builders" data-top="builders" data-nav-link data-nav="builders">builders</a>
+    <a href="/review" data-top="review" data-nav-link data-nav="review" data-auth="required">review</a>
+    <a href="/settings" data-top="settings" data-nav-link data-nav="settings" data-auth="required">settings</a>
+  </nav>
+  <div class="top-right">
+    <div class="nav-stats" id="nav-stats" hidden>
+      <span class="nav-stat" title="streak"><span class="nav-ico" data-glyph="bolt"></span><b class="tabular" id="nav-streak">0d</b></span>
+      <span class="nav-stat" title="weighted hours"><span class="nav-ico" data-glyph="timer"></span><b class="tabular" id="nav-hours">0h</b></span>
+    </div>
+    <a class="top-user" id="top-auth" href="/login" title="sign in" aria-label="sign in">
+      <span class="top-user-fallback">in</span>
+    </a>
+    <div class="nav-identity" id="nav-identity" hidden>
+      <span class="nav-flag" id="nav-flag" aria-hidden="true"></span>
+      <a class="nav-handle" id="who-name" href="/settings" data-nav-link>@you</a>
+    </div>
+    <a class="ui-btn ui-btn-ghost nav-signout" id="who-action" href="/login" data-nav-link>sign in</a>
+    <span class="live" id="live-txt" title="status">●</span>
+  </div>
+</header>
+
+<div class="shell no-side" id="app-shell">
   <main>
+    <!-- LANDING -->
+    <section class="page page-wide" id="page-landing">
+      <div class="hero hero-clean">
+        <div class="hero-copy">
+          <p class="eyebrow"><span class="nav-ico" data-glyph="bolt"></span> for builders who keep going</p>
+          <h1>the hours you actually spent fighting the code</h1>
+          <p class="lead">Quiet, private tracking across your projects. No screenshots, no keystrokes, just the loops that counted.</p>
+          <div class="hero-cta">
+            <a class="ui-btn" id="hero-primary" href="/login" data-nav-link><span class="nav-ico" data-glyph="slack"></span>continue with slack</a>
+            <a class="ui-btn ui-btn-ghost" id="hero-secondary" href="/builders" data-nav-link><span class="nav-ico" data-glyph="trophy"></span>see the builders board</a>
+          </div>
+        </div>
+        <div class="hero-preview" aria-hidden="true" id="hero-preview">
+          <!-- TODO: replace with captured fake stats screenshot -->
+          <!-- inlined so theme tokens (--bg/--accent/…) apply; source: /img/fake-stats-preview.svg -->
+          <object class="hero-shot-fallback" data="/img/fake-stats-preview.svg" type="image/svg+xml" width="720" height="460" tabindex="-1"></object>
+        </div>
+      </div>
+    </section>
+
+    <!-- LOGIN -->
+    <section class="page page-wide" id="page-login">
+      <div class="auth-split">
+        <div class="auth-aside">
+          <h1>welcome back in</h1>
+          <p class="lead">No passwords here. Sign in with Slack, pick a public handle, and connect GitHub later if you want private repos.</p>
+        </div>
+        <div class="auth-card ui-panel">
+          <div id="login-status" class="sub">checking your session…</div>
+          <div id="login-signed" hidden>
+            <p class="sub">you're already signed in.</p>
+            <a class="ui-btn" href="/home" data-nav-link><span class="nav-ico" data-glyph="home"></span>open your dashboard</a>
+            <form id="login-signout" style="margin-top:10px"><button class="ui-btn ui-btn-ghost" type="submit">sign out</button></form>
+          </div>
+          <div id="login-slack-box">
+            <button class="ui-btn auth-provider" id="login-slack" type="button">
+              <span class="nav-ico" data-glyph="slack-fill"></span>continue with slack
+            </button>
+            <p class="sub" id="login-slack-hint">We only ask for your Slack profile. Nothing else.</p>
+          </div>
+          <div id="login-claim-box" hidden>
+            <p class="sub">Choose a public handle. It stays tied to your Slack account.</p>
+            <form id="login-claim-form" class="claim-row">
+              <input class="ui-input" id="login-handle" placeholder="your-handle" required autocomplete="username">
+              <button class="ui-btn" type="submit"><span class="nav-ico" data-glyph="badge-check"></span>claim</button>
+            </form>
+            <div class="sub" id="login-claim-out"></div>
+          </div>
+          <a class="sub back-link" href="/" data-nav-link><span class="nav-ico" data-glyph="back"></span>back home</a>
+        </div>
+      </div>
+    </section>
+
+    <!-- HOME / DASHBOARD -->
     <section class="page" id="page-home">
-      <div class="small-i">no screenshots, no keystrokes, just the loop</div>
-      <h1>keep track of your struggle time</h1>
-      <div class="sub">time spent actually struggling with ai, tracked passively while you code in your terminal. updates live.</div>
-      <div class="filters"><span><label for="proj-sel">project</label><select id="proj-sel"></select></span><span class="sub" id="fr-meta"></span></div>
-      <div class="stats">
-        <div class="stat"><div class="n" id="m-weighted">…</div><div class="l">weighted time, all projects</div></div>
-        <div class="stat"><div class="n" id="m-raw">…</div><div class="l">raw time tracked</div></div>
-        <div class="stat"><div class="n" id="m-trust">…</div><div class="l">counted after weighting</div></div>
-        <div class="stat"><div class="n" id="m-pending">…</div><div class="l">waiting for review</div></div>
+      <div class="page-head">
+        <div class="page-head-row">
+          <h1>dashboard</h1>
+          <span id="fake-stats-badge" class="fake-badge" hidden>
+            <span class="nav-ico" data-glyph="sticker"></span>sample data
+          </span>
+        </div>
       </div>
-      <div class="sub" id="m-scale" style="margin-top:8px"></div>
-      <h2 id="friction">structural friction timeline</h2>
-      <div class="panel"><div id="fr-chart"><p class="empty">no data yet. run the daemon, break a build, fix it.</p></div>
-      <div class="sub">each bar is 5 minutes of metadata. tall = failures, retries, follow-through. ◆ = commit. grey = agent dump, discounted.</div></div>
-      <h2>how a minute earns its weight</h2>
-      <div class="panel" style="font-size:14px">steer (prompt or edit) → check (run it, failing counts) → follow through (edit again or commit). close the loop and the minute counts fully. leave an agent running on its own and it counts at 0.2×. go silent to debug and it fades out over 5 to 12 minutes instead of vanishing.</div>
+
+      <div class="filter-strip" id="home-filters"></div>
+
+      <div class="kpi-strip" id="kpi-strip"></div>
+
+      <div class="bento">
+        <div class="bento-card span-6 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="briefcase"></span><h2>projects</h2></div>
+          <div id="rank-projects" class="rank-list fill"></div>
+        </div>
+        <div class="bento-card span-6 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="pie-chart"></span><h2>modes</h2></div>
+          <div id="mode-pie" class="pie-slot fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="history"></span><h2>timeline</h2></div>
+          <div id="series-chart" class="series-chart fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="terminal"></span><h2>editor</h2></div>
+          <div id="break-editor" class="seg-stack fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="laptop"></span><h2>os</h2></div>
+          <div id="break-os" class="seg-stack fill"></div>
+        </div>
+        <div class="bento-card span-12">
+          <div class="card-head"><span class="nav-ico" data-glyph="waveform"></span><h2>rhythm</h2></div>
+          <div id="rhythm-grid" class="rhythm-grid fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="stopwatch"></span><h2>pace</h2></div>
+          <div id="pace-panel" class="pace-panel fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="people-2"></span><h2>assist</h2></div>
+          <div id="mode-panel" class="mode-panel fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch">
+          <div class="card-head"><span class="nav-ico" data-glyph="code"></span><h2>languages</h2></div>
+          <div id="break-lang" class="seg-stack fill"></div>
+        </div>
+        <div class="bento-card span-12">
+          <div class="card-head"><span class="nav-ico" data-glyph="diagram-3"></span><h2>friction</h2>
+            <select id="proj-sel" class="ui-input tight" aria-label="friction project"></select>
+          </div>
+          <div id="fr-chart" class="fill"><p class="ui-empty compact">nothing here yet</p></div>
+        </div>
+      </div>
     </section>
 
+    <!-- PROJECTS -->
     <section class="page" id="page-projects">
-      <h1>projects</h1><div class="sub">every project being struggled into existence.</div>
-      <div class="panel" style="margin-top:14px;padding-top:6px"><table><thead><tr><th>project</th><th class="n">weighted</th><th class="n">raw</th><th>flags</th></tr></thead><tbody id="proj-rows"><tr><td colspan="4" class="empty">loading…</td></tr></tbody></table></div>
-      <form id="proj-form"><input id="np-id" placeholder="project id" required><input id="np-name" placeholder="project name" required><input id="np-repo" placeholder="github repo url (optional)" size="30"><button>add project</button></form>
-      <div class="sub" id="proj-out"></div>
+      <div class="projects-toolbar">
+        <div class="projects-title">
+          <h1>projects</h1>
+          <p class="sub" id="proj-total"></p>
+        </div>
+        <div class="projects-controls">
+          <div class="search-wrap">
+            <span class="nav-ico" data-glyph="search"></span>
+            <input class="ui-input" id="proj-search" type="search" placeholder="search projects…">
+          </div>
+          <label class="range-wrap" title="status filter">
+            <span class="nav-ico" data-glyph="filter"></span>
+            <select id="proj-status" class="ui-input tight" aria-label="project status">
+              <option value="active" selected>active / unarchived</option>
+              <option value="archived">archived</option>
+              <option value="deleted">deleted repos</option>
+              <option value="all">all</option>
+            </select>
+          </label>
+          <label class="range-wrap">
+            <span class="nav-ico" data-glyph="history"></span>
+            <select id="proj-range" class="ui-input tight" aria-label="date range">
+              <option value="today">today</option>
+              <option value="7d" selected>7 days</option>
+              <option value="30d">30 days</option>
+              <option value="all">all time</option>
+            </select>
+          </label>
+          <button type="button" class="ui-btn" id="btn-create-project"><span class="nav-ico" data-glyph="plus"></span>create</button>
+        </div>
+      </div>
+      <div class="project-grid" id="project-grid"></div>
     </section>
 
+    <!-- BUILDERS -->
     <section class="page" id="page-builders">
-      <h1>builders</h1><div class="sub">public by default. streaks, not surveillance.</div>
-      <div class="panel" id="builder-list" style="margin-top:14px"><p class="empty">loading…</p></div>
+      <div class="page-head">
+        <div>
+          <h1>builders</h1>
+        </div>
+      </div>
+      <div id="lb-tabs"></div>
+      <div id="lb-search-slot"></div>
+      <div class="lb-meta" id="lb-meta"></div>
+      <div class="ui-panel" id="lb-list"><p class="ui-empty">loading…</p></div>
     </section>
 
+    <!-- REVIEW -->
     <section class="page" id="page-review">
-      <h1>review queue</h1><div class="sub">submitted hours are frozen evidence packs. approve, or deflate with a reason that teaches the next formula.</div>
-      <div class="panel" id="review-list" style="margin-top:14px"><p class="empty">nothing submitted yet.</p></div>
+      <div class="page-head">
+        <div>
+          <h1>review queue</h1>
+        </div>
+      </div>
+      <div class="ui-panel" id="review-list"><p class="ui-empty">nothing in the queue yet</p></div>
     </section>
 
-    <section class="page" id="page-integrations">
-      <h1>integrations</h1><div class="sub">what is connected, and what has flowed through it. link accounts in <a href="/settings">settings</a>.</div>
-      <h2>github</h2><div class="panel" id="gh-status"><p class="empty">loading…</p></div>
-      <h2>slack</h2><div class="panel" id="slack-events"><p class="empty">loading…</p></div>
-    </section>
-
+    <!-- SETTINGS: Profile + Appearance only -->
     <section class="page" id="page-settings">
-      <h1>settings</h1><div class="sub">your account and connections. this page talks only to your server.</div>
-      <div class="setgrid" style="margin-top:16px">
-        <div class="panel"><h2>account</h2>
-          <div id="acct-state" class="sub">not signed in.</div>
-          <div class="sub">an account is just a handle. pick one, it is yours. no password, no email.</div>
-          <form id="create-form"><input id="c-handle" placeholder="pick a handle" required><button>claim handle</button></form>
-          <div class="sub" id="create-out"></div>
-          <form id="signin-form"><input id="s-handle" placeholder="your handle" required><button class="dark">sign in</button></form>
-          <div class="sub" id="signin-out"></div>
-          <form id="signout-form" style="display:none"><button class="dark">sign out</button></form>
+      <div class="page-head">
+        <div>
+          <h1>settings</h1>
+          <p class="sub" id="acct-state"></p>
         </div>
-        <div class="panel"><h2>github</h2>
-          <div class="sub">connect github with oauth. you will go to github, approve, and come back here linked. we keep only your github username, never the oauth token.</div>
-          <form id="gh-form"><button id="gh-oauth" type="submit">sign in with github</button></form>
-          <div class="sub" id="gh-out"></div>
-          <div class="sub" style="margin-top:8px">repo webhook → <code>POST /v1/integrations/github/webhook</code><br>signed with <code>GITHUB_WEBHOOK_SECRET</code> on the server.</div>
-        </div>
-        <div class="panel"><h2>slack</h2>
-          <div class="sub">connect slack with oauth for <code>/struggletime stats</code> and submission + review notifications. you will go to slack, approve, and come back here linked. we keep only your slack user id.</div>
-          <form id="sl-form"><button id="sl-oauth" type="submit">sign in with slack</button></form>
-          <div class="sub" id="sl-out"></div>
-          <div class="sub" style="margin-top:8px">slash command → <code>POST /v1/integrations/slack/command</code><br>signed with <code>SLACK_SIGNING_SECRET</code>; notifications need <code>SLACK_WEBHOOK_URL</code>. both live in the server environment or secret store, never in this page.</div>
-        </div>
-        <div class="panel"><h2>your daemon</h2>
-          <div class="sub">run the helper on your machine. it only ever sends metadata buckets.</div>
-          <p><code id="daemon-cmd">struggletime-helper start --repo ~/my-project --user you</code></p>
-          <div class="sub">inspect before you trust: <code>make inspect REPO=~/my-project</code><br>full setup: <code>docs/setup.md</code> in the repo.</div>
-          <h2 style="margin-top:18px">privacy</h2>
-          <div class="sub">profile public by default, logged hours private, submitted hours auditable. prompts, code, commands and screenshots are rejected by the server schema even if something tried to send them.</div>
+        <form id="signout-form" style="display:none"><button class="ui-btn ui-btn-ghost" type="submit"><span class="nav-ico" data-glyph="door-leave"></span>sign out</button></form>
+      </div>
+
+      <div id="slack-login-box" class="ui-panel settings-gate">
+        <div class="sub">Slack is how you get in. No handle and password login.</div>
+        <form id="sl-login-form" style="margin-top:10px"><button class="ui-btn" id="sl-oauth" type="submit"><span class="nav-ico" data-glyph="slack"></span>sign in with slack</button></form>
+      </div>
+      <div id="claim-box" class="ui-panel settings-gate" hidden>
+        <div class="sub">Pick a public handle tied to your Slack account.</div>
+        <form id="claim-form" class="claim-row">
+          <input class="ui-input" id="c-handle" placeholder="pick a handle" required>
+          <button class="ui-btn" type="submit">claim handle</button>
+        </form>
+        <div class="sub" id="create-out"></div>
+      </div>
+
+      <div class="settings-layout" id="settings-main" hidden>
+        <aside class="settings-rail" role="tablist">
+          <button type="button" class="settings-tab on" data-settings-tab="profile" role="tab"><span class="nav-ico" data-glyph="profile"></span> Profile</button>
+          <button type="button" class="settings-tab" data-settings-tab="appearance" role="tab"><span class="nav-ico" data-glyph="contrast"></span> Appearance</button>
+        </aside>
+        <div class="settings-panels">
+          <div class="settings-panel on" id="settings-profile">
+            <div class="ui-panel">
+              <h2><span class="nav-ico" data-glyph="map-pin"></span> region & timezone</h2>
+              <div class="form-grid">
+                <label class="ui-field">country
+                  <select class="ui-input" id="set-country"></select>
+                </label>
+                <label class="ui-field">timezone
+                  <select class="ui-input" id="set-timezone"></select>
+                </label>
+              </div>
+              <button type="button" class="ui-btn" id="btn-save-region"><span class="nav-ico" data-glyph="checkmark"></span>save</button>
+            </div>
+            <div class="ui-panel">
+              <h2><span class="nav-ico" data-glyph="person"></span> identity</h2>
+              <div class="form-grid">
+                <label class="ui-field">display name
+                  <input class="ui-input" id="set-display-name" placeholder="display name">
+                </label>
+                <label class="ui-field">username
+                  <input class="ui-input" id="set-username" disabled>
+                </label>
+                <label class="ui-field" style="grid-column:1/-1">email
+                  <input class="ui-input" id="set-email" type="email" placeholder="you@example.com">
+                </label>
+              </div>
+              <button type="button" class="ui-btn" id="btn-save-identity"><span class="nav-ico" data-glyph="checkmark"></span>save</button>
+            </div>
+            <div class="ui-panel" id="gh-panel">
+              <h2><span class="nav-ico" data-glyph="github"></span> github</h2>
+              <div id="gh-check" class="sub">checking…</div>
+              <form id="gh-form" style="margin-top:10px" hidden><button class="ui-btn" id="gh-oauth" type="submit"><span class="nav-ico" data-glyph="github"></span>connect github</button></form>
+              <div id="gh-connected" hidden>
+                <p class="sub">Connected. Link or change a repo from a project's Edit dialog.</p>
+              </div>
+            </div>
+            <div class="ui-panel">
+              <h2><span class="nav-ico" data-glyph="private"></span> leaderboard privacy</h2>
+              <label class="toggle-row"><input type="checkbox" id="set-lb-opt-out"> <span>opt out of leaderboards (hide me from public boards)</span></label>
+              <label class="toggle-row"><input type="checkbox" id="set-show-lb" checked> <span>show leaderboards in the app</span></label>
+              <button type="button" class="ui-btn" id="btn-save-privacy" style="margin-top:10px"><span class="nav-ico" data-glyph="checkmark"></span>save privacy</button>
+            </div>
+            <div class="ui-panel">
+              <h2><span class="nav-ico" data-glyph="terminal"></span> daemon</h2>
+              <p class="sub">Track a local repo. Buckets sync about every five minutes.</p>
+              <p><code id="daemon-cmd">struggletime-helper start --repo ~/my-project --user you</code></p>
+            </div>
+            <div class="ui-panel danger-zone">
+              <h2><span class="nav-ico" data-glyph="important"></span> danger zone</h2>
+              <p class="sub">Delete your account and local session. Type your handle to confirm.</p>
+              <div class="claim-row">
+                <input class="ui-input" id="delete-confirm" placeholder="your-handle">
+                <button type="button" class="ui-btn ui-btn-danger" id="btn-delete-account"><span class="nav-ico" data-glyph="delete"></span>delete account</button>
+              </div>
+            </div>
+          </div>
+          <div class="settings-panel" id="settings-appearance" hidden>
+            <div class="ui-panel">
+              <h2><span class="nav-ico" data-glyph="contrast"></span> theme</h2>
+              <p class="sub">Uses your existing theme tokens. No new palette.</p>
+              <label class="ui-field">color scheme
+                <select id="theme-sel" class="ui-input" aria-label="color scheme">
+                  <option value="lime">lime</option><option value="ember">ember</option>
+                  <option value="ocean">ocean</option><option value="forest">forest</option><option value="ink">ink</option>
+                </select>
+              </label>
+            </div>
+          </div>
         </div>
       </div>
     </section>
-
-    <footer>struggletime · open source under agplv3 · <span id="foot-note"></span></footer>
   </main>
 </div>
-<script>
-const $=id=>document.getElementById(id), esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
-async function j(u,o){const r=await fetch(u,o);return [r.status,await r.json().catch(()=>({}))]}
-const fmt=(n,d=2)=>Number(n||0).toFixed(d); let selected="";
-const PAGE=(location.pathname.replace('/','')||'home'); const KNOWN=['home','projects','builders','review','integrations','settings'];
-document.querySelectorAll('.page').forEach(el=>el.classList.toggle('on', el.id==='page-'+(KNOWN.includes(PAGE)?PAGE:'home')));
-document.querySelectorAll('[data-nav]').forEach(a=>a.classList.toggle('on', a.dataset.nav===(KNOWN.includes(PAGE)?PAGE:'home')));
-const me=()=>localStorage.getItem('st_handle')||'';
-const auth=()=>me()?{'X-Handle':me()}:{};
-if(PAGE==='signout'||PAGE==='logout'){localStorage.removeItem('st_handle');location.replace('/settings?signed_out=1')}
-function acctUI(p){
-  if(me()){$('who-name').textContent='@'+me();$('who-streak').textContent=p?('🔥 '+(p.current_streak_days||0)+' day streak · '+fmt(p.weighted_hours)+'h weighted'):'signed in';$('who-action').textContent='sign out';$('who-action').href='/signout';
-    $('acct-state').innerHTML='signed in as <b>@'+esc(me())+'</b>'+(p?(' · '+fmt(p.weighted_hours)+'h weighted · github '+(p.github_login?'github.com/'+esc(p.github_login):'not linked')+' · slack '+(p.slack_user_id?'linked':'not linked')):'');
-    const q=new URLSearchParams(location.search).get('oauth'); if(q)$('acct-state').innerHTML+='<br>oauth: '+esc(q.replaceAll('_',' '));
-    $('signout-form').style.display='flex'; $('daemon-cmd').textContent='struggletime-helper start --repo ~/my-project --user '+me();}
-  else{$('who-name').textContent='not signed in';$('who-streak').textContent='pick a handle to start';$('who-action').textContent='claim a handle';$('who-action').href='/settings';
-    $('acct-state').textContent=new URLSearchParams(location.search).get('signed_out')?'signed out. claim a handle, or sign in with your handle.':'not signed in. claim a handle, or sign in with your handle.';$('signout-form').style.display='none'}
-}
-async function refresh(){
-  const [os,ov]=await j('/v1/overview'),[ps,pr]=await j('/v1/projects'),[us,ur]=await j('/v1/users'),[ss,sr]=await j('/v1/submissions'),[es,er]=await j('/v1/integrations/events');
-  if(os!==200){$('live-txt').textContent='● offline';return}
-  $('live-txt').textContent='● live';
-  const wh=ov.weighted_hours||0, raw=(ov.raw_secs||0)/3600;
-  $('m-weighted').textContent=fmt(wh)+'h'; $('m-raw').textContent=fmt(raw)+'h';
-  $('m-trust').textContent=raw>0?Math.round(wh/raw*100)+'%':'—'; $('m-pending').textContent=ov.pending_reviews||0;
-  $('m-scale').textContent=(ov.users||0)+' builders · '+(ov.projects_count||0)+' projects · '+(ov.buckets||0)+' buckets · formula v0.1.0-alpha';
-  $('foot-note').textContent=Object.entries(ov.by_state||{}).map(([k,v])=>k.replaceAll('_',' ').toLowerCase()+' ×'+v).join(' · ');
-  const users=(ur.users||[]).slice().sort((a,b)=>b.weighted_hours-a.weighted_hours);
-  if(me()){const [s,p]=await j('/v1/users/'+encodeURIComponent(me()));
-    if(s===200)acctUI(p);
-    else if(s===404){localStorage.removeItem('st_handle');acctUI(null);$('signin-out').textContent='that handle is not on this server, so you were signed out.'}
-    else acctUI(null)}
-  const projs=pr.projects||[], withData=projs.filter(p=>p.buckets>0);
-  if(!selected&&withData.length)selected=withData[0].id;
-  $('proj-sel').innerHTML=withData.length?withData.map(p=>`<option value="${esc(p.id)}" ${p.id===selected?'selected':''}>${esc(p.name||p.id)}</option>`).join(''):'<option value="">no projects yet</option>';
-  $('proj-rows').innerHTML=projs.length?projs.map(p=>{
-    const flags=(p.flags||[]).map(f=>`<span class="flag">⚑ ${esc(f)}</span>`).join('');
-    return `<tr><td><b>${esc(p.name||p.id)}</b><br><span class="sub">${p.owner?'@'+esc(p.owner)+' · ':''}${p.repo_url?`<a href="${esc(p.repo_url)}" target="_blank" rel="noreferrer">github</a>`:'no repo linked'}</span><br>${Object.entries(p.by_state||{}).map(([k,v])=>`<span class="tag ${k.includes('DUMP')?'bad':k.includes('LOOP')?'ok':''}">${esc(k.replaceAll('_',' ').toLowerCase())} ×${v}</span>`).join(' · ')}</td><td class="n"><b>${fmt(p.weighted_hours)}h</b></td><td class="n">${fmt((p.raw_secs||0)/3600)}h</td><td>${flags||'<span class="sub">none</span>'}</td></tr>`}).join(''):'<tr><td colspan="4" class="empty">no projects yet.</td></tr>';
-  await drawFriction();
-  const max=users.length?users[0].weighted_hours||1:1;
-  $('builder-list').innerHTML=users.length?users.map(u=>`<div class="builder"><span style="min-width:130px"><b>@${esc(u.handle)}</b><br><span class="sub">${u.active_days}d active · 🔥 ${u.current_streak_days}${u.github_login?'<br>github.com/'+esc(u.github_login):''}</span></span><span class="bar"><i style="width:${Math.max(3,u.weighted_hours/max*100)}%"></i></span><b>${fmt(u.weighted_hours)}h</b></div>`).join(''):'<p class="empty">no builders yet.</p>';
-  const subs=sr.submissions||[];
-  $('review-list').innerHTML=subs.length?subs.map(s=>`<div class="review"><b>${esc(s.project_id)}</b> <span class="tag ${s.status=='approved'?'ok':s.status=='pending'?'':'bad'}">${esc(s.status)}</span>
-    <span class="sub"> by ${esc(s.user_id||'unknown')} · claimed ${fmt(s.claimed_weighted_hours)}h · “${esc(s.ai_declaration)}”</span>${(s.flags||[]).map(f=>`<span class="flag">⚑ ${esc(f)}</span>`).join('')}
-    ${s.status=='pending'?`<form onsubmit="return review(event,'${s.id}')"><input name="amt" type="number" min="0" step="0.01" value="${fmt(s.claimed_weighted_hours)}" style="width:84px" aria-label="approved hours">
-    <select name="why"><option value="NONE">approve fully</option><option value="UNATTENDED_AGENT_DUMP">unattended agent dump</option><option value="IDLE_INFLATION">idle inflation</option><option value="NO_TEST_ITERATION">no test iteration</option><option value="BOILERPLATE_HEAVY">boilerplate heavy</option><option value="CHAIN_BROKEN">chain broken</option><option value="GIT_MISMATCH">git mismatch</option></select>
-    <button>save review</button></form>`:''}</div>`).join(''):'<p class="empty">nothing submitted yet.</p>';
-  const ghProjects=projs.filter(p=>p.repo_url);
-  $('gh-status').innerHTML=ghProjects.length?ghProjects.map(p=>`<div class="event"><b>${esc(p.name||p.id)}</b> <span class="sub">${esc(p.repo_url)} · <a href="#" onclick="return ghInfo(event,'${esc(p.id)}')">check anchors</a></span><div class="sub" id="ghinfo-${esc(p.id)}"></div></div>`).join(''):'<p class="empty">no repos linked yet. add a repo url to a project, then point its webhook here.</p>';
-  const evs=er.events||[];
-  $('slack-events').innerHTML=evs.length?evs.map(e=>`<div class="event"><span class="tag ${e.delivered?'ok':'bad'}">${e.delivered?'sent to slack':'queued'}</span> <span>${esc(e.text)}</span></div>`).join(''):'<p class="empty">no slack events yet. submissions and reviews land here, delivered or queued.</p>';
-}
-window.ghInfo=async(e,id)=>{e.preventDefault();const [s,g]=await j('/v1/projects/'+encodeURIComponent(id)+'/github');
-  document.getElementById('ghinfo-'+id).textContent=s===200?('linked: '+g.owner+'/'+g.repo+' · webhook anchors stored: '+g.webhook_events.length):('nope: '+(g.error||s)); return false};
-async function drawFriction(){
-  if(!selected)return; const [s,fr]=await j('/v1/projects/'+encodeURIComponent(selected)+'/friction'); if(s!==200)return;
-  $('fr-meta').textContent='evidence '+(fr.evidence_bytes/1024).toFixed(1)+' kb of metadata · '+fr.commit_anchors.length+' commits in range';
-  const w=Math.max(560,fr.timeline.length*52),h=120,bw=32;
-  $('fr-chart').innerHTML=`<svg width="100%" viewBox="0 0 ${w} ${h+30}" role="img" aria-label="friction timeline">`+fr.timeline.map((t,i)=>{const bh=Math.max(3,t.friction*95);return `<rect x="${i*52+8}" y="${h-bh}" width="${bw}" height="${bh}" rx="4" fill="${t.state=='OPEN_LOOP_AGENT_DUMP'?'#57534c':'#d7ff6a'}"><title>${esc(t.state)} · friction ${t.friction} · weight ${t.weight}</title></rect>`+(t.commits?`<text x="${i*52+19}" y="${h+16}" fill="#d7ff6a" font-size="12">◆</text>`:'')+`<text x="${i*52+8}" y="${h+27}" fill="#a39e93" font-size="8">${esc((t.head_commit||'').slice(0,6))}</text>`}).join('')+`</svg>`;
-}
-window.review=async(e,id)=>{e.preventDefault();const f=e.target,amt=parseFloat(f.amt.value),why=f.why.value;
-  const [s,r]=await j('/v1/submissions/'+id+'/review',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewer_id:'dashboard',approved_weighted_secs:Math.round(amt*3600),reason_code:why})});
-  if(s!==200)alert('could not save: '+(r.error||s)); refresh(); return false};
-$('proj-sel').addEventListener('change',e=>{selected=e.target.value;drawFriction()});
-$('c-handle').addEventListener('input',async e=>{const h=e.target.value.trim().toLowerCase(); if(h.length<2){$('create-out').textContent='';return}
-  const [s,r]=await j('/v1/handles/'+encodeURIComponent(h)); $('create-out').textContent=s===200?(r.available?('@'+h+' is available'):('@'+h+' is taken, pick another')):''});
-$('create-form').addEventListener('submit',async e=>{e.preventDefault();const h=$('c-handle').value.trim().toLowerCase();
-  const [s,r]=await j('/v1/users',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:h})});
-  if(s===201){localStorage.setItem('st_handle',h);$('create-out').textContent='@'+h+' is yours. now connect github or slack below.';refresh()}
-  else $('create-out').textContent='nope: '+(r.error||s)});
-$('signin-form').addEventListener('submit',async e=>{e.preventDefault();const h=$('s-handle').value.trim().toLowerCase();
-  const [s,r]=await j('/v1/auth/signin',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({handle:h})});
-  if(s===200){localStorage.setItem('st_handle',h);$('signin-out').textContent='signed in as @'+h+'.';refresh()}
-  else $('signin-out').textContent='nope: '+(r.error||s)});
-$('signout-form').addEventListener('submit',e=>{e.preventDefault();localStorage.removeItem('st_handle');acctUI(null);refresh()});
-$('gh-form').addEventListener('submit',e=>{e.preventDefault();if(!me()){$('gh-out').textContent='pick a handle and sign in first.';return}
-  location.href='/v1/auth/github/start?handle='+encodeURIComponent(me())});
-$('sl-form').addEventListener('submit',e=>{e.preventDefault();if(!me()){$('sl-out').textContent='pick a handle and sign in first.';return}
-  location.href='/v1/auth/slack/start?handle='+encodeURIComponent(me())});
-$('proj-form').addEventListener('submit',async e=>{e.preventDefault();
-  const [s,r]=await j('/v1/projects',{method:'POST',headers:{'Content-Type':'application/json',...auth()},body:JSON.stringify({id:$('np-id').value.trim(),name:$('np-name').value.trim(),repo_url:$('np-repo').value.trim()||null,owner_handle:me()||undefined})});
-  $('proj-out').textContent=s===201?'project added. point the daemon at its repo.':('nope: '+(r.error||s)); refresh()});
-acctUI(null); refresh(); setInterval(refresh,2000);
-</script></body></html>
+<script src="/ui.js"></script>
+<script src="/app.js"></script>
+</body></html>

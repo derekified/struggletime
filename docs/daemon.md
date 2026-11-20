@@ -4,6 +4,9 @@ One python file (`daemon/daemon.py`), stdlib only, polling instead of
 native watchers so it runs the same on a 10-year-old windows laptop as
 on a new mac. expect tens of mb of ram and near-zero cpu while idle.
 
+Config lives in `~/.aitime/gui.json` (and env overrides). There is no
+`~/.wakatime.cfg` in this architecture.
+
 ## what it watches
 
 - **files** in the repo (`.git` and common build dirs skipped): how many
@@ -16,9 +19,10 @@ on a new mac. expect tens of mb of ram and near-zero cpu while idle.
   per-file deltas keyed by an anonymized id (`sha256(salt:path)`, salt
   created locally and stored only in the ledger).
 
-every 5 minutes (`AITIME_BUCKET_SECS` to change) it seals a bucket:
-counts + git anchor + `prev_hash`, hashes it, appends to the local
-ledger, and posts the pending batch if a server is configured.
+every 5 minutes (`AITIME_BUCKET_SECS` / `--bucket-secs` to change) it
+seals a bucket: counts + git anchor + `prev_hash`, hashes it, appends
+to the local ledger, and posts the pending batch if a server is
+configured.
 
 ## running it
 
@@ -32,11 +36,11 @@ make tray                                     # or: python3 daemon/tray.py
 it lives in the menu bar on macos, the system tray on windows, and
 the appindicator area on linux. it starts tracking on launch if you
 are set up, shows today's weighted time next to the icon (`42m`,
-`1h 15m`), refreshed every 15 seconds, and its menu has start/stop, open dashboard,
-inspect, settings, and quit. linux needs a tray backend
+`1h 15m`), refreshed every 15 seconds, and its menu has start/stop,
+open dashboard, inspect, settings, and quit. linux needs a tray backend
 (`sudo apt install gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`);
-gnome without the appindicator extension has no tray area, use the
-gui there.
+gnome without the appindicator extension has no tray area — the tray
+falls back to a headless CLI loop, or use the gui.
 
 the settings window is stdlib tkinter, no installs:
 
@@ -57,12 +61,29 @@ python3 daemon/daemon.py --repo ~/my-project \
   --server http://127.0.0.1:18765 --user you
 ```
 
-flags: `--project` (default: repo folder name), `--bucket-secs`,
-`--once` (seal one bucket and exit, used by tests and demos).
+or via the helper (background + logs):
 
+```bash
+python3 daemon/helper.py start --repo ~/my-project --user you \
+  --server http://127.0.0.1:18765 --token "$ST_TOKEN"
+python3 daemon/helper.py status
+python3 daemon/helper.py sync --repo ~/my-project --user you   # flush pending now
+python3 daemon/helper.py pause
+python3 daemon/helper.py resume
+python3 daemon/helper.py stop
+python3 daemon/tray.py --headless
+```
+
+flags: `--project` (default: repo folder name), `--bucket-secs`,
+`--token` (session bearer, also `STRUGGLETIME_TOKEN` / `AITIME_TOKEN`),
+`--once` (seal one bucket and exit, used by tests and demos),
+`--flush-only` (retry pending ledger upload and exit).
+
+on start the daemon retries any pending ledger buckets with backoff.
 if the server is down, buckets pile up in the ledger and sync later.
-if you kill the daemon mid-bucket, that partial bucket is lost and
-nothing else is. the hash chain makes both facts visible in review.
+SIGTERM/SIGINT flush pending then exit. if you kill the daemon
+mid-bucket, that partial bucket is lost and nothing else is. the hash
+chain makes both facts visible in review.
 
 ## adapters (optional enrichment)
 

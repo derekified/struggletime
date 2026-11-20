@@ -1,10 +1,12 @@
-import json, os, pathlib, subprocess, sys, tempfile, time, unittest, urllib.request, urllib.error
+import hashlib, json, os, pathlib, secrets, sqlite3, subprocess, sys, tempfile, time, unittest, urllib.request, urllib.error
 ROOT = pathlib.Path(__file__).parent.parent
 sys.path.insert(0, str(ROOT / "src")); import verify
 
-def req(port, method, path, body=None, raw=None):
+def req(port, method, path, body=None, raw=None, token=None):
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
-    r = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=data, headers={"Content-Type": "application/json"})
+    headers = {"Content-Type": "application/json"}
+    if token: headers["Authorization"] = f"Bearer {token}"
+    r = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=data, headers=headers)
     try:
         with urllib.request.urlopen(r) as x: return x.status, json.loads(x.read())
     except urllib.error.HTTPError as e: return e.code, json.loads(e.read())
@@ -26,13 +28,20 @@ ACTIVE = {"human_edits": 3, "executions": 1}
 class TestMore(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.mkdtemp(); cls.port = 18803
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db"}
+        cls.tmp = tempfile.mkdtemp(); cls.port = 18803; cls.db = f"{cls.tmp}/t.db"
+        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
                 if req(cls.port, "GET", "/health")[0] == 200: break
             except Exception: time.sleep(0.1)
+        token = secrets.token_urlsafe(16); now = int(time.time())
+        c = sqlite3.connect(cls.db)
+        c.execute("INSERT INTO user(handle, token_hash, is_public, created_at) VALUES (?,?,?,?)", ("owner", "", 1, now))
+        c.execute("INSERT INTO link(handle, github_login, slack_user_id, github_token, slack_avatar, slack_name) VALUES (?,?,?,?,?,?)",
+                  ("owner", None, "Uowner", None, None, None))
+        c.execute("INSERT INTO session VALUES (?,?,?,?,?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), "owner", "Uowner", "", "", now, now + 86400))
+        c.commit(); c.close(); cls.token = token
     @classmethod
     def tearDownClass(cls): cls.proc.terminate()
 
@@ -86,7 +95,7 @@ class TestMore(unittest.TestCase):
 
     def test_07_submission_without_git_link_flagged(self):
         req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u9", "buckets": chain("nogit", [ACTIVE])})
-        req(self.port, "POST", "/v1/projects", {"id": "nogit", "name": "nogit"})
+        self.assertEqual(req(self.port, "POST", "/v1/projects", {"id": "nogit", "name": "nogit"}, token=self.token)[0], 201)
         b = chain("nogit", [ACTIVE])[0]
         s, sub = req(self.port, "POST", "/v1/submissions", {"user_id": "u9", "project_id": "nogit", "from_bucket": b["bucket_id"], "to_bucket": b["bucket_id"], "ai_declaration": "pair programmed with claude"})
         self.assertEqual(s, 201); self.assertTrue(any("git_mismatch" in f for f in sub["flags"]), sub)

@@ -1,7 +1,9 @@
-import importlib.util, json, pathlib, tempfile, unittest
+import importlib.util, json, os, pathlib, tempfile, unittest
 ROOT = pathlib.Path(__file__).parent.parent
 spec = importlib.util.spec_from_file_location("tray", ROOT / "daemon" / "tray.py")
 tray = importlib.util.module_from_spec(spec); spec.loader.exec_module(tray)
+cfg_spec = importlib.util.spec_from_file_location("dcfg", ROOT / "daemon" / "config.py")
+dcfg = importlib.util.module_from_spec(cfg_spec); cfg_spec.loader.exec_module(dcfg)
 
 class TestTray(unittest.TestCase):
     def test_pending_count(self):
@@ -17,9 +19,35 @@ class TestTray(unittest.TestCase):
         self.assertEqual(tray.weighted_title(2.0), "2h")
         self.assertEqual(tray.weighted_title(1.25, tracking=False), "1h 15m")
 
+    def test_aitime_gui_json_and_pause(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = pathlib.Path(d)
+            gui = home / "gui.json"
+            gui.write_text(json.dumps({"handle": "rowan", "repo": "/tmp/x", "server": "http://127.0.0.1:18765", "bucket_mins": 5}))
+            os.environ["STRUGGLETIME_HOME"] = str(home)
+            os.environ.pop("STRUGGLETIME_SERVER", None)
+            os.environ.pop("AITIME_SERVER", None)
+            dcfg.HOME = home
+            dcfg.GUI_SETTINGS = gui
+            dcfg.PAUSE_FLAG = home / "paused"
+            s = dcfg.load_settings(gui)
+            self.assertEqual(s["handle"], "rowan")
+            self.assertEqual(s["server"], "http://127.0.0.1:18765")
+            self.assertFalse(hasattr(dcfg, "WAKATIME_CFG"))
+            self.assertFalse(hasattr(dcfg, "read_wakatime_cfg"))
+            dcfg.set_paused(True)
+            self.assertTrue(dcfg.is_paused())
+            dcfg.set_paused(False)
+            self.assertFalse(dcfg.is_paused())
+
+    def test_has_display_and_headless_helpers(self):
+        self.assertIsInstance(tray.has_display(), bool)
+        self.assertIn("pip install", tray.INSTALL_HINT)
+
     @unittest.skipIf(tray.pystray is None, "pystray/pillow not installed")
     def test_icon_renders(self):
         self.assertEqual(tray.make_icon(True).size, (64, 64))
+        self.assertEqual(tray.make_icon(True, paused=True).size, (64, 64))
 
 if __name__ == "__main__":
     unittest.main()

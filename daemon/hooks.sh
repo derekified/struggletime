@@ -4,8 +4,10 @@ _aitime_log="${AITIME_EXEC_LOG:-$HOME/.aitime/exec.jsonl}"
 mkdir -p "$(dirname "$_aitime_log")"
 _aitime_category() {
   case "$1" in
-    git) echo git;; claude|codex|aider|opencode|openclaw|gemini|goose|amp|crush|copilot|cursor-agent|qwen|pi|cline|roo) echo ai_cli;;
+    git) echo git;;
+    claude|codex|aider|opencode|openclaw|gemini|goose|amp|crush|copilot|cursor-agent|qwen|pi|cline|roo) echo ai_cli;;
     pytest|jest|vitest|test|go|cargo|npm|pnpm|yarn|make|python|python3|node) echo test_runner;;
+    gcc|g++|clang|clang++|rustc|javac|tsc) echo compiler;;
     *) echo other;;
   esac
 }

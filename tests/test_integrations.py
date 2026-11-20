@@ -1,35 +1,50 @@
-import hashlib, hmac, json, os, pathlib, subprocess, sys, tempfile, time, unittest, urllib.request, urllib.error
+import hashlib, hmac, json, os, pathlib, secrets, sqlite3, subprocess, sys, tempfile, time, unittest, urllib.request, urllib.error
 from urllib.parse import urlencode
 ROOT = pathlib.Path(__file__).parent.parent
 
-def req(port, method, path, body=None, raw=None, headers=None, ctype="application/json"):
+def req(port, method, path, body=None, raw=None, headers=None, ctype="application/json", token=None):
     data = raw if raw is not None else (json.dumps(body).encode() if body is not None else None)
-    r = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=data, headers={"Content-Type": ctype, **(headers or {})})
+    hdrs = {"Content-Type": ctype, **(headers or {})}
+    if token: hdrs["Authorization"] = f"Bearer {token}"
+    r = urllib.request.Request(f"http://127.0.0.1:{port}{path}", method=method, data=data, headers=hdrs)
     try:
         with urllib.request.urlopen(r) as x: return x.status, json.loads(x.read())
     except urllib.error.HTTPError as e: return e.code, json.loads(e.read())
 
+def seed_user(db, handle="rowan", slack_id="U123"):
+    token = secrets.token_urlsafe(16)
+    th = hashlib.sha256(token.encode()).hexdigest()
+    now = int(time.time())
+    c = sqlite3.connect(db)
+    c.execute("INSERT OR IGNORE INTO user(handle, token_hash, is_public, created_at) VALUES (?,?,?,?)", (handle, "", 1, now))
+    c.execute("INSERT OR REPLACE INTO link(handle, github_login, slack_user_id, github_token, slack_avatar, slack_name) VALUES (?,?,?,?,?,?)",
+              (handle, None, slack_id, None, None, None))
+    c.execute("INSERT INTO session VALUES (?,?,?,?,?,?,?)", (th, handle, slack_id, "", "", now, now + 86400))
+    c.execute("INSERT OR IGNORE INTO project VALUES (?,?,?,?,?,?)", ("cs2", handle, "CS2", "https://github.com/rowan/cs2-browser", None, None))
+    c.commit(); c.close()
+    return token
+
 class TestIntegrations(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        cls.tmp = tempfile.mkdtemp(); cls.port = 18807
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db",
-               "GITHUB_WEBHOOK_SECRET": "ghsecret", "SLACK_SIGNING_SECRET": "slsecret"}
+        cls.tmp = tempfile.mkdtemp(); cls.port = 18807; cls.db = f"{cls.tmp}/t.db"
+        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db,
+               "GITHUB_WEBHOOK_SECRET": "ghsecret", "SLACK_SIGNING_SECRET": "slsecret",
+               "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
                 if req(cls.port, "GET", "/health")[0] == 200: break
             except Exception: time.sleep(0.1)
-        req(cls.port, "POST", "/v1/users", {"handle": "rowan"})
-        req(cls.port, "POST", "/v1/projects", {"id": "cs2", "name": "CS2", "repo_url": "https://github.com/rowan/cs2-browser"})
+        cls.token = seed_user(cls.db)
     @classmethod
     def tearDownClass(cls): cls.proc.terminate()
 
     def test_github_link_and_parse(self):
-        s, r = req(self.port, "POST", "/v1/users/rowan/github", {"github_login": "rowan-17"})
+        s, r = req(self.port, "POST", "/v1/users/rowan/github", {"github_login": "rowan-17"}, token=self.token)
         self.assertEqual(s, 200); self.assertEqual(r["github_url"], "https://github.com/rowan-17")
-        self.assertEqual(req(self.port, "POST", "/v1/users/rowan/github", {"github_login": "bad login!"})[0], 400)
-        self.assertEqual(req(self.port, "POST", "/v1/users/ghost/github", {"github_login": "x"})[0], 404)
+        self.assertEqual(req(self.port, "POST", "/v1/users/rowan/github", {"github_login": "bad login!"}, token=self.token)[0], 400)
+        self.assertEqual(req(self.port, "POST", "/v1/users/rowan/github", {"github_login": "x"})[0], 401)
         s, g = req(self.port, "GET", "/v1/projects/cs2/github")
         self.assertTrue(g["linked"]); self.assertEqual((g["owner"], g["repo"]), ("rowan", "cs2-browser"))
         s, p = req(self.port, "GET", "/v1/users/rowan"); self.assertEqual(p["github_login"], "rowan-17")
@@ -44,8 +59,6 @@ class TestIntegrations(unittest.TestCase):
         s, g = req(self.port, "GET", "/v1/projects/cs2/github"); self.assertEqual(len(g["webhook_events"]), 1)
 
     def test_slack_link_command_and_notify_queue(self):
-        s, _ = req(self.port, "POST", "/v1/users/rowan/slack", {"slack_user_id": "U123"})
-        self.assertEqual(s, 200)
         form = urlencode({"text": "stats", "user_id": "U123", "user_name": "rowan"}).encode()
         ts = "1700000000"; sig = "v0=" + hmac.new(b"slsecret", f"v0:{ts}:".encode() + form, hashlib.sha256).hexdigest()
         h = {"X-Slack-Request-Timestamp": ts, "X-Slack-Signature": sig}

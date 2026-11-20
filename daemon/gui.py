@@ -21,17 +21,19 @@ except ImportError:
     tk = None
 
 ROOT = Path(__file__).parent.parent
-HOME = Path(os.environ.get("AITIME_HOME", Path.home() / ".aitime"))
-SETTINGS = HOME / "gui.json"
-DEFAULTS = {"handle": "", "repo": "", "server": "http://127.0.0.1:18765", "bucket_mins": 5}
+sys.path.insert(0, str(Path(__file__).parent))
+import config as dcfg
+HOME = dcfg.HOME
+SETTINGS = dcfg.GUI_SETTINGS
+DEFAULTS = dict(dcfg.DEFAULTS)
 
 def load_settings(path=SETTINGS):
-    try: return {**DEFAULTS, **json.loads(Path(path).read_text())}
-    except Exception: return dict(DEFAULTS)
+    s = dcfg.load_settings(path)
+    # keep gui keys stable
+    return {**DEFAULTS, **{k: s.get(k, DEFAULTS.get(k, "")) for k in DEFAULTS}, "token": s.get("token", "")}
 
 def save_settings(s, path=SETTINGS):
-    Path(path).parent.mkdir(parents=True, exist_ok=True)
-    Path(path).write_text(json.dumps({k: s[k] for k in DEFAULTS}, indent=1))
+    dcfg.save_settings(s, path)
 
 def validate(s):
     errs = []
@@ -42,9 +44,12 @@ def validate(s):
     return errs
 
 def daemon_cmd(s):
-    return [sys.executable, str(ROOT / "daemon" / "daemon.py"), "--repo", str(Path(s["repo"]).expanduser()),
-            "--server", s["server"].rstrip("/"), "--user", s["handle"].strip(),
-            "--bucket-secs", str(max(1, int(s["bucket_mins"])) * 60)]
+    cmd = [sys.executable, str(ROOT / "daemon" / "daemon.py"), "--repo", str(Path(s["repo"]).expanduser()),
+           "--server", s["server"].rstrip("/"), "--user", s["handle"].strip(),
+           "--bucket-secs", str(max(1, int(s.get("bucket_mins") or 5)) * 60)]
+    if s.get("project"): cmd += ["--project", str(s["project"])]
+    if s.get("token"): cmd += ["--token", str(s["token"])]
+    return cmd
 
 class App:
     def __init__(self, root, initial):

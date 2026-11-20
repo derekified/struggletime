@@ -4,3 +4,4 @@ __pycache__/
 server.db
 *.db
 .aitime-ledger.json
+*.bak

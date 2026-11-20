@@ -1,0 +1,1477 @@
+const { esc, el, toast, modal, field, btn, pill, empty, tabs, avatar, icon, iconBtn, selectField, pieChart } = UI;
+const $ = (id) => document.getElementById(id);
+const fmt = (n, d = 2) => Number(n || 0).toFixed(d);
+const fmtH = (h) => {
+  const n = Number(h || 0);
+  if (n < 1 / 60) return "0m";
+  if (n < 1) return `${Math.round(n * 60)}m`;
+  return `${fmt(n, 1)}h`;
+};
+const token = () => localStorage.getItem("st_token") || "";
+const setToken = (t) => { if (t) localStorage.setItem("st_token", t); else localStorage.removeItem("st_token"); };
+const authHdr = () => (token() ? { Authorization: "Bearer " + token() } : {});
+async function j(u, o = {}) {
+  const r = await fetch(u, { ...o, headers: { ...(o.headers || {}), ...authHdr() } });
+  return [r.status, await r.json().catch(() => ({}))];
+}
+
+function hydrateNavIcons(root = document) {
+  root.querySelectorAll(".nav-ico[data-glyph]").forEach((node) => {
+    if (node.dataset.ready) return;
+    const g = node.dataset.glyph;
+    const url = `https://icons.hackclub.com/api/icons/black/${encodeURIComponent(g)}`;
+    node.style.setProperty("--hc-url", `url(${url})`);
+    node.dataset.ready = "1";
+  });
+}
+
+let selected = "", authStatus = null, meProfile = null, ghReposCache = null, ghReposAt = 0;
+let lbPeriod = "week", lbQuery = "";
+let analytics = null, projectsCache = [];
+let meLoaded = false, authStatusLoaded = false, booted = false;
+const filters = {
+  range: localStorage.getItem("st_range") || "7d",
+  project: "all", language: "all", os: "all", editor: "all", category: "all",
+};
+const projSearch = {
+  q: "",
+  range: localStorage.getItem("st_proj_range") || "7d",
+  status: localStorage.getItem("st_proj_status") || "active",
+};
+const TZ_OFFSET = -new Date().getTimezoneOffset();
+const KNOWN = ["landing", "login", "home", "projects", "builders", "review", "settings"];
+const PROTECTED = new Set(["home", "projects", "review", "settings"]);
+
+function pathToPage(pathname) {
+  const raw = (pathname || "/").replace(/\/$/, "") || "/";
+  let page = raw === "/" ? "landing" : raw.slice(1);
+  if (page === "dashboard") page = "home";
+  if (page === "signout" || page === "logout") return page;
+  return KNOWN.includes(page) ? page : "landing";
+}
+
+function isSignedIn() {
+  return !!(token() && meProfile && meProfile.handle);
+}
+
+function pendingAuthCode() {
+  return new URLSearchParams(location.search).has("auth");
+}
+
+function paintNavAuth() {
+  const ok = isSignedIn();
+  document.querySelectorAll('#top-nav a[data-auth="required"]').forEach((a) => { a.hidden = !ok; });
+}
+
+function clearClientSession() {
+  setToken("");
+  meProfile = null;
+  meLoaded = true;
+  ghReposCache = null;
+  ghReposAt = 0;
+  projectsCache = [];
+  window._projects = [];
+  analytics = null;
+  selected = "";
+  fakeStatsMode = false;
+  try { sessionStorage.removeItem("st_fake_stats"); } catch (_) {}
+  paintFakeBadge();
+  if ($("nav-stats")) $("nav-stats").hidden = true;
+  if ($("nav-identity")) $("nav-identity").hidden = true;
+  if ($("nav-flag")) $("nav-flag").textContent = "";
+  if ($("nav-streak")) $("nav-streak").textContent = "0d";
+  if ($("nav-hours")) $("nav-hours").textContent = "0h";
+  if ($("who-name")) { $("who-name").textContent = ""; $("who-name").href = "/login"; }
+  if ($("acct-state")) $("acct-state").textContent = "";
+  if ($("set-display-name")) $("set-display-name").value = "";
+  if ($("set-username")) $("set-username").value = "";
+  if ($("set-email")) $("set-email").value = "";
+  if ($("set-country")) $("set-country").value = "";
+  if ($("set-timezone")) $("set-timezone").value = "";
+  if ($("set-lb-opt-out")) $("set-lb-opt-out").checked = false;
+  if ($("set-show-lb")) $("set-show-lb").checked = true;
+  if ($("delete-confirm")) $("delete-confirm").value = "";
+  if ($("settings-main")) $("settings-main").hidden = true;
+  if ($("signout-form")) $("signout-form").style.display = "none";
+  if ($("gh-connected")) $("gh-connected").hidden = true;
+  if ($("gh-form")) $("gh-form").hidden = true;
+  if ($("gh-check")) $("gh-check").textContent = "";
+  paintTopUser("", "", "/login", "sign in");
+  paintWhoAction("sign in", "/login", "door-enter");
+  paintNavAuth();
+  paintHeroCta();
+}
+
+async function doLogout() {
+  try { await j("/v1/auth/logout", { method: "POST" }); } catch (_) {}
+  clearClientSession();
+  navigate("/");
+}
+
+let activePage = pathToPage(location.pathname);
+
+function showPage(page, { push = false } = {}) {
+  if (page === "signout" || page === "logout") {
+    doLogout();
+    return;
+  }
+  if (!KNOWN.includes(page)) page = "landing";
+  if (PROTECTED.has(page) && !isSignedIn() && !pendingAuthCode()) {
+    // token present but profile still loading: wait for refresh; otherwise send to hero
+    if (!token() || meLoaded) {
+      navigate("/");
+      return;
+    }
+  }
+  activePage = page;
+  const path = page === "landing" ? "/" : "/" + page;
+  if (push) history.pushState({ page }, "", path);
+  document.querySelectorAll(".page").forEach((node) => node.classList.toggle("on", node.id === "page-" + page));
+  document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === page));
+  document.querySelectorAll("[data-top]").forEach((a) => a.classList.toggle("on", a.dataset.top === page));
+  const shell = $("app-shell");
+  shell.classList.toggle("landing-mode", page === "landing");
+  shell.classList.toggle("login-mode", page === "login");
+  paintNavAuth();
+  paintLogin();
+  if (page === "settings") paintSettingsForm();
+  softRefresh();
+}
+
+function navigate(url) {
+  const u = new URL(url, location.origin);
+  if (u.origin !== location.origin) { location.href = url; return; }
+  const page = pathToPage(u.pathname);
+  if (u.search) history.pushState({ page }, "", u.pathname + u.search);
+  else history.pushState({ page }, "", page === "landing" ? "/" : "/" + page);
+  // apply query without full reload
+  if (u.searchParams.get("signed_out") || u.searchParams.get("oauth") || u.searchParams.get("auth")) {
+    activePage = page;
+    document.querySelectorAll(".page").forEach((node) => node.classList.toggle("on", node.id === "page-" + page));
+    document.querySelectorAll("[data-nav]").forEach((a) => a.classList.toggle("on", a.dataset.nav === page));
+    document.querySelectorAll("[data-top]").forEach((a) => a.classList.toggle("on", a.dataset.top === page));
+    $("app-shell").classList.toggle("landing-mode", page === "landing");
+    $("app-shell").classList.toggle("login-mode", page === "login");
+  }
+  showPage(page, { push: false });
+}
+
+document.addEventListener("click", (e) => {
+  const a = e.target.closest("a[data-nav-link], a[data-nav], a[data-top], a.brand, a.top-user, a#who-action");
+  if (!a || a.target === "_blank" || a.hasAttribute("download")) return;
+  const href = a.getAttribute("href");
+  if (!href || href.startsWith("http") || href.startsWith("mailto:") || href.startsWith("#")) return;
+  if (href.startsWith("/v1/")) return; // oauth / api starts
+  e.preventDefault();
+  navigate(href);
+});
+window.addEventListener("popstate", () => showPage(pathToPage(location.pathname), { push: false }));
+
+showPage(activePage, { push: false });
+hydrateNavIcons();
+
+const theme = localStorage.getItem("st_theme") || "lime";
+document.documentElement.setAttribute("data-theme", theme);
+
+async function mountHeroShot() {
+  const box = $("hero-preview");
+  if (!box || box.querySelector("svg.hero-shot")) return;
+  try {
+    const r = await fetch("/img/fake-stats-preview.svg");
+    if (!r.ok) return;
+    box.innerHTML = await r.text();
+    const node = box.querySelector("svg");
+    if (!node) return;
+    node.classList.add("hero-shot");
+    node.setAttribute("width", "720");
+    node.setAttribute("height", "460");
+    node.removeAttribute("xmlns");
+  } catch (_) { /* keep <object> fallback */ }
+}
+mountHeroShot();
+
+if ($("theme-sel")) {
+  $("theme-sel").value = theme;
+  $("theme-sel").addEventListener("change", (e) => {
+    localStorage.setItem("st_theme", e.target.value);
+    document.documentElement.setAttribute("data-theme", e.target.value);
+  });
+}
+
+if (activePage === "signout" || activePage === "logout") {
+  showPage(activePage);
+}
+
+function oauthMsg(code) {
+  return ({
+    claim_handle: "Signed in with Slack. Grab a handle next.",
+    slack_linked: "Signed in with Slack.",
+    github_linked: "GitHub connected.",
+    github_failed: "GitHub sign-in didn’t work. Try again?",
+    slack_failed: "Slack sign-in didn’t work. Try again?",
+    bad_state: "That sign-in link expired. Start again from Slack.",
+    sign_in_with_slack_first: "Sign in with Slack first.",
+  })[code] || (code ? code.replaceAll("_", " ") : "");
+}
+
+function flagEmoji(cc) {
+  if (!cc || !/^[A-Za-z]{2}$/.test(cc)) return "";
+  const u = cc.toUpperCase();
+  return String.fromCodePoint(...[...u].map((c) => 127397 + c.charCodeAt(0)));
+}
+
+const COUNTRIES = [
+  ["", "select country"],
+  ["AF", "Afghanistan"],
+  ["AL", "Albania"],
+  ["DZ", "Algeria"],
+  ["AD", "Andorra"],
+  ["AO", "Angola"],
+  ["AI", "Anguilla"],
+  ["AQ", "Antarctica"],
+  ["AG", "Antigua & Barbuda"],
+  ["AR", "Argentina"],
+  ["AM", "Armenia"],
+  ["AW", "Aruba"],
+  ["AU", "Australia"],
+  ["AT", "Austria"],
+  ["AZ", "Azerbaijan"],
+  ["BS", "Bahamas"],
+  ["BH", "Bahrain"],
+  ["BD", "Bangladesh"],
+  ["BB", "Barbados"],
+  ["BY", "Belarus"],
+  ["BE", "Belgium"],
+  ["BZ", "Belize"],
+  ["BJ", "Benin"],
+  ["BM", "Bermuda"],
+  ["BT", "Bhutan"],
+  ["BO", "Bolivia"],
+  ["BA", "Bosnia & Herzegovina"],
+  ["BW", "Botswana"],
+  ["BV", "Bouvet Island"],
+  ["BR", "Brazil"],
+  ["GB", "Britain (UK)"],
+  ["IO", "British Indian Ocean Territory"],
+  ["BN", "Brunei"],
+  ["BG", "Bulgaria"],
+  ["BF", "Burkina Faso"],
+  ["BI", "Burundi"],
+  ["KH", "Cambodia"],
+  ["CM", "Cameroon"],
+  ["CA", "Canada"],
+  ["CV", "Cape Verde"],
+  ["BQ", "Caribbean NL"],
+  ["KY", "Cayman Islands"],
+  ["CF", "Central African Rep."],
+  ["TD", "Chad"],
+  ["CL", "Chile"],
+  ["CN", "China"],
+  ["CX", "Christmas Island"],
+  ["CC", "Cocos (Keeling) Islands"],
+  ["CO", "Colombia"],
+  ["KM", "Comoros"],
+  ["CD", "Congo (Dem. Rep.)"],
+  ["CG", "Congo (Rep.)"],
+  ["CK", "Cook Islands"],
+  ["CR", "Costa Rica"],
+  ["HR", "Croatia"],
+  ["CU", "Cuba"],
+  ["CW", "Curaçao"],
+  ["CY", "Cyprus"],
+  ["CZ", "Czech Republic"],
+  ["CI", "Côte d’Ivoire"],
+  ["DK", "Denmark"],
+  ["DJ", "Djibouti"],
+  ["DM", "Dominica"],
+  ["DO", "Dominican Republic"],
+  ["TL", "East Timor"],
+  ["EC", "Ecuador"],
+  ["EG", "Egypt"],
+  ["SV", "El Salvador"],
+  ["GQ", "Equatorial Guinea"],
+  ["ER", "Eritrea"],
+  ["EE", "Estonia"],
+  ["SZ", "Eswatini (Swaziland)"],
+  ["ET", "Ethiopia"],
+  ["FK", "Falkland Islands"],
+  ["FO", "Faroe Islands"],
+  ["FJ", "Fiji"],
+  ["FI", "Finland"],
+  ["FR", "France"],
+  ["GF", "French Guiana"],
+  ["PF", "French Polynesia"],
+  ["TF", "French S. Terr."],
+  ["GA", "Gabon"],
+  ["GM", "Gambia"],
+  ["GE", "Georgia"],
+  ["DE", "Germany"],
+  ["GH", "Ghana"],
+  ["GI", "Gibraltar"],
+  ["GR", "Greece"],
+  ["GL", "Greenland"],
+  ["GD", "Grenada"],
+  ["GP", "Guadeloupe"],
+  ["GU", "Guam"],
+  ["GT", "Guatemala"],
+  ["GG", "Guernsey"],
+  ["GN", "Guinea"],
+  ["GW", "Guinea-Bissau"],
+  ["GY", "Guyana"],
+  ["HT", "Haiti"],
+  ["HM", "Heard Island & McDonald Islands"],
+  ["HN", "Honduras"],
+  ["HK", "Hong Kong"],
+  ["HU", "Hungary"],
+  ["IS", "Iceland"],
+  ["IN", "India"],
+  ["ID", "Indonesia"],
+  ["IR", "Iran"],
+  ["IQ", "Iraq"],
+  ["IE", "Ireland"],
+  ["IM", "Isle of Man"],
+  ["IL", "Israel"],
+  ["IT", "Italy"],
+  ["JM", "Jamaica"],
+  ["JP", "Japan"],
+  ["JE", "Jersey"],
+  ["JO", "Jordan"],
+  ["KZ", "Kazakhstan"],
+  ["KE", "Kenya"],
+  ["KI", "Kiribati"],
+  ["KP", "Korea (North)"],
+  ["KR", "Korea (South)"],
+  ["KW", "Kuwait"],
+  ["KG", "Kyrgyzstan"],
+  ["LA", "Laos"],
+  ["LV", "Latvia"],
+  ["LB", "Lebanon"],
+  ["LS", "Lesotho"],
+  ["LR", "Liberia"],
+  ["LY", "Libya"],
+  ["LI", "Liechtenstein"],
+  ["LT", "Lithuania"],
+  ["LU", "Luxembourg"],
+  ["MO", "Macau"],
+  ["MG", "Madagascar"],
+  ["MW", "Malawi"],
+  ["MY", "Malaysia"],
+  ["MV", "Maldives"],
+  ["ML", "Mali"],
+  ["MT", "Malta"],
+  ["MH", "Marshall Islands"],
+  ["MQ", "Martinique"],
+  ["MR", "Mauritania"],
+  ["MU", "Mauritius"],
+  ["YT", "Mayotte"],
+  ["MX", "Mexico"],
+  ["FM", "Micronesia"],
+  ["MD", "Moldova"],
+  ["MC", "Monaco"],
+  ["MN", "Mongolia"],
+  ["ME", "Montenegro"],
+  ["MS", "Montserrat"],
+  ["MA", "Morocco"],
+  ["MZ", "Mozambique"],
+  ["MM", "Myanmar (Burma)"],
+  ["NA", "Namibia"],
+  ["NR", "Nauru"],
+  ["NP", "Nepal"],
+  ["NL", "Netherlands"],
+  ["NC", "New Caledonia"],
+  ["NZ", "New Zealand"],
+  ["NI", "Nicaragua"],
+  ["NE", "Niger"],
+  ["NG", "Nigeria"],
+  ["NU", "Niue"],
+  ["NF", "Norfolk Island"],
+  ["MK", "North Macedonia"],
+  ["MP", "Northern Mariana Islands"],
+  ["NO", "Norway"],
+  ["OM", "Oman"],
+  ["PK", "Pakistan"],
+  ["PW", "Palau"],
+  ["PS", "Palestine"],
+  ["PA", "Panama"],
+  ["PG", "Papua New Guinea"],
+  ["PY", "Paraguay"],
+  ["PE", "Peru"],
+  ["PH", "Philippines"],
+  ["PN", "Pitcairn"],
+  ["PL", "Poland"],
+  ["PT", "Portugal"],
+  ["PR", "Puerto Rico"],
+  ["QA", "Qatar"],
+  ["RO", "Romania"],
+  ["RU", "Russia"],
+  ["RW", "Rwanda"],
+  ["RE", "Réunion"],
+  ["AS", "Samoa (American)"],
+  ["WS", "Samoa (western)"],
+  ["SM", "San Marino"],
+  ["ST", "Sao Tome & Principe"],
+  ["SA", "Saudi Arabia"],
+  ["SN", "Senegal"],
+  ["RS", "Serbia"],
+  ["SC", "Seychelles"],
+  ["SL", "Sierra Leone"],
+  ["SG", "Singapore"],
+  ["SK", "Slovakia"],
+  ["SI", "Slovenia"],
+  ["SB", "Solomon Islands"],
+  ["SO", "Somalia"],
+  ["ZA", "South Africa"],
+  ["GS", "South Georgia & the South Sandwich Islands"],
+  ["SS", "South Sudan"],
+  ["ES", "Spain"],
+  ["LK", "Sri Lanka"],
+  ["BL", "St Barthelemy"],
+  ["SH", "St Helena"],
+  ["KN", "St Kitts & Nevis"],
+  ["LC", "St Lucia"],
+  ["SX", "St Maarten (Dutch)"],
+  ["MF", "St Martin (French)"],
+  ["PM", "St Pierre & Miquelon"],
+  ["VC", "St Vincent"],
+  ["SD", "Sudan"],
+  ["SR", "Suriname"],
+  ["SJ", "Svalbard & Jan Mayen"],
+  ["SE", "Sweden"],
+  ["CH", "Switzerland"],
+  ["SY", "Syria"],
+  ["TW", "Taiwan"],
+  ["TJ", "Tajikistan"],
+  ["TZ", "Tanzania"],
+  ["TH", "Thailand"],
+  ["TG", "Togo"],
+  ["TK", "Tokelau"],
+  ["TO", "Tonga"],
+  ["TT", "Trinidad & Tobago"],
+  ["TN", "Tunisia"],
+  ["TR", "Turkey"],
+  ["TM", "Turkmenistan"],
+  ["TC", "Turks & Caicos Is"],
+  ["TV", "Tuvalu"],
+  ["UG", "Uganda"],
+  ["UA", "Ukraine"],
+  ["AE", "United Arab Emirates"],
+  ["US", "United States"],
+  ["UY", "Uruguay"],
+  ["UM", "US minor outlying islands"],
+  ["UZ", "Uzbekistan"],
+  ["VU", "Vanuatu"],
+  ["VA", "Vatican City"],
+  ["VE", "Venezuela"],
+  ["VN", "Vietnam"],
+  ["VG", "Virgin Islands (UK)"],
+  ["VI", "Virgin Islands (US)"],
+  ["WF", "Wallis & Futuna"],
+  ["EH", "Western Sahara"],
+  ["YE", "Yemen"],
+  ["ZM", "Zambia"],
+  ["ZW", "Zimbabwe"],
+  ["AX", "Åland Islands"],
+];
+
+function paintTopUser(url, handle, href, title) {
+  const topAuth = $("top-auth");
+  if (!topAuth) return;
+  topAuth.href = href;
+  topAuth.title = title;
+  topAuth.setAttribute("aria-label", title);
+  topAuth.classList.toggle("signed", !!url || !!handle);
+  topAuth.innerHTML = "";
+  if (url) topAuth.appendChild(el("img", { src: url, alt: handle || "profile" }));
+  else if (handle) topAuth.appendChild(el("span", { className: "top-user-fallback", text: String(handle).slice(0, 1).toUpperCase() }));
+  else topAuth.appendChild(el("span", { className: "top-user-fallback", text: "in" }));
+}
+
+function paintWhoAction(label, href, glyph) {
+  const a = $("who-action");
+  if (!a) return;
+  a.href = href;
+  a.innerHTML = "";
+  if (glyph) a.append(icon(glyph, { size: 14 }), document.createTextNode(label));
+  else a.textContent = label;
+}
+
+function paintAccount() {
+  const p = meProfile, signed = !!token();
+  const q = new URLSearchParams(location.search).get("oauth");
+  const stats = $("nav-stats");
+  const ident = $("nav-identity");
+  const flagEl = $("nav-flag");
+  if (signed && p && p.needs_handle) {
+    paintTopUser(p.slack_avatar, p.slack_name, "/login", "claim handle");
+    if (ident) ident.hidden = true;
+    if (stats) stats.hidden = true;
+    paintWhoAction("claim handle", "/login", "badge-check");
+    if ($("acct-state")) $("acct-state").textContent = "Signed in with Slack. Grab a handle next." + (q ? " " + oauthMsg(q) : "");
+    if ($("slack-login-box")) $("slack-login-box").hidden = true;
+    if ($("claim-box")) $("claim-box").hidden = false;
+    if ($("settings-main")) $("settings-main").hidden = true;
+    if ($("signout-form")) $("signout-form").style.display = "flex";
+  } else if (signed && p && p.handle) {
+    paintTopUser(p.slack_avatar, p.handle, "/settings", "@" + p.handle);
+    if (ident) {
+      ident.hidden = false;
+      $("who-name").textContent = p.display_name || ("@" + p.handle);
+      $("who-name").href = "/settings";
+      if (flagEl) flagEl.textContent = flagEmoji(p.country) || "";
+    }
+    if (stats) {
+      stats.hidden = false;
+      if ($("nav-streak")) $("nav-streak").textContent = `${p.current_streak_days || 0}d`;
+      if ($("nav-hours")) $("nav-hours").textContent = fmtH(p.weighted_hours);
+    }
+    paintWhoAction("sign out", "/signout", "door-leave");
+    if ($("acct-state")) {
+      $("acct-state").textContent = `Signed in as @${p.handle}` + (q ? `. ${oauthMsg(q)}` : "");
+    }
+    if ($("slack-login-box")) $("slack-login-box").hidden = true;
+    if ($("claim-box")) $("claim-box").hidden = true;
+    if ($("settings-main")) $("settings-main").hidden = false;
+    if ($("signout-form")) $("signout-form").style.display = "flex";
+    if ($("daemon-cmd")) $("daemon-cmd").textContent = `struggletime-helper start --repo ~/my-project --user ${p.handle}`;
+  } else {
+    paintTopUser("", "", "/login", "sign in");
+    if (ident) ident.hidden = true;
+    if (stats) stats.hidden = true;
+    paintWhoAction("sign in", "/login", "door-enter");
+    if ($("acct-state")) $("acct-state").textContent = new URLSearchParams(location.search).get("signed_out") ? "You're signed out." : "Sign in to manage your account.";
+    if ($("slack-login-box")) $("slack-login-box").hidden = false;
+    if ($("claim-box")) $("claim-box").hidden = true;
+    if ($("settings-main")) $("settings-main").hidden = true;
+    if ($("signout-form")) $("signout-form").style.display = "none";
+  }
+  paintNavAuth();
+  if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
+    navigate("/");
+    return;
+  }
+  paintAuthChecks();
+  fillAttachProjects();
+  paintLogin();
+  paintSettingsForm();
+  paintHeroCta();
+  hydrateNavIcons();
+}
+
+function paintLogin() {
+  if (activePage !== "login") return;
+  const p = meProfile, signed = !!token();
+  const q = new URLSearchParams(location.search);
+  const status = $("login-status");
+  if (q.get("signed_out")) status.textContent = "You're signed out.";
+  else if (q.get("oauth")) status.innerHTML = `<span class="tag ${String(q.get("oauth")).includes("fail") || String(q.get("oauth")).includes("denied") ? "bad" : "ok"}">${esc(oauthMsg(q.get("oauth")))}</span>`;
+  else status.textContent = signed ? "You're signed in." : "Continue with Slack to get started.";
+
+  $("login-signed").hidden = !(signed && p && p.handle);
+  $("login-slack-box").hidden = !!(signed && (p?.handle || p?.needs_handle));
+  $("login-claim-box").hidden = !(signed && p && p.needs_handle);
+  if (signed && p && p.handle && !q.get("oauth") && !q.get("stay") && !q.get("signed_out")) {
+    navigate("/home");
+  }
+}
+
+function paintAuthChecks() {
+  if (!authStatus || !$("gh-check")) return;
+  const p = meProfile || {}, ready = !!p.handle, linked = !!p.github_linked;
+  $("gh-check").innerHTML = "";
+  if (linked) {
+    $("gh-check").append(pill(true, "connected", "not connected"));
+    if (p.github_login) $("gh-check").append(document.createTextNode(" @" + p.github_login));
+  } else {
+    $("gh-check").append(
+      pill(!!authStatus.github_ready, "ready", "not configured"),
+      pill(false, "connected", "not connected"),
+    );
+  }
+  if ($("gh-form")) $("gh-form").hidden = linked || !ready;
+  if ($("gh-connected")) $("gh-connected").hidden = !linked;
+  if ($("gh-oauth")) $("gh-oauth").disabled = !ready || !authStatus.github_ready || linked;
+  if ($("sl-oauth")) $("sl-oauth").disabled = !authStatus.slack_ready;
+  if ($("login-slack")) $("login-slack").disabled = !authStatus.slack_ready;
+  if ($("login-slack-hint") && !authStatus.slack_ready) $("login-slack-hint").textContent = "Slack OAuth is not configured on this server.";
+  const builders = document.querySelector('[data-top="builders"], [data-nav="builders"]');
+  if (builders) builders.hidden = !!(p.handle && p.show_leaderboards === false);
+}
+
+let settingsFilled = false;
+function paintSettingsForm() {
+  if (!$("set-country")) return;
+  if (!settingsFilled) {
+    $("set-country").innerHTML = COUNTRIES.map(([c, l]) => `<option value="${esc(c)}">${esc(l)}</option>`).join("");
+    const zones = (typeof Intl !== "undefined" && Intl.supportedValuesOf)
+      ? Intl.supportedValuesOf("timeZone")
+      : ["UTC", "America/New_York", "America/Los_Angeles", "Europe/London", "Europe/Berlin", "Asia/Kolkata", "Asia/Tokyo"];
+    $("set-timezone").innerHTML = '<option value="">select timezone</option>' +
+      zones.map((z) => `<option value="${esc(z)}">${esc(z)}</option>`).join("");
+    settingsFilled = true;
+  }
+  const p = meProfile;
+  if (!(p && p.handle)) return;
+  if ($("set-country")) $("set-country").value = p.country || "";
+  if ($("set-timezone")) $("set-timezone").value = p.timezone || "";
+  if ($("set-display-name")) $("set-display-name").value = p.display_name || "";
+  if ($("set-username")) $("set-username").value = p.handle || "";
+  if ($("set-email")) $("set-email").value = p.email || "";
+  if ($("set-lb-opt-out")) $("set-lb-opt-out").checked = !!p.lb_opt_out;
+  if ($("set-show-lb")) $("set-show-lb").checked = p.show_leaderboards !== false;
+  if ($("delete-confirm")) $("delete-confirm").placeholder = p.handle || "your-handle";
+}
+
+async function saveProfile(patch) {
+  const [s, r] = await j("/v1/me/profile", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(patch),
+  });
+  if (s !== 200) { toast(r.error || "Could not save", { kind: "error" }); return null; }
+  meProfile = r; meLoaded = true;
+  paintAccount();
+  toast("Saved", { kind: "ok" });
+  return r;
+}
+
+function fillAttachProjects() {
+  // project↔repo linking lives in Edit Project modal now
+}
+
+async function consumeAuthCode() {
+  const q = new URLSearchParams(location.search);
+  const code = q.get("auth");
+  if (!code) return false;
+  const [s, r] = await j("/v1/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+  q.delete("auth");
+  const clean = location.pathname + (q.toString() ? "?" + q : "");
+  history.replaceState({}, "", clean);
+  if (s === 200 && r.token) {
+    setToken(r.token); meProfile = r; meLoaded = true;
+    toast(r.needs_handle ? "Signed in. Grab a handle next." : "Welcome back", { kind: "ok" });
+    if (r.handle) {
+      navigate("/home");
+      return true;
+    }
+    navigate("/login" + (q.get("oauth") ? "?oauth=" + encodeURIComponent(q.get("oauth")) : ""));
+    return true;
+  }
+  toast(r.error || "Auth failed", { kind: "error" });
+  return false;
+}
+
+async function loadMe(force = false) {
+  if (!token()) { meProfile = null; meLoaded = true; return; }
+  if (meLoaded && !force && meProfile) return;
+  const [s, r] = await j("/v1/auth/me");
+  if (s === 401) {
+    setToken("");
+    meProfile = null;
+    meLoaded = true;
+    if ($("nav-identity")) $("nav-identity").hidden = true;
+    if ($("nav-stats")) $("nav-stats").hidden = true;
+    if ($("nav-flag")) $("nav-flag").textContent = "";
+    return;
+  }
+  if (s === 200) meProfile = r;
+  meLoaded = true;
+}
+
+async function loadAuthStatus(force = false) {
+  if (authStatusLoaded && !force && authStatus) return;
+  const [as, ar] = await j("/v1/auth/status");
+  if (as === 200) authStatus = ar;
+  authStatusLoaded = true;
+}
+
+async function fetchGhRepos(force = false) {
+  if (!(meProfile && meProfile.github_linked)) return null;
+  if (!force && ghReposCache && Date.now() - ghReposAt < 5 * 60 * 1000) return ghReposCache;
+  const [s, r] = await j("/v1/me/github-repos");
+  if (s !== 200) { toast(r.error || "Could not load GitHub repos", { kind: "error" }); return null; }
+  ghReposCache = r; ghReposAt = Date.now();
+  return r;
+}
+
+function openProjectModal(existing) {
+  if (!(meProfile && meProfile.handle)) {
+    toast("Sign in with Slack first", { kind: "error" });
+    navigate("/login");
+    return;
+  }
+  const nameId = "m-name", repoId = "m-repo", pickId = "m-repo-pick", archId = "m-archived";
+  const kids = [
+    field({ label: "Name", id: nameId, value: existing?.name || "", placeholder: "my project", required: true }),
+    field({
+      label: "GitHub repo URL",
+      id: repoId,
+      value: existing?.repo_url || "",
+      placeholder: existing?.last_repo_url || "https://github.com/you/repo",
+    }),
+  ];
+  if (meProfile.github_linked) {
+    kids.push(el("label", { className: "ui-field" }, [
+      el("span", { text: "Or pick from your GitHub repos" }),
+      el("select", { id: pickId, className: "ui-input" }, [
+        el("option", { value: "", text: "loading repos…" }),
+      ]),
+    ]));
+  } else {
+    kids.push(el("p", { className: "sub", text: "Connect GitHub in Settings to pick from your private repos." }));
+  }
+  if (existing) {
+    kids.push(el("label", { className: "toggle-row" }, [
+      el("input", { type: "checkbox", id: archId, checked: !!existing.archived }),
+      el("span", { text: "Archived project" }),
+    ]));
+    if (existing.repo_url || existing.last_repo_url) {
+      const hasLink = !!existing.repo_url;
+      kids.push(el("div", { className: "modal-danger", style: "margin-top:14px;padding-top:12px;border-top:1px solid var(--line)" }, [
+        el("h3", { style: "margin:0 0 6px;font-size:14px", text: "Delete repo" }),
+        el("p", {
+          className: "sub",
+          text: hasLink
+            ? "Unlink the repository from this project. Coding history stays on the project."
+            : `Last linked: ${existing.last_repo_url}`,
+        }),
+        btn(hasLink ? "Delete repo" : "Clear deleted repo memory", {
+          className: "ui-btn-danger",
+          glyph: "delete",
+          onClick: async () => {
+            const msg = hasLink
+              ? `Delete repo link ${existing.repo_url} from this project?`
+              : "Clear the remembered deleted repo URL?";
+            if (!confirm(msg)) return;
+            const [s, r] = await j("/v1/projects/" + encodeURIComponent(existing.id) + "/delete", {
+              method: "POST", headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ mode: hasLink ? "repo" : "clear" }),
+            });
+            if (s !== 200) { toast(r.error || "Could not update repo link", { kind: "error" }); return; }
+            toast(hasLink ? "Repo deleted from project" : "Cleared", { kind: "ok" });
+            document.querySelector(".ui-modal-backdrop")?.remove();
+            refresh();
+          },
+        }),
+      ]));
+    }
+  }
+  const body = el("div", {}, kids);
+  modal({
+    title: existing ? "Edit project / repo" : "Create project",
+    glyph: existing ? "edit" : "plus",
+    confirmText: existing ? "Save" : "Create",
+    confirmGlyph: existing ? "checkmark" : "plus",
+    cancelGlyph: "view-close",
+    body,
+    onConfirm: async () => {
+      const name = document.getElementById(nameId).value.trim();
+      const repo_url = document.getElementById(repoId).value.trim() || null;
+      if (!name) { toast("Name required", { kind: "error" }); return false; }
+      if (existing) {
+        const archived = !!document.getElementById(archId)?.checked;
+        const [s, r] = await j("/v1/projects/" + encodeURIComponent(existing.id) + "/edit", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, repo_url, archived }),
+        });
+        if (s !== 200) { toast(r.error || "Could not save", { kind: "error" }); return false; }
+        toast("Project updated", { kind: "ok" });
+      } else {
+        const [s, r] = await j("/v1/projects", {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name, repo_url }),
+        });
+        if (s !== 201) { toast(r.error || "Could not create", { kind: "error" }); return false; }
+        toast(r.repo_slug ? `Created /${String(r.repo_slug).split("/").pop()}` : `Created ${r.id}`, { kind: "ok" });
+      }
+      refresh();
+    },
+  });
+  if (meProfile.github_linked) {
+    (async () => {
+      const data = await fetchGhRepos();
+      const sel = document.getElementById(pickId);
+      if (!sel) return;
+      const repos = data?.repos || [];
+      sel.innerHTML = '<option value="">choose a repo…</option>' +
+        repos.map((repo) => `<option value="${esc(repo.repo_url)}">${esc(repo.full_name || repo.name)}${repo.private ? " (private)" : ""}</option>`).join("");
+      if (existing?.repo_url) sel.value = existing.repo_url;
+      sel.addEventListener("change", () => {
+        if (sel.value) document.getElementById(repoId).value = sel.value;
+      });
+    })();
+  }
+}
+
+window.claimProject = async (e, id) => {
+  e.preventDefault();
+  const [s, r] = await j("/v1/projects", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ id, name: id }) });
+  if (s === 201) toast("Claimed " + id, { kind: "ok" }); else toast(r.error || s, { kind: "error" });
+  refresh(); return false;
+};
+
+async function toggleArchive(p) {
+  const next = !p.archived;
+  const [s, r] = await j("/v1/projects/" + encodeURIComponent(p.id) + "/archive", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ archived: next }),
+  });
+  if (s !== 200) { toast(r.error || "Could not update archive", { kind: "error" }); return; }
+  toast(next ? "Archived" : "Unarchived", { kind: "ok" });
+  refresh();
+}
+
+async function restoreProject(p) {
+  const [s, r] = await j("/v1/projects/" + encodeURIComponent(p.id) + "/restore", { method: "POST" });
+  if (s !== 200) { toast(r.error || "Could not restore", { kind: "error" }); return; }
+  toast(r.repo_url ? "Repo restored" : "Restored", { kind: "ok" });
+  refresh();
+}
+
+async function renderLeaderboard() {
+  const box = $("lb-list"); if (!box) return;
+  const [s, r] = await j("/v1/leaderboard?period=" + encodeURIComponent(lbPeriod));
+  if (s !== 200) { box.replaceChildren(empty("Could not load leaderboard")); return; }
+  $("lb-meta").textContent = `${r.label} · ${r.total} builders`;
+  let entries = r.entries || [];
+  const q = lbQuery.trim().toLowerCase();
+  if (q) entries = entries.filter((e) => [e.handle, e.github_login, e.active_project, e.slack_name].filter(Boolean).join(" ").toLowerCase().includes(q));
+  if (!entries.length) { box.replaceChildren(empty("No activity in this period.")); return; }
+  const max = entries[0].weighted_hours || 1;
+  box.replaceChildren(...entries.map((e) => {
+    const flag = flagEmoji(e.country);
+    const nameKids = [];
+    if (flag) nameKids.push(el("span", { className: "lb-flag", text: flag, title: e.country || "" }));
+    nameKids.push(document.createTextNode("@" + e.handle));
+    return el("div", { className: "lb-row" }, [
+      el("div", { className: `lb-rank ${e.rank <= 3 ? "top" : ""}`, text: "#" + e.rank }),
+      avatar(e.slack_avatar, e.handle),
+      el("div", { className: "lb-user" }, [
+        el("b", {}, nameKids),
+        el("span", { className: "sub", text: [
+          e.active_project ? "/" + String(e.active_project).split("/").pop() : null,
+          e.streak ? `${e.streak}d streak` : null,
+        ].filter(Boolean).join(" · ") || " " }),
+        el("div", { className: "lb-bar" }, [el("i", { style: `width:${Math.max(4, (e.weighted_hours / max) * 100)}%` })]),
+      ]),
+      el("div", { className: "lb-hours", text: fmt(e.weighted_hours) + "h" }),
+    ]);
+  }));
+}
+
+function analyticsQS() {
+  const p = new URLSearchParams({
+    range: filters.range, project: filters.project, language: filters.language,
+    os: filters.os, editor: filters.editor, category: filters.category, tz_offset: String(TZ_OFFSET),
+  });
+  return p.toString();
+}
+
+const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "KeyB", "KeyA"];
+let konamiBuf = [];
+let fakeStatsMode = sessionStorage.getItem("st_fake_stats") === "1";
+
+function buildFakeAnalytics() {
+  const days = [];
+  const now = new Date();
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date(now);
+    d.setDate(now.getDate() - i);
+    const iso = d.toISOString().slice(0, 10);
+    const hours = [3.2, 5.1, 6.4, 8.8, 7.2, 5.6, 6.3][6 - i];
+    days.push({ day: iso, hours });
+  }
+  const rhythm = Array.from({ length: 7 }, (_, d) => Array.from({ length: 24 }, (_, h) => {
+    if (h < 9 || h > 22) return 0;
+    const base = [0.1, 0.25, 0.55, 0.9, 0.7, 0.35, 0.2][d];
+    const bump = h >= 14 && h <= 18 ? 1.4 : h >= 10 && h <= 12 ? 1.1 : 0.6;
+    return Math.round(base * bump * 100) / 100;
+  }));
+  const projects = [
+    { id: "arcade", label: "arcade", hours: 18.2, pct: 43 },
+    { id: "shipyard", label: "shipyard", hours: 12.4, pct: 29 },
+    { id: "notebook", label: "notebook", hours: 7.1, pct: 17 },
+    { id: "helpers", label: "helpers", hours: 4.9, pct: 11 },
+  ];
+  const languages = [
+    { label: "TypeScript", hours: 22.4, pct: 53 },
+    { label: "Python", hours: 11.2, pct: 26 },
+    { label: "Go", hours: 5.8, pct: 14 },
+    { label: "CSS", hours: 3.2, pct: 7 },
+  ];
+  const editors = [
+    { label: "VS Code", hours: 31.0, pct: 73 },
+    { label: "Neovim", hours: 8.4, pct: 20 },
+    { label: "Cursor", hours: 3.2, pct: 7 },
+  ];
+  const oses = [
+    { label: "Linux", hours: 36.1, pct: 85 },
+    { label: "macOS", hours: 6.5, pct: 15 },
+  ];
+  const categories = [
+    { label: "coding", hours: 29.0, pct: 68 },
+    { label: "debugging", hours: 8.1, pct: 19 },
+    { label: "docs", hours: 3.4, pct: 8 },
+    { label: "review", hours: 2.1, pct: 5 },
+  ];
+  return {
+    total_hours: 42.6,
+    top_project: projects[0],
+    top_language: languages[0],
+    top_os: oses[0],
+    top_editor: editors[0],
+    top_category: categories[0],
+    projects, languages, editors, oses, categories,
+    series: days,
+    rhythm,
+    pace: { today_hours: 6.3, baseline_hours: 5.4, delta_pct: 17 },
+    modes: { human_hours: 34.1, ai_hours: 8.5, human_pct: 80, ai_pct: 20 },
+    filters: {
+      ranges: [
+        { id: "today", label: "today" }, { id: "7d", label: "7 days" },
+        { id: "30d", label: "30 days" }, { id: "all", label: "all time" },
+      ],
+      projects: [{ id: "all", label: "all projects" }, ...projects.map((p) => ({ id: p.id, label: p.label }))],
+      languages: [{ id: "all", label: "all languages" }, ...languages.map((l) => ({ id: l.label.toLowerCase(), label: l.label }))],
+      oses: [{ id: "all", label: "all os" }, ...oses.map((o) => ({ id: o.label.toLowerCase(), label: o.label }))],
+      editors: [{ id: "all", label: "all editors" }, ...editors.map((e) => ({ id: e.label.toLowerCase(), label: e.label }))],
+      categories: [{ id: "all", label: "all categories" }, ...categories.map((c) => ({ id: c.label, label: c.label }))],
+    },
+  };
+}
+
+function paintFakeBadge() {
+  const badge = $("fake-stats-badge");
+  if (!badge) return;
+  badge.hidden = !(fakeStatsMode && activePage === "home");
+  if (!badge.hidden) hydrateNavIcons(badge);
+}
+
+function setFakeStatsMode(on) {
+  fakeStatsMode = !!on;
+  sessionStorage.setItem("st_fake_stats", fakeStatsMode ? "1" : "0");
+  paintFakeBadge();
+  toast(fakeStatsMode ? "Sample stats on" : "Back to your real stats", { kind: fakeStatsMode ? "info" : "ok", glyph: fakeStatsMode ? "sticker" : "checkmark" });
+  loadAnalytics();
+}
+
+function onKonamiKey(e) {
+  if (activePage !== "home") return;
+  const t = e.target;
+  if (t && (t.tagName === "INPUT" || t.tagName === "TEXTAREA" || t.tagName === "SELECT" || t.isContentEditable)) return;
+  const code = e.code === "KeyB" || e.key === "b" || e.key === "B" ? "KeyB"
+    : e.code === "KeyA" || e.key === "a" || e.key === "A" ? "KeyA"
+    : e.code;
+  if (!KONAMI.includes(code) && !["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight", "KeyB", "KeyA"].includes(code)) {
+    konamiBuf = [];
+    return;
+  }
+  konamiBuf.push(code);
+  if (konamiBuf.length > KONAMI.length) konamiBuf.shift();
+  if (konamiBuf.length === KONAMI.length && konamiBuf.every((k, i) => k === KONAMI[i])) {
+    konamiBuf = [];
+    setFakeStatsMode(!fakeStatsMode);
+  }
+}
+document.addEventListener("keydown", onKonamiKey);
+
+function renderFilterStrip(meta) {
+  const box = $("home-filters"); if (!box) return;
+  const f = meta?.filters || {};
+  box.replaceChildren(
+    selectField({ label: "Range", glyph: "clock", options: f.ranges || [], value: filters.range, onChange: (v) => { filters.range = v; localStorage.setItem("st_range", v); loadAnalytics(); } }),
+    selectField({ label: "Project", glyph: "briefcase", options: f.projects || [{ id: "all", label: "all projects" }], value: filters.project, onChange: (v) => { filters.project = v; loadAnalytics(); } }),
+    selectField({ label: "Language", glyph: "code", options: f.languages || [], value: filters.language, onChange: (v) => { filters.language = v; loadAnalytics(); } }),
+    selectField({ label: "OS", glyph: "laptop", options: f.oses || [], value: filters.os, onChange: (v) => { filters.os = v; loadAnalytics(); } }),
+    selectField({ label: "Editor", glyph: "terminal", options: f.editors || [], value: filters.editor, onChange: (v) => { filters.editor = v; loadAnalytics(); } }),
+    selectField({ label: "Category", glyph: "sticker", options: f.categories || [], value: filters.category, onChange: (v) => { filters.category = v; loadAnalytics(); } }),
+  );
+}
+
+function kpiCard(glyph, label, value) {
+  return el("div", { className: "kpi" }, [
+    el("div", { className: "kpi-ico" }, [icon(glyph, { size: 16 })]),
+    el("div", { className: "n", text: value }),
+    el("div", { className: "l", text: label }),
+  ]);
+}
+
+function renderKpis(a) {
+  const box = $("kpi-strip"); if (!box) return;
+  box.replaceChildren(
+    kpiCard("timer", "Time", fmtH(a.total_hours)),
+    kpiCard("briefcase", "Project", a.top_project ? a.top_project.label : "none yet"),
+    kpiCard("code", "Language", a.top_language ? a.top_language.label : "none yet"),
+    kpiCard("laptop", "OS", a.top_os ? a.top_os.label : "none yet"),
+    kpiCard("terminal", "Editor", a.top_editor ? a.top_editor.label : "none yet"),
+    kpiCard("sticker", "Category", a.top_category ? a.top_category.label : "none yet"),
+  );
+}
+
+function compactEmpty(msg) {
+  return el("p", { className: "ui-empty compact", text: msg });
+}
+
+function renderRanked(box, items, emptyMsg) {
+  if (!box) return;
+  if (!items?.length) { box.replaceChildren(compactEmpty(emptyMsg)); return; }
+  const max = items[0].hours || 1;
+  box.replaceChildren(...items.slice(0, 8).map((it, i) => el("div", { className: "rank-row" }, [
+    el("div", { className: "idx", text: String(i + 1).padStart(2, "0") }),
+    el("div", { className: "rank-main" }, [
+      el("b", { text: it.label }),
+      el("div", { className: "bar" }, [el("i", { style: `width:${Math.max(4, (it.hours / max) * 100)}%` })]),
+    ]),
+    el("b", { className: "rank-h", text: fmtH(it.hours) }),
+  ])));
+}
+
+function renderSeg(box, items, emptyMsg) {
+  if (!box) return;
+  if (!items?.length) { box.replaceChildren(compactEmpty(emptyMsg)); return; }
+  box.replaceChildren(...items.slice(0, 6).map((it) => el("div", { className: "seg" }, [
+    el("div", { className: "seg-top" }, [
+      el("b", { text: it.label }),
+      el("span", { className: "seg-meta", text: `${fmtH(it.hours)} · ${it.pct || 0}%` }),
+    ]),
+    el("div", { className: "track" }, [el("i", { style: `width:${Math.max(3, it.pct || 0)}%` })]),
+  ])));
+}
+
+function renderModePie(a) {
+  const box = $("mode-pie"); if (!box) return;
+  const cats = (a.categories || []).filter((c) => (c.hours || 0) > 0);
+  box.replaceChildren(pieChart(cats.length ? cats : a.categories || [], { size: 148, hole: 0.55 }));
+}
+
+function renderSeries(a) {
+  const box = $("series-chart"); if (!box) return;
+  const series = a.series || [];
+  if (!series.length) {
+    box.classList.add("is-empty");
+    box.replaceChildren(compactEmpty("nothing here yet"));
+    return;
+  }
+  box.classList.remove("is-empty");
+  const max = Math.max(...series.map((s) => s.hours), 0.01);
+  box.replaceChildren(...series.map((s) => el("div", { className: "series-col" }, [
+    el("div", { className: "col", style: `height:${Math.max(4, (s.hours / max) * 120)}px`, title: `${s.day}: ${fmtH(s.hours)}` }),
+    el("div", { className: "lbl", text: s.day.slice(5) }),
+  ])));
+}
+
+function renderRhythm(a) {
+  const box = $("rhythm-grid"); if (!box) return;
+  const days = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+  const rhythm = a.rhythm || [];
+  let peak = 0;
+  for (const row of rhythm) for (const v of row) peak = Math.max(peak, v);
+  if (!peak) {
+    box.classList.add("is-empty");
+    box.replaceChildren(compactEmpty("quiet week so far"));
+    return;
+  }
+  box.classList.remove("is-empty");
+  const kids = [el("div", {})];
+  for (let h = 0; h < 24; h++) kids.push(el("div", { className: "hour-lbl", text: h % 3 === 0 ? (h === 0 ? "12a" : h < 12 ? h + "a" : h === 12 ? "12p" : (h - 12) + "p") : "" }));
+  for (let d = 0; d < 7; d++) {
+    kids.push(el("div", { className: "rh", text: days[d] }));
+    for (let h = 0; h < 24; h++) {
+      const v = (rhythm[d] && rhythm[d][h]) || 0;
+      const op = 0.14 + 0.86 * (v / peak);
+      kids.push(el("div", {
+        className: "cell",
+        title: `${days[d]} ${h}:00 · ${fmt(v, 2)}h`,
+        style: v > 0 ? `background:var(--accent);opacity:${op}` : "",
+      }));
+    }
+  }
+  box.replaceChildren(...kids);
+}
+
+function renderPaceModes(a) {
+  const pace = a.pace || {}, modes = a.modes || {};
+  const pp = $("pace-panel");
+  if (pp) {
+    const delta = pace.delta_pct || 0;
+    pp.replaceChildren(
+      el("div", { className: "pace-big", text: fmtH(pace.today_hours) }),
+      el("div", { className: "sub", text: `${delta >= 0 ? "+" : ""}${fmt(delta, 0)}% compared with your usual day` }),
+      el("div", { className: "pace-bar" }, [
+        el("i", { style: `width:${Math.min(100, Math.max(4, pace.baseline_hours ? (pace.today_hours / Math.max(pace.baseline_hours, 0.01)) * 50 : (pace.today_hours ? 50 : 0)))}%` }),
+      ]),
+    );
+  }
+  const mp = $("mode-panel");
+  if (mp) {
+    mp.replaceChildren(
+      el("div", { className: "mode-bar" }, [
+        el("div", { className: "human", style: `width:${modes.human_pct || 0}%` }),
+        el("div", { className: "ai", style: `width:${modes.ai_pct || 0}%` }),
+      ]),
+      el("div", { className: "mode-legend" }, [
+        el("span", {}, [icon("person", { size: 14 }), " ", el("b", { text: fmtH(modes.human_hours) })]),
+        el("span", {}, [icon("bolt", { size: 14 }), " ", el("b", { text: fmtH(modes.ai_hours) })]),
+      ]),
+    );
+  }
+}
+
+function paintHomeAnalytics(a) {
+  analytics = a;
+  renderFilterStrip(a);
+  renderKpis(a);
+  renderRanked($("rank-projects"), a.projects, "no projects in this range");
+  renderModePie(a);
+  renderSeg($("break-lang"), a.languages, "no language data yet"); // TODO: wire backend metric
+  renderSeg($("break-editor"), a.editors, "no editor data yet"); // TODO: wire backend metric
+  renderSeg($("break-os"), a.oses, "no os data yet"); // TODO: wire backend metric
+  renderSeries(a);
+  renderRhythm(a);
+  renderPaceModes(a);
+  paintFakeBadge();
+  hydrateNavIcons(document.getElementById("page-home") || document);
+}
+
+async function loadAnalytics() {
+  if (fakeStatsMode && activePage === "home") {
+    paintHomeAnalytics(buildFakeAnalytics());
+    return;
+  }
+  const [s, a] = await j("/v1/me/analytics?" + analyticsQS());
+  if (s !== 200) return;
+  paintHomeAnalytics(a);
+}
+
+function repoName(p) {
+  if (p.repo_slug) return "/" + String(p.repo_slug).split("/").pop();
+  return p.registered === false ? "unregistered" : "no repo";
+}
+
+function projectStatus(p) {
+  if (p.deleted) return "deleted";
+  if (p.archived) return "archived";
+  if (!p.repo_url && p.last_repo_url) return "deleted";
+  return "active";
+}
+
+function renderProjectCards(list, rangeAnalytics) {
+  const box = $("project-grid"); if (!box) return;
+  if (!(meProfile && meProfile.handle)) {
+    box.replaceChildren(el("div", { className: "ui-panel" }, [
+      empty("Sign in to see your projects."),
+      el("div", { style: "margin-top:10px" }, [el("a", { className: "ui-btn", href: "/login" }, [icon("slack", { size: 16 }), "sign in"])]),
+    ]));
+    return;
+  }
+  const hoursMap = Object.fromEntries((rangeAnalytics?.projects || []).map((p) => [p.id, p.hours]));
+  let items = list.slice();
+  const status = projSearch.status || "active";
+  if (status === "active") items = items.filter((p) => projectStatus(p) === "active");
+  else if (status === "archived") items = items.filter((p) => projectStatus(p) === "archived");
+  else if (status === "deleted") items = items.filter((p) => projectStatus(p) === "deleted");
+  const q = projSearch.q.trim().toLowerCase();
+  if (q) items = items.filter((p) => [p.name, p.id, p.repo_slug, p.last_repo_url].filter(Boolean).join(" ").toLowerCase().includes(q));
+  const total = items.reduce((s, p) => s + (hoursMap[p.id] ?? p.weighted_hours ?? 0), 0);
+  if ($("proj-total")) $("proj-total").textContent = `${fmtH(total)} · ${items.length} projects · ${status}`;
+  if (!items.length) {
+    box.replaceChildren(el("div", { className: "ui-panel" }, [
+      empty(status === "deleted" ? "No deleted repos here." : status === "archived" ? "No archived projects." : "No projects yet."),
+      status === "active"
+        ? el("div", { style: "margin-top:10px" }, [btn("Create project", { glyph: "plus", onClick: () => openProjectModal(null) })])
+        : null,
+    ]));
+    return;
+  }
+  box.replaceChildren(...items.map((p) => {
+    const hours = hoursMap[p.id] ?? p.weighted_hours ?? 0;
+    const slug = repoName(p);
+    const buckets = p.buckets ? `${p.buckets} buckets` : "no buckets";
+    const st = projectStatus(p);
+    const canRestore = !!p.deleted || (!p.repo_url && !!p.last_repo_url);
+    return el("article", { className: `proj-card${p.archived ? " is-archived" : ""}${st === "deleted" ? " is-deleted" : ""}` }, [
+      el("div", { className: "title-row" }, [
+        el("div", { className: "title-copy" }, [
+          el("h3", { text: p.name || p.id }),
+          el("div", { className: "slug", text: slug }),
+        ]),
+        el("div", { className: "hours", text: fmtH(hours) }),
+      ]),
+      el("div", { className: "tags" }, [
+        el("span", { className: "tag", text: p.registered === false ? "unclaimed" : "tracked" }),
+        st !== "active" ? el("span", { className: "tag", text: st === "deleted" ? "deleted repo" : "archived" }) : null,
+      ]),
+      el("div", { className: "meta-row" }, [
+        el("span", { className: "meta-item" }, [icon("card-list", { size: 14 }), el("span", { text: buckets })]),
+        el("span", { className: "meta-item" }, [
+          icon(p.repo_url ? "github" : (p.last_repo_url ? "delete" : "private"), { size: 14 }),
+          el("span", { text: p.repo_url ? "repo linked" : (p.last_repo_url ? "repo deleted" : "no repo") }),
+        ]),
+        el("span", { className: "meta-item" }, [
+          icon("history", { size: 14 }),
+          el("span", { text: hours > 0 ? "active" : "idle" }),
+        ]),
+      ]),
+      el("div", { className: "actions" }, [
+        p.registered === false
+          ? iconBtn({ glyph: "plus", title: "Claim", onClick: (e) => claimProject(e, p.id) })
+          : iconBtn({ glyph: "edit", title: "Edit project / repo", onClick: () => openProjectModal(p) }),
+        p.repo_url
+          ? iconBtn({ glyph: "external", title: "Open repo", onClick: () => window.open(p.repo_url, "_blank", "noopener") })
+          : iconBtn({ glyph: "link", title: "Link repo", onClick: () => openProjectModal(p) }),
+        iconBtn({ glyph: "dashboard-meter", title: "Open on dashboard", onClick: () => {
+          filters.project = p.id; localStorage.setItem("st_range", filters.range); navigate("/home");
+        } }),
+        canRestore
+          ? iconBtn({
+              glyph: "view-reload",
+              title: p.deleted ? "Restore project" : "Restore deleted repo",
+              onClick: () => restoreProject(p),
+            })
+          : iconBtn({
+              glyph: p.archived ? "view-reload" : "archive",
+              title: p.archived ? "Unarchive" : "Archive",
+              onClick: () => toggleArchive(p),
+            }),
+      ]),
+    ]);
+  }));
+}
+
+async function loadProjectsView() {
+  const [ps, pr] = await j("/v1/projects");
+  projectsCache = pr.projects || [];
+  window._projects = projectsCache;
+  const [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(projSearch.range)}&tz_offset=${TZ_OFFSET}`);
+  renderProjectCards(projectsCache, as === 200 ? ar : null);
+}
+
+async function drawFriction() {
+  if (!$("fr-chart")) return;
+  if (!selected) { $("fr-chart").innerHTML = '<p class="ui-empty compact">nothing here yet</p>'; return; }
+  const [s, fr] = await j("/v1/projects/" + encodeURIComponent(selected) + "/friction");
+  if (s !== 200) return;
+  const w = Math.max(560, fr.timeline.length * 52), h = 120, bw = 32;
+  const accent = getComputedStyle(document.documentElement).getPropertyValue("--bar").trim() || "#d7ff6a";
+  const dump = getComputedStyle(document.documentElement).getPropertyValue("--dump").trim() || "#57534c";
+  $("fr-chart").innerHTML = `<svg width="100%" viewBox="0 0 ${w} ${h + 20}">` + fr.timeline.map((t, i) => {
+    const bh = Math.max(3, t.friction * 95);
+    return `<rect x="${i * 52 + 8}" y="${h - bh}" width="${bw}" height="${bh}" rx="4" fill="${t.state === "OPEN_LOOP_AGENT_DUMP" ? dump : accent}"></rect>`;
+  }).join("") + "</svg>";
+}
+
+async function softRefresh() {
+  // page-local data only — does not re-hit /v1/auth/me or /v1/auth/status
+  if (!booted) return;
+  if (PROTECTED.has(activePage) && !isSignedIn() && !pendingAuthCode()) {
+    paintHeroCta();
+    paintFakeBadge();
+    return;
+  }
+  if (activePage === "home") await loadAnalytics();
+  if (activePage === "projects") await loadProjectsView();
+  if (activePage === "home" && !fakeStatsMode) await drawFriction();
+  if (activePage === "builders") await renderLeaderboard();
+  if (activePage === "review") {
+    const [ss, sr] = await j("/v1/submissions");
+    if ($("review-list") && ss === 200) {
+      const subs = sr.submissions || [];
+      $("review-list").innerHTML = subs.length
+        ? subs.map((s) => `<div class="event"><b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span>
+            <span class="sub"> ${fmt(s.claimed_weighted_hours)}h · ${esc(s.user_id || "")}</span></div>`).join("")
+        : '<p class="ui-empty">Nothing submitted yet.</p>';
+    }
+  }
+  paintHeroCta();
+  paintFakeBadge();
+}
+
+function paintHeroCta() {
+  const primary = $("hero-primary");
+  const secondary = $("hero-secondary");
+  if (primary) {
+    if (meProfile?.handle) {
+      primary.href = "/home";
+      primary.innerHTML = "";
+      primary.append(icon("home", { size: 16 }), document.createTextNode("open your dashboard"));
+    } else {
+      primary.href = "/login";
+      primary.innerHTML = "";
+      primary.append(icon("slack", { size: 16 }), document.createTextNode("continue with slack"));
+    }
+  }
+  if (secondary) {
+    if (meProfile?.handle) {
+      secondary.href = "/projects";
+      secondary.innerHTML = "";
+      secondary.append(icon("briefcase", { size: 16 }), document.createTextNode("your projects"));
+    } else {
+      secondary.href = "/builders";
+      secondary.innerHTML = "";
+      secondary.append(icon("trophy", { size: 16 }), document.createTextNode("see the builders board"));
+    }
+  }
+}
+
+async function refresh({ forceAuth = false } = {}) {
+  await loadAuthStatus(forceAuth);
+  await loadMe(forceAuth);
+  paintAccount();
+
+  const [os] = await j("/v1/overview");
+  const [ps, pr] = await j("/v1/projects");
+  if (os !== 200) { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--danger)"; }
+  else { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--accent)"; }
+
+  const projs = pr.projects || [];
+  window._projects = projs;
+  projectsCache = projs;
+  fillAttachProjects();
+  const withData = projs.filter((p) => p.buckets > 0);
+  if (!selected && withData.length) selected = withData[0].id;
+  if ($("proj-sel")) {
+    $("proj-sel").innerHTML = withData.length
+      ? withData.map((p) => `<option value="${esc(p.id)}" ${p.id === selected ? "selected" : ""}>${esc(p.name || p.id)}</option>`).join("")
+      : '<option value="">no projects yet</option>';
+  }
+
+  booted = true;
+  if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
+    navigate("/");
+    return;
+  }
+  await softRefresh();
+}
+
+/* wire controls */
+if ($("proj-sel")) $("proj-sel").addEventListener("change", (e) => { selected = e.target.value; drawFriction(); });
+if ($("c-handle")) $("c-handle").addEventListener("input", async (e) => {
+  const h = e.target.value.trim().toLowerCase();
+  if (h.length < 2) { $("create-out").textContent = ""; return; }
+  const [s, r] = await j("/v1/handles/" + encodeURIComponent(h));
+  $("create-out").textContent = s === 200 ? (r.available ? `@${h} is available` : `@${h} is taken`) : "";
+});
+if ($("claim-form")) $("claim-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const h = $("c-handle").value.trim().toLowerCase();
+  const [s, r] = await j("/v1/auth/claim-handle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: h }) });
+  if (s === 201) {
+    meProfile = r; meLoaded = true; toast("@" + h + " is yours", { kind: "ok" });
+    await refresh({ forceAuth: true });
+    navigate("/home");
+  } else toast(r.error || s, { kind: "error" });
+});
+if ($("signout-form")) $("signout-form").addEventListener("submit", async (e) => {
+  e.preventDefault(); await doLogout();
+});
+if ($("login-signout")) $("login-signout").addEventListener("submit", async (e) => {
+  e.preventDefault(); await doLogout();
+});
+if ($("sl-login-form")) $("sl-login-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!(authStatus && authStatus.slack_ready)) { toast("Slack OAuth not configured", { kind: "error" }); return; }
+  location.href = "/v1/auth/slack/start";
+});
+if ($("login-slack")) $("login-slack").addEventListener("click", () => {
+  if (!(authStatus && authStatus.slack_ready)) { toast("Slack OAuth not configured", { kind: "error" }); return; }
+  location.href = "/v1/auth/slack/start";
+});
+if ($("login-claim-form")) $("login-claim-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const h = $("login-handle").value.trim().toLowerCase();
+  const [s, r] = await j("/v1/auth/claim-handle", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle: h }) });
+  if (s === 201) {
+    meProfile = r; meLoaded = true; toast("@" + h + " is yours", { kind: "ok" });
+    paintAccount();
+    navigate("/home");
+  } else { $("login-claim-out").textContent = r.error || String(s); toast(r.error || s, { kind: "error" }); }
+});
+if ($("login-handle")) $("login-handle").addEventListener("input", async (e) => {
+  const h = e.target.value.trim().toLowerCase();
+  if (h.length < 2) { $("login-claim-out").textContent = ""; return; }
+  const [s, r] = await j("/v1/handles/" + encodeURIComponent(h));
+  $("login-claim-out").textContent = s === 200 ? (r.available ? `@${h} is available` : `@${h} is taken`) : "";
+});
+if ($("gh-form")) $("gh-form").addEventListener("submit", (e) => {
+  e.preventDefault();
+  if (!(meProfile && meProfile.handle)) { toast("Claim a handle first", { kind: "error" }); return; }
+  location.href = "/v1/auth/github/start?session=" + encodeURIComponent(token());
+});
+if ($("btn-create-project")) $("btn-create-project").addEventListener("click", () => openProjectModal(null));
+if ($("proj-search")) $("proj-search").addEventListener("input", (e) => { projSearch.q = e.target.value; renderProjectCards(projectsCache, analytics); });
+if ($("proj-range")) {
+  $("proj-range").value = projSearch.range;
+  $("proj-range").addEventListener("change", async (e) => {
+    projSearch.range = e.target.value; localStorage.setItem("st_proj_range", projSearch.range);
+    await loadProjectsView();
+  });
+}
+if ($("proj-status")) {
+  $("proj-status").value = projSearch.status;
+  $("proj-status").addEventListener("change", (e) => {
+    projSearch.status = e.target.value;
+    localStorage.setItem("st_proj_status", projSearch.status);
+    renderProjectCards(projectsCache, analytics);
+  });
+}
+
+if ($("lb-tabs")) {
+  $("lb-tabs").appendChild(tabs([
+    { value: "today", label: "24h" },
+    { value: "week", label: "7d" },
+  ], { value: lbPeriod, onChange: (v) => { lbPeriod = v; renderLeaderboard(); } }));
+}
+if ($("lb-search-slot")) {
+  $("lb-search-slot").appendChild(UI.searchInput({ placeholder: "Find a builder…", onInput: (v) => { lbQuery = v; renderLeaderboard(); } }));
+}
+
+document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
+  tab.addEventListener("click", () => {
+    const id = tab.dataset.settingsTab;
+    document.querySelectorAll("[data-settings-tab]").forEach((t) => t.classList.toggle("on", t === tab));
+    document.querySelectorAll(".settings-panel").forEach((p) => {
+      const on = p.id === "settings-" + id;
+      p.classList.toggle("on", on);
+      p.hidden = !on;
+    });
+    hydrateNavIcons($("settings-main") || document);
+  });
+});
+
+if ($("btn-save-region")) $("btn-save-region").addEventListener("click", () => saveProfile({
+  country: $("set-country").value || null,
+  timezone: $("set-timezone").value || null,
+}));
+if ($("btn-save-identity")) $("btn-save-identity").addEventListener("click", () => saveProfile({
+  display_name: $("set-display-name").value.trim() || null,
+  email: $("set-email").value.trim() || null,
+}));
+if ($("btn-save-privacy")) $("btn-save-privacy").addEventListener("click", () => saveProfile({
+  lb_opt_out: !!$("set-lb-opt-out").checked,
+  show_leaderboards: !!$("set-show-lb").checked,
+}));
+if ($("btn-delete-account")) $("btn-delete-account").addEventListener("click", async () => {
+  const confirm = ($("delete-confirm").value || "").trim();
+  if (!meProfile?.handle || confirm !== meProfile.handle) {
+    toast("Type your handle to confirm", { kind: "error" }); return;
+  }
+  const [s, r] = await j("/v1/me/delete", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm }),
+  });
+  if (s !== 200) { toast(r.error || "Delete failed", { kind: "error" }); return; }
+  clearClientSession();
+  toast("Account deleted", { kind: "ok" });
+  navigate("/");
+});
+
+(async () => {
+  // Exchange OAuth code before any auth-gated redirect can strip ?auth=
+  await consumeAuthCode();
+  await refresh({ forceAuth: true });
+  if (isSignedIn() && (activePage === "login" || activePage === "landing")) {
+    navigate("/home");
+  } else if (PROTECTED.has(activePage) && meLoaded && !isSignedIn()) {
+    navigate("/");
+  } else {
+    showPage(activePage, { push: false });
+  }
+  setInterval(() => refresh({ forceAuth: false }), 15000);
+})();

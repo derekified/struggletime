@@ -8,13 +8,16 @@ def req(port, method, path, body=None):
         with urllib.request.urlopen(r) as x:
             raw = x.read().decode()
             return x.status, (json.loads(raw) if x.headers.get_content_type() == "application/json" else raw)
-    except urllib.error.HTTPError as e: return e.code, json.loads(e.read())
+    except urllib.error.HTTPError as e:
+        raw = e.read().decode()
+        try: return e.code, json.loads(raw)
+        except Exception: return e.code, raw
 
 class TestPagesDaemon(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18811
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db"}
+        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db", "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
@@ -24,26 +27,46 @@ class TestPagesDaemon(unittest.TestCase):
     def tearDownClass(cls): cls.proc.terminate()
 
     def test_pages_are_separate_routes(self):
-        for path, needle in (("/", "page-home"), ("/projects", "page-projects"), ("/builders", "page-builders"),
-                             ("/review", "page-review"), ("/integrations", "page-integrations"), ("/settings", "page-settings"),
+        for path, needle in (("/", "page-landing"), ("/home", "page-home"), ("/login", "page-login"),
+                             ("/projects", "page-projects"), ("/builders", "page-builders"),
+                             ("/review", "page-review"), ("/settings", "page-settings"),
                              ("/signout", "who-action"), ("/logout", "who-action")):
             s, html = req(self.port, "GET", path)
             self.assertEqual(s, 200, path); self.assertIn(needle, html)
+        # integrations moved into settings
+        class _NoRedir(urllib.request.HTTPRedirectHandler):
+            def redirect_request(self, *a, **k): return None
+        try:
+            urllib.request.build_opener(_NoRedir).open(f"http://127.0.0.1:{self.port}/integrations")
+            code = 200
+        except urllib.error.HTTPError as e:
+            code = e.code
+        self.assertIn(code, (301, 302, 303, 307, 308))
         s, html = req(self.port, "GET", "/")
-        self.assertNotIn("@builder", html); self.assertIn("not signed in", html); self.assertIn('id="who-action"', html)
+        self.assertIn("page-landing", html); self.assertIn("hero", html)
+        s, home = req(self.port, "GET", "/home")
+        self.assertIn('id="who-action"', home)
+        self.assertIn('id="nav-stats"', home)
+        self.assertIn("lb-list", req(self.port, "GET", "/builders")[1])
         s, html = req(self.port, "GET", "/settings")
-        for needle in ("claim handle", "sign in", "sign in with github", "sign in with slack", "GITHUB_WEBHOOK_SECRET", "SLACK_SIGNING_SECRET"):
-            self.assertIn(needle, html)
+        for needle in ("sign in with slack", "connect github", "claim handle", "daemon",
+                       'data-settings-tab="profile"', 'data-settings-tab="appearance"', "danger zone",
+                       "leaderboard privacy", "set-country"):
+            self.assertIn(needle, html.lower())
+        self.assertNotIn('id="signin-form"', html)
+        self.assertNotIn('id="side"', html)
+        self.assertNotIn("who-streak", html)
+        self.assertNotIn("btn-import", html)
+        self.assertNotIn("struggletime / wakatime", html.lower())
+        self.assertNotIn("attach-project", html)
+        proj = req(self.port, "GET", "/projects")[1]
+        self.assertIn("btn-create-project", proj)
+        self.assertIn("proj-status", proj)
+        self.assertIn("icons.hackclub.com", req(self.port, "GET", "/ui.js")[1])
 
-    def test_signin_flow(self):
-        s, u = req(self.port, "POST", "/v1/users", {"handle": "signinuser"})
-        self.assertEqual(s, 201); self.assertNotIn("token", u)
-        self.assertEqual(req(self.port, "POST", "/v1/auth/signin", {"handle": "ghostuser"})[0], 404)
-        s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})
-        self.assertEqual(s, 200); self.assertEqual(p["handle"], "signinuser"); self.assertIn("weighted_today_hours", p)
-        req(self.port, "POST", "/v1/users/signinuser/github", {"github_login": "octocat"})
-        s, p = req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})
-        self.assertEqual(p["github_login"], "octocat")
+    def test_handle_login_removed(self):
+        self.assertEqual(req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})[0], 410)
+        self.assertEqual(req(self.port, "POST", "/v1/users", {"handle": "signinuser"})[0], 410)
 
     def test_helper_lifecycle(self):
         tmp = tempfile.mkdtemp(); repo = pathlib.Path(tmp) / "r"; repo.mkdir()
