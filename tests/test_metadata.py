@@ -17,6 +17,15 @@ class TestMetadata(unittest.TestCase):
     def test_allowlist_accepts_metadata_only(self):
         self.assertEqual(verify.validate_allowlist(bucket()), [])
 
+    def test_allowlist_accepts_file_op_editor_agent(self):
+        b = bucket()
+        b["files"][0].update({"op": "modified", "editor": "cursor", "agent": "human", "source": "layer1"})
+        b["editors"] = {"cursor": 1}
+        b["agents"] = {"human": 1}
+        self.assertEqual(verify.validate_allowlist(b), [])
+        b["files"][0]["op"] = "rewrite"
+        self.assertTrue(any("op" in e for e in verify.validate_allowlist(b)))
+
     def test_allowlist_rejects_raw_content(self):
         for field, val in (("prompt_text", "write me code"), ("command", "rm -rf"), ("content", "secret code")):
             b = bucket(); b[field] = val

@@ -10,7 +10,7 @@ start/stop, open dashboard, inspect, settings, quit. Falls back to a
 headless CLI loop when no display / AppIndicator is available.
 Settings come from ~/.aitime/gui.json only (custom aitime architecture).
 """
-import importlib.util, json, os, signal, subprocess, sys, threading, time, urllib.request, webbrowser
+import importlib.util, json, os, signal, subprocess, sys, threading, time, urllib.error, urllib.request, webbrowser
 from pathlib import Path
 
 HERE = Path(__file__).parent
@@ -74,6 +74,48 @@ def make_icon(tracking, paused=False):
     d.ellipse([28, 28, 36, 36], fill=(255, 140, 55, 255) if tracking and not paused else (87, 83, 76, 255))
     return img
 
+def api_json(server, method, path, token=None, body=None, timeout=12):
+    url = server.rstrip("/") + path
+    data = None if body is None else json.dumps(body).encode()
+    headers = {"Content-Type": "application/json", "Accept": "application/json"}
+    if token:
+        headers["Authorization"] = "Bearer " + token
+    req = urllib.request.Request(url, method=method, data=data, headers=headers)
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as x:
+            return x.status, json.loads(x.read() or b"{}")
+    except urllib.error.HTTPError as e:
+        try:
+            return e.code, json.loads(e.read() or b"{}")
+        except Exception:
+            return e.code, {"error": str(e)}
+    except Exception as e:
+        return 0, {"error": str(e)}
+
+def prompt_text(title, prompt):
+    """Small tk prompt when available; otherwise None (caller uses stdin/headless)."""
+    if st_gui.tk is None or not has_display():
+        return None
+    try:
+        root = st_gui.tk.Tk()
+        root.withdraw()
+        from tkinter import simpledialog
+        val = simpledialog.askstring(title, prompt, parent=root)
+        root.destroy()
+        return (val or "").strip()
+    except Exception:
+        return None
+
+def git_remote_url(repo):
+    try:
+        r = subprocess.run(
+            ["git", "-C", str(Path(repo).expanduser()), "remote", "get-url", "origin"],
+            capture_output=True, text=True, timeout=5,
+        )
+        return (r.stdout or "").strip() or None
+    except Exception:
+        return None
+
 class TrayCore:
     """Shared daemon control used by tray UI and headless CLI."""
 
@@ -90,9 +132,17 @@ class TrayCore:
         if not self.s.get("token") and rt.get("token"): self.s["token"] = rt["token"]
         if not self.s.get("handle"): self.s["handle"] = rt["handle"]
         if not self.s.get("repo"): self.s["repo"] = rt["repo"]
+        if not self.s.get("project") and rt.get("project"): self.s["project"] = rt["project"]
         self.proc = None
         self.hours = 0.0
+        self.auth = {"ok": False, "handle": None, "needs_handle": False}
         self._stop = False
+        self.refresh_auth()
+
+    def persist(self):
+        save = dict(self.s)
+        save["bucket_mins"] = int(save.get("bucket_mins") or 5)
+        st_gui.save_settings(save)
 
     def tracking(self):
         return self.proc is not None and self.proc.poll() is None
@@ -100,27 +150,128 @@ class TrayCore:
     def paused(self):
         return dcfg.is_paused()
 
+    def signed_in(self):
+        return bool(self.auth.get("ok") and self.auth.get("handle"))
+
     def status_line(self):
         repo = Path(self.s.get("repo") or ".").name
-        handle = self.s.get("handle") or "?"
+        proj = self.s.get("project") or repo
+        if not self.s.get("token"):
+            auth = "signed out"
+        elif self.auth.get("needs_handle"):
+            auth = "signed in · claim a handle"
+        elif self.signed_in():
+            auth = f"@{self.auth['handle']}"
+        else:
+            auth = "auth expired"
         if self.tracking():
             state = "paused" if self.paused() else "active"
-            return f"Status: {state.capitalize()} — {repo} @{handle} · {format_duration(self.hours)} today · {pending_count(self.s['repo'])} pending"
-        return f"Status: No active session · {format_duration(self.hours)} today"
+            return f"Status: {state.capitalize()} — {proj} · {auth} · {format_duration(self.hours)} today · {pending_count(self.s.get('repo'))} pending"
+        return f"Status: No active session · {auth} · {format_duration(self.hours)} today"
+
+    def refresh_auth(self):
+        token = self.s.get("token") or ""
+        if not token:
+            self.auth = {"ok": False, "handle": None, "needs_handle": False}
+            return self.auth
+        code, data = api_json(self.s["server"], "GET", "/v1/auth/me", token=token)
+        if code == 200 and data.get("handle"):
+            self.auth = {"ok": True, "handle": data["handle"], "needs_handle": False}
+            self.s["handle"] = data["handle"]
+            self.persist()
+        elif code == 200 and data.get("needs_handle"):
+            self.auth = {"ok": True, "handle": None, "needs_handle": True}
+        else:
+            self.auth = {"ok": False, "handle": None, "needs_handle": False}
+        return self.auth
+
+    def open_login(self):
+        """Open Slack OAuth in the browser (same flow as the dashboard)."""
+        url = self.s["server"].rstrip("/") + "/v1/auth/slack/start"
+        webbrowser.open(url)
+        return "opened Slack sign-in — after the browser finishes, use “paste auth code / token…”"
+
+    def apply_auth_secret(self, raw):
+        """Accept a one-time ?auth= code or a session bearer token; save to gui.json."""
+        raw = (raw or "").strip()
+        if not raw:
+            return False, "nothing pasted"
+        # auth codes from /login?auth=… are exchanged; long tokens are used as bearer
+        if len(raw) < 80 and " " not in raw:
+            code, data = api_json(self.s["server"], "POST", "/v1/auth/session", body={"code": raw})
+            if code == 200 and data.get("token"):
+                self.s["token"] = data["token"]
+                if data.get("handle"):
+                    self.s["handle"] = data["handle"]
+                self.persist()
+                self.refresh_auth()
+                if data.get("needs_handle"):
+                    return True, "signed in — claim a handle on the dashboard, then reopen the tray"
+                return True, f"signed in as @{self.s.get('handle')}"
+            # fall through: maybe it was already a short token
+        self.s["token"] = raw
+        self.persist()
+        self.refresh_auth()
+        if self.signed_in():
+            return True, f"signed in as @{self.auth['handle']}"
+        if self.auth.get("needs_handle"):
+            return True, "token saved — claim a handle on the dashboard"
+        return False, "token rejected — sign in again"
+
+    def sign_out(self):
+        token = self.s.get("token")
+        if token:
+            api_json(self.s["server"], "POST", "/v1/auth/logout", token=token)
+        self.s["token"] = ""
+        self.persist()
+        self.refresh_auth()
+        return "signed out"
+
+    def link_project(self, project_id=None):
+        """Create/claim project and attach this repo's git remote via existing APIs."""
+        if not self.signed_in():
+            return False, "sign in first"
+        repo = self.s.get("repo")
+        if not repo or not Path(repo).expanduser().is_dir():
+            return False, "pick a repo in settings first"
+        pid = (project_id or self.s.get("project") or Path(repo).expanduser().name).strip()
+        remote = git_remote_url(repo)
+        name = pid
+        code, data = api_json(
+            self.s["server"], "POST", "/v1/projects",
+            token=self.s["token"],
+            body={"id": pid, "name": name, "repo_url": remote},
+        )
+        if code == 409:
+            code, data = api_json(
+                self.s["server"], "POST", f"/v1/projects/{pid}/edit",
+                token=self.s["token"],
+                body={"name": name, "repo_url": remote},
+            )
+        if code not in (200, 201):
+            return False, (data.get("error") if isinstance(data, dict) else None) or f"link failed ({code})"
+        self.s["project"] = pid
+        self.persist()
+        # restart tracker against the linked project id if already running
+        if self.tracking():
+            self.stop_daemon()
+            self.spawn()
+        linked = remote or "(no git remote — project id only)"
+        return True, f"linked {pid} → {linked}"
 
     def spawn(self):
         errs = st_gui.validate(self.s)
         if errs:
             return False, "; ".join(errs)
-        save = dict(self.s); save["bucket_mins"] = int(save.get("bucket_mins", 5))
-        st_gui.save_settings(save)
+        self.persist()
         dcfg.HOME.mkdir(parents=True, exist_ok=True)
         log = open(dcfg.HOME / "daemon.log", "a")
         cmd = st_gui.daemon_cmd(self.s)
         if self.s.get("token"):
             cmd += ["--token", self.s["token"]]
         self.proc = subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL)
-        return True, f"tracking {self.s['repo']} as @{self.s['handle']}"
+        who = self.s.get("handle") or "?"
+        return True, f"tracking {self.s['repo']} as @{who}"
 
     def stop_daemon(self):
         if self.tracking():
@@ -153,14 +304,16 @@ class TrayCore:
         return r.returncode == 0, (msg[-1] if msg else ("flushed" if r.returncode == 0 else "flush failed"))
 
     def fetch_hours(self):
-        if not self.s.get("handle"):
+        self.refresh_auth()
+        handle = self.auth.get("handle") or self.s.get("handle")
+        if not handle:
             return
         try:
             headers = {}
             if self.s.get("token"):
                 headers["Authorization"] = "Bearer " + self.s["token"]
             req = urllib.request.Request(
-                self.s["server"].rstrip("/") + "/v1/users/" + self.s["handle"],
+                self.s["server"].rstrip("/") + "/v1/users/" + handle,
                 headers=headers,
             )
             with urllib.request.urlopen(req, timeout=4) as x:
@@ -170,11 +323,10 @@ class TrayCore:
             pass
 
     def open_dashboard(self):
-        webbrowser.open(self.s["server"].rstrip("/") + "/home")
+        webbrowser.open(self.s["server"].rstrip("/") + ("/home" if self.signed_in() else "/login"))
 
     def open_config(self):
         dcfg.HOME.mkdir(parents=True, exist_ok=True)
-        # ensure settings exist; open gui when display available else print paths
         if has_display() and st_gui.tk is not None:
             subprocess.Popen([sys.executable, str(HERE / "gui.py")])
             return "opened settings window"
@@ -188,10 +340,15 @@ class Tray(TrayCore):
         self._auto_start()
 
     def _menu(self):
-        # Docs menu: Start/Stop, Open Dashboard, Inspect, Settings, Quit (+ live status/time)
+        # StruggleTime-style status + core actions; Login / Linking added for aitime
         return pystray.Menu(
             pystray.MenuItem(lambda _: self.status_line(), None, enabled=False),
             pystray.MenuItem(lambda _: f"Today: {format_duration(self.hours)}", None, enabled=False),
+            pystray.Menu.SEPARATOR,
+            pystray.MenuItem("sign in with slack…", self._login, visible=lambda _: not self.signed_in()),
+            pystray.MenuItem("paste auth code / token…", self._paste_auth, visible=lambda _: not self.signed_in() or self.auth.get("needs_handle")),
+            pystray.MenuItem("sign out", self._sign_out, visible=lambda _: bool(self.s.get("token"))),
+            pystray.MenuItem("link project / repo…", self._link, visible=lambda _: self.signed_in()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("start tracking", self._start, visible=lambda _: not self.tracking()),
             pystray.MenuItem("stop tracking", self._stop, visible=lambda _: self.tracking()),
@@ -226,6 +383,30 @@ class Tray(TrayCore):
 
     def _flush(self, *_):
         ok, msg = self.flush(); self._notify(msg if ok else f"sync failed: {msg}")
+
+    def _login(self, *_):
+        self._notify(self.open_login())
+
+    def _paste_auth(self, *_):
+        val = prompt_text("StruggleTime sign-in", "Paste the ?auth= code from the browser URL, or your session token:")
+        if val is None:
+            self._notify("open settings or run tray --headless to paste a token")
+            return
+        ok, msg = self.apply_auth_secret(val)
+        self._notify(msg)
+        self._refresh()
+
+    def _sign_out(self, *_):
+        self._notify(self.sign_out()); self._refresh()
+
+    def _link(self, *_):
+        suggested = self.s.get("project") or Path(self.s.get("repo") or ".").name
+        pid = prompt_text("Link project / repo", f"Project id to create or update (default {suggested}):")
+        if pid is None:
+            pid = ""
+        ok, msg = self.link_project(pid or None)
+        self._notify(msg)
+        self._refresh()
 
     def _inspect(self, *_):
         r = subprocess.run([sys.executable, str(HERE / "tracker_inspect.py"), self.s["repo"]], capture_output=True, text=True)
@@ -271,7 +452,7 @@ def run_headless(overrides):
     core = TrayCore(overrides)
     print("struggletime tray: headless mode (no display / pystray)", flush=True)
     print(INSTALL_HINT if pystray is None else "no DISPLAY/WAYLAND_DISPLAY — CLI control loop", flush=True)
-    print("commands: status | start | stop | pause | resume | sync | dashboard | config | quit", flush=True)
+    print("commands: status | login | token <code|token> | logout | link [project] | start | stop | pause | resume | sync | dashboard | config | quit", flush=True)
     if not st_gui.validate(core.s):
         ok, msg = core.spawn()
         print(msg, flush=True)
@@ -303,6 +484,17 @@ def run_headless(overrides):
             return True
         if line == "status":
             core.fetch_hours(); print(core.status_line(), flush=True)
+        elif line == "login":
+            print(core.open_login(), flush=True)
+        elif line.startswith("token ") or line.startswith("auth "):
+            ok, msg = core.apply_auth_secret(line.split(None, 1)[1])
+            print(msg, flush=True)
+        elif line == "logout":
+            print(core.sign_out(), flush=True)
+        elif line == "link" or line.startswith("link "):
+            parts = line.split(None, 1)
+            ok, msg = core.link_project(parts[1] if len(parts) > 1 else None)
+            print(msg, flush=True)
         elif line == "start":
             print(core.spawn()[1], flush=True)
         elif line == "stop":

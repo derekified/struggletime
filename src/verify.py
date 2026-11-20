@@ -7,10 +7,13 @@ import hashlib, json, sys
 
 GENESIS = "0" * 64
 
-ALLOWED_TOP = {"v","bucket_id","install_id","project_id","repo_remote_hash","bucket_start_wall","bucket_secs","mono_delta_ms","counts","git","files","exec_categories","formula_version","prev_hash","hash","signature"}
+ALLOWED_TOP = {"v","bucket_id","install_id","project_id","repo_remote_hash","bucket_start_wall","bucket_secs","mono_delta_ms","counts","git","files","exec_categories","editors","agents","formula_version","prev_hash","hash","signature"}
 ALLOWED_COUNTS = {"human_edits","ai_writes","prompts","executions","exec_failures","commits","dwell_diff_secs","idle_secs"}
 ALLOWED_GIT = {"head_commit","lines_added","lines_deleted","dirty_files"}
-ALLOWED_FILE = {"file_id","added","deleted","bursts"}
+# op/editor/agent/source are metadata labels only — never raw paths or content
+ALLOWED_FILE = {"file_id","added","deleted","bursts","op","editor","agent","source"}
+ALLOWED_FILE_OP = {"created","modified","deleted"}
+ALLOWED_FILE_SOURCE = {"layer1","adapter"}
 FORBIDDEN = {"content","text","code","prompt_text","command","args","keystrokes","screenshot","image","path","filepath","file_path","raw","transcript"}
 
 def anonymized_file_id(rel_path, salt):
@@ -29,6 +32,24 @@ def validate_allowlist(bucket):
             elif k not in ALLOWED_FILE: errs.append(f"files[{i}].{k}: not in allowlist")
         if "file_id" in f and not all(ch in "0123456789abcdef" for ch in str(f["file_id"])):
             errs.append(f"files[{i}].file_id: must be anonymized hex id")
+        if "op" in f and f["op"] not in ALLOWED_FILE_OP:
+            errs.append(f"files[{i}].op: must be created|modified|deleted")
+        if "source" in f and f["source"] not in ALLOWED_FILE_SOURCE:
+            errs.append(f"files[{i}].source: must be layer1|adapter")
+        for label in ("editor", "agent"):
+            if label in f and (not isinstance(f[label], str) or len(f[label]) > 32 or "/" in f[label] or " " in f[label]):
+                errs.append(f"files[{i}].{label}: short metadata label only")
+    for agg in ("editors", "agents"):
+        obj = bucket.get(agg)
+        if obj is None: continue
+        if not isinstance(obj, dict):
+            errs.append(f"{agg}: must be object of label→count")
+            continue
+        for k, v in obj.items():
+            if not isinstance(k, str) or len(k) > 32 or "/" in k or " " in k:
+                errs.append(f"{agg}.{k}: short metadata label only")
+            if not isinstance(v, int) or v < 0:
+                errs.append(f"{agg}.{k}: count must be non-negative int")
     return errs
 
 def is_silent(bucket):

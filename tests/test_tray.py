@@ -44,6 +44,12 @@ class TestTray(unittest.TestCase):
         self.assertIsInstance(tray.has_display(), bool)
         self.assertIn("pip install", tray.INSTALL_HINT)
 
+    def test_login_and_link_helpers_exist(self):
+        self.assertTrue(callable(tray.TrayCore.open_login))
+        self.assertTrue(callable(tray.TrayCore.apply_auth_secret))
+        self.assertTrue(callable(tray.TrayCore.link_project))
+        self.assertTrue(callable(tray.git_remote_url))
+
     @unittest.skipIf(tray.pystray is None, "pystray/pillow not installed")
     def test_icon_renders(self):
         self.assertEqual(tray.make_icon(True).size, (64, 64))

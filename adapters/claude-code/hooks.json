@@ -1,8 +1,8 @@
 {
   "$schema": "struggletime-adapter/v1",
-  "description": "Claude Code enrichment: prompt/agent-turn counts only. Merge into .claude/settings.json hooks; each command appends one category line the daemon already understands.",
+  "description": "Claude Code enrichment: agent turn counts + editor/agent labels only. Merge into .claude/settings.json hooks.",
   "hooks": {
-    "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"category\":\"ai_cli\",\"verb\":\"tool\",\"exit_code\":0}\n' \"$(date +%s)\" >> \"${AITIME_EXEC_LOG:-$HOME/.aitime/exec.jsonl}\" "}]}],
-    "Stop": [{"hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"category\":\"ai_cli\",\"verb\":\"stop\",\"exit_code\":0}\n' \"$(date +%s)\" >> \"${AITIME_EXEC_LOG:-$HOME/.aitime/exec.jsonl}\" "}]}]
+    "PostToolUse": [{"matcher": "", "hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"category\":\"ai_cli\",\"verb\":\"tool\",\"editor\":\"claude-code\",\"agent\":\"claude\",\"op\":\"modified\",\"exit_code\":0}\\n' \"$(date +%s)\" >> \"${AITIME_EXEC_LOG:-$HOME/.aitime/exec.jsonl}\" "}]}],
+    "Stop": [{"hooks": [{"type": "command", "command": "printf '{\"ts\":%s,\"category\":\"ai_cli\",\"verb\":\"stop\",\"editor\":\"claude-code\",\"agent\":\"claude\",\"exit_code\":0}\\n' \"$(date +%s)\" >> \"${AITIME_EXEC_LOG:-$HOME/.aitime/exec.jsonl}\" "}]}]
   }
 }

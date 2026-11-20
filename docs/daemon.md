@@ -37,7 +37,8 @@ it lives in the menu bar on macos, the system tray on windows, and
 the appindicator area on linux. it starts tracking on launch if you
 are set up, shows today's weighted time next to the icon (`42m`,
 `1h 15m`), refreshed every 15 seconds, and its menu has start/stop,
-open dashboard, inspect, settings, and quit. linux needs a tray backend
+sign in / paste auth code, link project/repo, open dashboard, inspect,
+settings, and quit. linux needs a tray backend
 (`sudo apt install gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`);
 gnome without the appindicator extension has no tray area — the tray
 falls back to a headless CLI loop, or use the gui.

@@ -40,9 +40,11 @@ def git(repo, *args):
     except Exception:
         return ""
 
-def git_anchor(repo, salt=None, bursts=None):
+def git_anchor(repo, salt=None, bursts=None, file_meta=None):
+    """Build git totals + anonymized per-file rows (optional op/editor/agent)."""
     added = deleted = 0
     files = {}
+    file_meta = file_meta or {}
     for line in git(repo, "diff", "--numstat").splitlines():
         p = line.split("\t")
         if len(p) >= 2:
@@ -51,12 +53,26 @@ def git_anchor(repo, salt=None, bursts=None):
             added += a
             deleted += d
             if salt and len(p) >= 3:
-                fid = anonymized_file_id(p[2], salt)
-                files[fid] = {"file_id": fid, "added": a, "deleted": d, "bursts": (bursts or {}).get(p[2], 0)}
+                rel = p[2]
+                fid = anonymized_file_id(rel, salt)
+                row = {"file_id": fid, "added": a, "deleted": d, "bursts": (bursts or {}).get(rel, 0)}
+                row.update({k: v for k, v in (file_meta.get(rel) or {}).items() if k in ("op", "editor", "agent", "source")})
+                files[fid] = row
     for rel, n in (bursts or {}).items():
-        if salt and anonymized_file_id(rel, salt) not in files:
-            fid = anonymized_file_id(rel, salt)
-            files[fid] = {"file_id": fid, "added": 0, "deleted": 0, "bursts": n}
+        fid = anonymized_file_id(rel, salt) if salt else None
+        if salt and fid not in files:
+            row = {"file_id": fid, "added": 0, "deleted": 0, "bursts": n}
+            row.update({k: v for k, v in (file_meta.get(rel) or {}).items() if k in ("op", "editor", "agent", "source")})
+            files[fid] = row
+    # deleted files may only appear in file_meta
+    for rel, meta in file_meta.items():
+        if meta.get("op") != "deleted" or not salt:
+            continue
+        fid = anonymized_file_id(rel, salt)
+        if fid not in files:
+            row = {"file_id": fid, "added": 0, "deleted": 0, "bursts": (bursts or {}).get(rel, 0)}
+            row.update({k: v for k, v in meta.items() if k in ("op", "editor", "agent", "source")})
+            files[fid] = row
     dirty = len([l for l in git(repo, "status", "--porcelain").splitlines() if l])
     anchor = {
         "head_commit": git(repo, "rev-parse", "HEAD") or None,
@@ -82,8 +98,14 @@ def classify_name(name):
         return EXEC_CATS[name]
     return "other"
 
+def _clean_label(v, default="unknown"):
+    s = str(v or default).lower().strip().replace(" ", "-")
+    if not s or len(s) > 32 or "/" in s or "\\" in s or " " in s:
+        return default
+    return s
+
 def classify_exec(line):
-    """Parse shell-hook JSONL. Never keep args — only category/verb/exit_code."""
+    """Parse shell-hook / adapter JSONL. Never keep args or paths."""
     e = json.loads(line)
     if not isinstance(e, dict):
         raise ValueError("exec line must be object")
@@ -91,7 +113,6 @@ def classify_exec(line):
     if cat not in ("git", "test_runner", "compiler", "ai_cli", "other", "editor"):
         cat = "other"
     verb = e.get("verb") or ""
-    # strip anything that looks like an argument list
     if " " in verb or "/" in verb or len(verb) > 32:
         verb = ""
     return {
@@ -99,6 +120,10 @@ def classify_exec(line):
         "verb": verb,
         "exit_code": int(e.get("exit_code") or 0),
         "ts": e.get("ts"),
+        "editor": _clean_label(e.get("editor"), "") or None,
+        "agent": _clean_label(e.get("agent"), "") or None,
+        "op": e.get("op") if e.get("op") in ("created", "modified", "deleted") else None,
+        "source": "adapter" if e.get("editor") or e.get("agent") or cat == "editor" else "layer1",
     }
 
 def empty():
@@ -107,9 +132,57 @@ def empty():
         "exec_failures": 0, "commits": 0, "dwell_diff_secs": 0, "idle_secs": 0,
     }
 
-def classify_burst(changed, prev_snap, snap):
-    """1–2 files = human; 5+ files = agent/formatter (huge diffs handled at seal)."""
-    return "ai" if len(changed) >= 5 else "human"
+def classify_burst(n_changed):
+    """1–2 files = human; 5+ files = agent/formatter."""
+    return "ai" if n_changed >= 5 else "human"
+
+def detect_running_editors():
+    """Stdlib process scan → editor labels (no paths)."""
+    try:
+        if sys.platform.startswith("win"):
+            out = subprocess.run(["tasklist"], capture_output=True, text=True, timeout=3).stdout.lower()
+        else:
+            out = subprocess.run(["ps", "-ax", "-o", "comm="], capture_output=True, text=True, timeout=3).stdout.lower()
+    except Exception:
+        out = ""
+    found = []
+    checks = (
+        ("cursor", "cursor"), ("code helper", "vscode"), ("visual studio code", "vscode"),
+        ("code.exe", "vscode"), ("nvim", "neovim"), ("vim", "vim"), ("emacs", "emacs"),
+        ("sublime_text", "sublime"), ("zed", "zed"), ("idea", "jetbrains"),
+    )
+    for needle, label in checks:
+        if needle in out and label not in found:
+            found.append(label)
+    env_ed = _clean_label(env("STRUGGLETIME_EDITOR", "AITIME_EDITOR", default=""), "")
+    if env_ed and env_ed not in found:
+        found.insert(0, env_ed)
+    return found
+
+def default_attr(burst_kind="human", hint=None):
+    hint = hint or {}
+    editor = hint.get("editor") or (detect_running_editors() or ["unknown"])[0]
+    if hint.get("agent"):
+        agent = hint["agent"]
+    elif burst_kind == "ai":
+        agent = "unknown-agent"
+    else:
+        agent = "human"
+    source = hint.get("source") or ("adapter" if hint.get("editor") or hint.get("agent") else "layer1")
+    return _clean_label(editor), _clean_label(agent, "human"), source
+
+def diff_ops(prev_snap, snap):
+    """Return {rel: op} for created / modified / deleted in this poll."""
+    ops = {}
+    for rel in snap:
+        if rel not in prev_snap:
+            ops[rel] = "created"
+        elif snap[rel] != prev_snap[rel]:
+            ops[rel] = "modified"
+    for rel in prev_snap:
+        if rel not in snap:
+            ops[rel] = "deleted"
+    return ops
 
 def post_buckets(server, user, token, buckets, retries=4):
     url = server.rstrip("/") + "/v1/buckets/batch"
@@ -156,21 +229,29 @@ def _on_signal(signum, _frame):
     elif hasattr(signal, "SIGUSR2") and signum == signal.SIGUSR2:
         os.environ["_ST_FLUSH_NOW"] = "1"
 
-def seal_bucket(state, repo, project, bucket_secs, started_wall, started_mono, counts, bursts, install_id):
-    anchor, files = git_anchor(repo, state["salt"], bursts)
-    # huge instant diff: many lines added+deleted in one seal window → agentic write signal
+def seal_bucket(state, repo, project, bucket_secs, started_wall, started_mono, counts, bursts, install_id, file_meta=None, exec_categories=None):
+    file_meta = file_meta or {}
+    anchor, files = git_anchor(repo, state["salt"], bursts, file_meta=file_meta)
     if (anchor["lines_added"] + anchor["lines_deleted"]) >= 200 and counts["human_edits"] > 0 and counts["ai_writes"] == 0:
-        # reclassify leftover human_edits into ai_writes for dump-shaped diffs
-        dump = counts["human_edits"]
         counts = dict(counts)
-        counts["ai_writes"] += dump
+        counts["ai_writes"] += counts["human_edits"]
         counts["human_edits"] = 0
+        for meta in file_meta.values():
+            if meta.get("agent") == "human":
+                meta["agent"] = "unknown-agent"
+    editors, agents = {}, {}
+    for f in files:
+        ed, ag = f.get("editor") or "unknown", f.get("agent") or "unknown"
+        editors[ed] = editors.get(ed, 0) + 1
+        agents[ag] = agents.get(ag, 0) + 1
     bucket = {
         "v": 1, "bucket_id": str(uuid.uuid4()), "install_id": install_id,
         "project_id": project, "repo_remote_hash": None, "bucket_start_wall": started_wall,
         "bucket_secs": bucket_secs, "mono_delta_ms": int((time.monotonic() - started_mono) * 1000),
-        "counts": counts, "git": anchor, "files": files, "formula_version": "v0.1.0-alpha",
-        "prev_hash": state["prev_hash"],
+        "counts": counts, "git": anchor, "files": files,
+        "exec_categories": exec_categories or {},
+        "editors": editors, "agents": agents,
+        "formula_version": "v0.1.0-alpha", "prev_hash": state["prev_hash"],
     }
     bucket["hash"] = bucket_hash(bucket)
     state["prev_hash"] = bucket["hash"]
@@ -243,6 +324,8 @@ def main():
         return 0 if not state.get("pending") else 1
 
     bursts, counts, prev_snap, last_activity = {}, empty(), snapshot(repo), time.monotonic()
+    file_meta, exec_categories = {}, {}
+    attr_hint = {}  # latest adapter/layer1 editor+agent hint for this bucket
     started_wall, started_mono = int(time.time()), time.monotonic()
     install_id = env("STRUGGLETIME_INSTALL", "AITIME_INSTALL", default="local")
     print(
@@ -262,22 +345,9 @@ def main():
             was_paused = paused_now
             if not paused_now:
                 started_wall, started_mono = int(time.time()), time.monotonic()
-                counts, bursts = empty(), {}
+                counts, bursts, file_meta, exec_categories, attr_hint = empty(), {}, {}, {}, {}
         if paused_now:
             continue
-
-        snap = snapshot(repo)
-        changed = [k for k in snap if k not in prev_snap or snap[k] != prev_snap.get(k)]
-        if changed:
-            last_activity = time.monotonic()
-            for rel in changed:
-                bursts[rel] = bursts.get(rel, 0) + 1
-            kind = classify_burst(changed, prev_snap, snap)
-            if kind == "ai":
-                counts["ai_writes"] += len(changed)
-            else:
-                counts["human_edits"] += len(changed)
-        prev_snap = snap
 
         if exec_log.exists():
             try:
@@ -290,13 +360,48 @@ def main():
                 except Exception:
                     continue
                 counts["executions"] += 1
+                cat = e.get("category") or "other"
+                exec_categories[cat] = exec_categories.get(cat, 0) + 1
                 if e.get("exit_code"):
                     counts["exec_failures"] += 1
-                if e.get("category") == "ai_cli":
+                if cat == "ai_cli":
                     counts["prompts"] += 1
-                if e.get("category") == "git" and e.get("verb") == "commit":
+                    attr_hint = {
+                        "agent": e.get("agent") or _clean_label(e.get("verb") or "ai-cli", "unknown-agent"),
+                        "editor": e.get("editor") or attr_hint.get("editor"),
+                        "source": "adapter" if e.get("source") == "adapter" or e.get("editor") else "layer1",
+                    }
+                if cat == "editor":
+                    attr_hint = {
+                        "editor": e.get("editor") or "unknown",
+                        "agent": e.get("agent") or "human",
+                        "source": "adapter",
+                    }
+                if cat == "git" and e.get("verb") == "commit":
                     counts["commits"] += 1
             state["exec_offset"] = len(lines)
+
+        snap = snapshot(repo)
+        ops = diff_ops(prev_snap, snap)
+        if ops:
+            last_activity = time.monotonic()
+            n_touch = sum(1 for op in ops.values() if op != "deleted")
+            kind = classify_burst(n_touch)
+            editor, agent, source = default_attr(kind, attr_hint)
+            if kind == "ai":
+                counts["ai_writes"] += max(n_touch, 1)
+            else:
+                counts["human_edits"] += max(n_touch, 1)
+            for rel, op in ops.items():
+                bursts[rel] = bursts.get(rel, 0) + (0 if op == "deleted" else 1)
+                # adapter hint wins when present; else layer1 process/burst inference
+                file_meta[rel] = {
+                    "op": op,
+                    "editor": editor,
+                    "agent": agent if op != "deleted" or kind == "ai" else agent,
+                    "source": source,
+                }
+        prev_snap = snap
 
         if time.monotonic() - started_mono < bucket_secs:
             continue
@@ -304,10 +409,17 @@ def main():
             int(max(0, bucket_secs - (last_activity - started_mono)))
             if time.monotonic() - last_activity > 60 else 0
         )
-        bucket = seal_bucket(state, repo, project, bucket_secs, started_wall, started_mono, counts, bursts, install_id)
-        bursts = {}
+        bucket = seal_bucket(
+            state, repo, project, bucket_secs, started_wall, started_mono, counts, bursts, install_id,
+            file_meta=file_meta, exec_categories=exec_categories,
+        )
+        bursts, file_meta, exec_categories, attr_hint = {}, {}, {}, {}
         save_ledger(ledger, state)
-        print(f"bucket {bucket['bucket_id'][:8]} sealed {bucket['counts']}", flush=True)
+        print(
+            f"bucket {bucket['bucket_id'][:8]} sealed {bucket['counts']} "
+            f"editors={bucket.get('editors')} agents={bucket.get('agents')}",
+            flush=True,
+        )
         flush_pending(state, server, user, token, ledger)
         if a.once:
             return 0

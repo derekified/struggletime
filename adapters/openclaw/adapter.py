@@ -13,15 +13,16 @@ from pathlib import Path
 
 def classify(entry):
     s = json.dumps(entry).lower()
+    base = {"editor": "openclaw", "agent": "openclaw"}
     if '"toolresult"' in s or '"tool_result"' in s or '"tool result"' in s:
         failed = '"iserror": true' in s or '"status": "error"' in s or '"exitcode": 1' in s
-        return {"category": "test_runner", "verb": "tool_result", "exit_code": 1 if failed else 0}
+        return {**base, "category": "test_runner", "verb": "tool_result", "op": "modified", "exit_code": 1 if failed else 0}
     if '"toolcall"' in s or '"tool_call"' in s or '"tooluse"' in s:
-        return {"category": "ai_cli", "verb": "tool", "exit_code": 0}
+        return {**base, "category": "ai_cli", "verb": "tool", "op": "modified", "exit_code": 0}
     role = str(entry.get("role", "")).lower() if isinstance(entry, dict) else ""
     typ = str(entry.get("type", "")).lower() if isinstance(entry, dict) else ""
     if role == "user" or typ in ("user_message", "human_turn"):
-        return {"category": "ai_cli", "verb": "prompt", "exit_code": 0}
+        return {**base, "category": "ai_cli", "verb": "prompt", "exit_code": 0}
     return None
 
 def scan(sessions_dir, state):
