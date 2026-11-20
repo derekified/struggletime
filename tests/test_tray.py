@@ -63,6 +63,11 @@ class TestTray(unittest.TestCase):
         self.assertTrue(browser_auth.valid_desktop_redirect("http://127.0.0.1:9/callback"))
         self.assertFalse(browser_auth.valid_desktop_redirect("https://evil.example/callback"))
         self.assertFalse(browser_auth.valid_desktop_redirect("http://example.com/callback"))
+        self.assertEqual(browser_auth.normalize_browser_url(" https://x.example/a "), "https://x.example/a")
+        with self.assertRaises(ValueError):
+            browser_auth.normalize_browser_url("/relative")
+        with self.assertRaises(ValueError):
+            browser_auth.normalize_browser_url("ftp://nope")
 
     @unittest.skipIf(tray.pystray is None, "pystray/pillow not installed")
     def test_icon_renders(self):

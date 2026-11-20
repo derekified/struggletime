@@ -83,6 +83,23 @@ flags: `--project` (default: repo folder name), `--bucket-secs`,
 `--once` (seal one bucket and exit, used by tests and demos),
 `--flush-only` (retry pending ledger upload and exit).
 
+browser opens from the tray/gui go through `daemon/browser_auth.py`
+(`open` / `xdg-open` / `os.startfile`, with a sanitized env on linux) so
+the **system default browser** is used even when the tray process has a
+weird `LD_LIBRARY_PATH`.
+
+## stress / acceptance (internal)
+
+```bash
+make stress-smoke          # 5 projects, ephemeral server, cleanup
+make stress                # 1000 weighted projects + buckets + report
+python3 daemon/stress_test.py --count 1000 --cleanup-after
+```
+
+creates taggable projects `sts{run_id}{nnnn}`, posts sealed buckets,
+verifies listing/stats, prints p50/p95 latency, and can `--cleanup`
+soft-delete them afterward.
+
 on start the daemon retries any pending ledger buckets with backoff.
 if the server is down, buckets pile up in the ledger and sync later.
 SIGTERM/SIGINT flush pending then exit. if you kill the daemon

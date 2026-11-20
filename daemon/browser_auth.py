@@ -24,37 +24,114 @@ ERR_HTML = """<!doctype html><meta charset=utf-8>
 """
 
 
-def open_default_browser(url):
-    """Launch the OS default browser. Avoid webbrowser's wrong-browser / silent fails in tray processes."""
+def _browser_log(msg):
+    print(f"[browser] {msg}", file=sys.stderr, flush=True)
+
+def normalize_browser_url(url):
+    """Require absolute http(s) URL; strip whitespace and trailing junk."""
     url = (url or "").strip()
-    if not url.startswith(("http://", "https://")):
-        raise ValueError("url must be http(s)")
-    if sys.platform == "darwin":
-        subprocess.Popen(["open", url], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        return
-    if sys.platform.startswith("win"):
-        try:
-            os.startfile(url)  # noqa: PTH208 — intentional shell association
-            return
-        except OSError:
-            subprocess.Popen(
-                ["cmd", "/c", "start", "", url],
-                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0),
-            )
-            return
-    env = {k: v for k, v in os.environ.items() if k not in ("LD_LIBRARY_PATH", "PYTHONHOME")}
+    if not url:
+        raise ValueError("empty url")
+    parsed = urlparse(url)
+    if parsed.scheme not in ("http", "https") or not parsed.netloc:
+        raise ValueError(f"url must be absolute http(s), got {url!r}")
+    # rebuild without fragment noise / accidental whitespace
+    return parsed.geturl()
+
+def _linux_browser_env():
+    """Drop bundler/venv library overrides that break system xdg-open / gio."""
+    drop = {
+        "LD_LIBRARY_PATH", "LD_PRELOAD", "PYTHONHOME", "PYTHONPATH",
+        "QT_PLUGIN_PATH", "GTK_PATH", "GI_TYPELIB_PATH",
+    }
+    return {k: v for k, v in os.environ.items() if k not in drop}
+
+def _spawn_detached(cmd, *, env=None, windows_flags=0):
+    kwargs = {
+        "stdout": subprocess.DEVNULL,
+        "stderr": subprocess.DEVNULL,
+        "stdin": subprocess.DEVNULL,
+        "start_new_session": True,
+    }
+    if env is not None:
+        kwargs["env"] = env
+    if sys.platform.startswith("win") and windows_flags:
+        kwargs["creationflags"] = windows_flags
+        kwargs.pop("start_new_session", None)
+    return subprocess.Popen(cmd, **kwargs)
+
+def open_default_browser(url):
+    """Launch the OS default browser from tray/GUI/headless contexts.
+
+    Returns True on a successful launch attempt. Logs diagnostics on failure
+    instead of silently swallowing errors. Prefer OS helpers over webbrowser
+    (which often picks the wrong browser or no-ops under AppIndicator/launchd).
+    """
     try:
-        subprocess.Popen(
-            ["xdg-open", url],
-            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env,
-            start_new_session=True,
+        url = normalize_browser_url(url)
+    except ValueError as e:
+        _browser_log(f"invalid url: {e}")
+        raise
+
+    errors = []
+
+    if sys.platform == "darwin":
+        try:
+            _spawn_detached(["open", url])
+            return True
+        except Exception as e:
+            errors.append(f"open: {e}")
+            _browser_log(f"macOS open failed: {e}")
+
+    elif sys.platform.startswith("win"):
+        win_flags = (
+            getattr(subprocess, "CREATE_NO_WINDOW", 0x08000000)
+            | getattr(subprocess, "DETACHED_PROCESS", 0x00000008)
         )
-        return
-    except FileNotFoundError:
-        pass
-    import webbrowser
-    webbrowser.open(url)
+        try:
+            os.startfile(url)  # noqa: PTH208 — OS file/URL association
+            return True
+        except OSError as e:
+            errors.append(f"startfile: {e}")
+            _browser_log(f"Windows startfile failed: {e}")
+        try:
+            _spawn_detached(["cmd", "/c", "start", "", url], windows_flags=win_flags)
+            return True
+        except Exception as e:
+            errors.append(f"cmd start: {e}")
+            _browser_log(f"Windows cmd start failed: {e}")
+
+    else:
+        env = _linux_browser_env()
+        for cmd in (
+            ["xdg-open", url],
+            ["gio", "open", url],
+            ["sensible-browser", url],
+            ["x-www-browser", url],
+        ):
+            try:
+                _spawn_detached(cmd, env=env)
+                return True
+            except FileNotFoundError as e:
+                errors.append(f"{cmd[0]}: not found")
+            except Exception as e:
+                errors.append(f"{cmd[0]}: {e}")
+                _browser_log(f"Linux {cmd[0]} failed: {e}")
+
+    try:
+        import webbrowser
+        ok = webbrowser.open(url)
+        if ok:
+            return True
+        errors.append("webbrowser.open returned False")
+        _browser_log("webbrowser.open returned False")
+    except Exception as e:
+        errors.append(f"webbrowser: {e}")
+        _browser_log(f"webbrowser fallback failed: {e}")
+
+    detail = "; ".join(errors) or "unknown"
+    _browser_log(f"all launch methods failed for {url}: {detail}")
+    raise RuntimeError(f"could not open default browser: {detail}")
 
 
 def api_json(server, method, path, token=None, body=None, timeout=12):
