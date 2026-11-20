@@ -41,6 +41,27 @@ class TestTray(unittest.TestCase):
             dcfg.set_paused(False)
             self.assertFalse(dcfg.is_paused())
 
+    def test_normalize_ngrok_placeholder(self):
+        self.assertEqual(
+            dcfg.normalize_server("<NGROK, nothing after it>"),
+            dcfg.PUBLIC_SERVER.rstrip("/"),
+        )
+        self.assertEqual(dcfg.normalize_server(""), dcfg.PUBLIC_SERVER.rstrip("/"))
+        self.assertEqual(dcfg.normalize_server("not-a-url"), dcfg.PUBLIC_SERVER.rstrip("/"))
+        self.assertTrue(dcfg.PUBLIC_SERVER.startswith("https://paper-identifier-specialist-sold.trycloudflare.com"))
+        with tempfile.TemporaryDirectory() as d:
+            home = pathlib.Path(d)
+            gui = home / "gui.json"
+            gui.write_text(json.dumps({"handle": "x", "repo": "/tmp", "server": "<NGROK, nothing after it>", "bucket_mins": 5}))
+            for k in ("STRUGGLETIME_SERVER", "AITIME_SERVER", "OAUTH_REDIRECT_BASE",
+                      "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL"):
+                os.environ.pop(k, None)
+            dcfg.GUI_SETTINGS = gui
+            s = dcfg.load_settings(gui)
+            self.assertEqual(s["server"], dcfg.PUBLIC_SERVER.rstrip("/"))
+            saved = json.loads(gui.read_text())
+            self.assertEqual(saved["server"], dcfg.PUBLIC_SERVER.rstrip("/"))
+
     def test_has_display_and_headless_helpers(self):
         self.assertIsInstance(tray.has_display(), bool)
         self.assertIn("pip install", tray.INSTALL_HINT)

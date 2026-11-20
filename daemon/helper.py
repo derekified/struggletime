@@ -90,14 +90,14 @@ def main():
     ap = argparse.ArgumentParser(prog="struggletime-helper")
     sub = ap.add_subparsers(dest="cmd", required=True)
     st = sub.add_parser("start"); st.add_argument("--repo", required=True); st.add_argument("--user", default="")
-    st.add_argument("--server", default=env("STRUGGLETIME_SERVER", "AITIME_SERVER", default="http://127.0.0.1:18765"))
+    st.add_argument("--server", default=env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=dcfg.PUBLIC_SERVER))
     st.add_argument("--token", default=env("STRUGGLETIME_TOKEN", "AITIME_TOKEN"))
     st.add_argument("--project", default=None); st.add_argument("--bucket-secs", type=int, default=300); st.set_defaults(fn=cmd_start)
     for name, fn in (("stop", cmd_stop), ("status", cmd_status), ("pause", cmd_pause), ("resume", cmd_resume)):
         sp = sub.add_parser(name); sp.set_defaults(fn=fn)
     lg = sub.add_parser("logs"); lg.add_argument("--lines", type=int, default=30); lg.set_defaults(fn=cmd_logs)
     sy = sub.add_parser("sync"); sy.add_argument("--repo", required=True); sy.add_argument("--user", default="")
-    sy.add_argument("--server", default=env("STRUGGLETIME_SERVER", "AITIME_SERVER", default="http://127.0.0.1:18765"))
+    sy.add_argument("--server", default=env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=dcfg.PUBLIC_SERVER))
     sy.add_argument("--token", default=env("STRUGGLETIME_TOKEN", "AITIME_TOKEN")); sy.set_defaults(fn=cmd_sync)
     a = ap.parse_args(); return a.fn(a)
 
