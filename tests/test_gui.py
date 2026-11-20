@@ -24,10 +24,11 @@ class TestGui(unittest.TestCase):
     def test_api_key_ui(self):
         src = (ROOT / "daemon" / "gui.py").read_text()
         low = src.lower()
-        self.assertIn("set api key", low)
-        self.assertIn("clear api key", low)
+        self.assertIn("set_api_key", low)
+        self.assertIn("native_ui", src)
+        self.assertNotIn("import tkinter", src)
+        self.assertIsNone(gui.tk)
         self.assertNotIn("sign in with slack", low)
-        self.assertNotIn("desktoplogin", low.replace("_", ""))
 
 if __name__ == "__main__":
     unittest.main()

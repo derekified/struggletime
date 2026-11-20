@@ -31,6 +31,7 @@ sys.path = [p for p in sys.path if Path(p or ".").resolve() != HERE.resolve()]
 sys.path.insert(0, str(HERE))
 import config as dcfg
 import browser_auth
+import native_ui
 
 spec = importlib.util.spec_from_file_location("st_gui", HERE / "gui.py")
 st_gui = importlib.util.module_from_spec(spec); spec.loader.exec_module(st_gui)
@@ -46,39 +47,13 @@ INSTALL_HINT = (
     "  pip install -r daemon/tray-requirements.txt\n"
     "linux also needs a tray backend, e.g.\n"
     "  sudo apt install gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1\n"
+    "dialogs use native OS prompts (osascript / zenity / PowerShell) — no tkinter.\n"
     "some desktops (plain GNOME without AppIndicator) have no tray area;\n"
     "use `python3 daemon/gui.py` or `python3 daemon/tray.py --headless`."
 )
 
-# Tk must not run inside the pystray/AppIndicator callback thread — it hangs.
-# Spawn a tiny one-shot dialog process instead.
-_PROMPT_SCRIPT = r"""
-import sys
-try:
-    import tkinter as tk
-    from tkinter import simpledialog
-except ImportError:
-    sys.exit(2)
-title, prompt = sys.argv[1], sys.argv[2]
-secret = len(sys.argv) > 3 and sys.argv[3] == "1"
-root = tk.Tk(); root.withdraw()
-try: root.attributes("-topmost", True)
-except Exception: pass
-root.update_idletasks()
-kw = {"show": "*"} if secret else {}
-val = simpledialog.askstring(title, prompt, parent=root, **kw)
-try: root.destroy()
-except Exception: pass
-if val is None: sys.exit(1)
-sys.stdout.write(val.strip())
-"""
-
 def has_display():
-    if sys.platform == "darwin":
-        return True
-    if sys.platform.startswith("win"):
-        return True
-    return bool(os.environ.get("DISPLAY") or os.environ.get("WAYLAND_DISPLAY"))
+    return native_ui.has_display()
 
 def pending_count(repo):
     try:
@@ -111,23 +86,8 @@ def api_json(server, method, path, token=None, body=None, timeout=12):
     return browser_auth.api_json(server, method, path, token=token, body=body, timeout=timeout)
 
 def prompt_text(title, prompt, secret=False):
-    """Ask for a string via a detached Tk process (safe from pystray threads)."""
-    if not has_display():
-        return None
-    try:
-        r = subprocess.run(
-            [sys.executable, "-c", _PROMPT_SCRIPT, title, prompt, "1" if secret else "0"],
-            capture_output=True, text=True, timeout=600,
-        )
-    except Exception as e:
-        print(f"[tray] prompt failed: {e}", flush=True)
-        return None
-    if r.returncode == 2:
-        print("[tray] tkinter missing — cannot show dialog", flush=True)
-        return None
-    if r.returncode != 0:
-        return None
-    return (r.stdout or "").strip()
+    """Ask for a string via native OS dialog (no tkinter)."""
+    return native_ui.prompt(title, prompt, secret=secret)
 
 def git_remote_url(repo):
     try:
@@ -343,13 +303,11 @@ class TrayCore:
 
     def open_config(self):
         dcfg.HOME.mkdir(parents=True, exist_ok=True)
-        if has_display() and st_gui.tk is not None:
-            kwargs = {}
-            if sys.platform.startswith("win"):
-                kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-            subprocess.Popen([sys.executable, str(HERE / "gui.py")], **kwargs)
-            return "opened settings window"
-        return f"config: {dcfg.GUI_SETTINGS}"
+        kwargs = {}
+        if sys.platform.startswith("win"):
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        subprocess.Popen([sys.executable, str(HERE / "gui.py")], **kwargs)
+        return "opened settings"
 
 class Tray(TrayCore):
     def __init__(self, overrides):
@@ -436,6 +394,9 @@ class Tray(TrayCore):
         self._refresh_ui()
 
     def _do_clear_api_key(self):
+        if not native_ui.confirm("StruggleTime", "Clear the StruggleTime API key from this machine?"):
+            self._notify("cancelled")
+            return
         if self.tracking():
             self.stop_daemon()
         self._notify(self.clear_api_key())
@@ -454,15 +415,18 @@ class Tray(TrayCore):
     def _do_inspect(self):
         repo = self.s.get("repo") or "."
         if not Path(repo).expanduser().is_dir():
+            native_ui.alert("StruggleTime", "Pick a repo in settings first.")
             self._notify("pick a repo in settings first")
             return
         r = subprocess.run(
             [sys.executable, str(HERE / "tracker_inspect.py"), str(Path(repo).expanduser())],
             capture_output=True, text=True, timeout=60,
         )
-        lines = (r.stdout or r.stderr or "").strip().splitlines()
-        summary = lines[1] if len(lines) > 1 else (lines[0] if lines else "nothing to inspect yet")
+        out = (r.stdout or r.stderr or "").strip() or "nothing to inspect yet"
+        lines = out.splitlines()
+        summary = lines[1] if len(lines) > 1 else lines[0]
         self._notify(summary[:180])
+        native_ui.alert("Inspect — what would be sent", out)
 
     def _do_settings(self):
         self._notify(self.open_config())

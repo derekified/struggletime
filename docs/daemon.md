@@ -45,18 +45,18 @@ linux needs a tray backend
 gnome without the appindicator extension has no tray area — the tray
 falls back to a headless CLI loop, or use the gui.
 
-the settings window is stdlib tkinter, no installs:
+settings use **native OS dialogs** (no tkinter): osascript on macOS,
+zenity/kdialog on Linux, PowerShell forms on Windows, with a terminal
+menu fallback when headless.
 
 ```bash
 make gui                 # or: python3 daemon/gui.py
 ```
 
-**set API key** (from Settings on the dashboard), pick your repo, press
-**start tracking**. it runs the same daemon underneath, shows its log
-live and how many sealed buckets are waiting to send, and remembers
-your settings in `~/.aitime/gui.json`, which the tray reads too.
-`inspect what would be sent` runs the inspect command from inside the
-window.
+**set API key** (from Settings on the dashboard), pick your repo, start
+tracking. settings are stored in `~/.aitime/gui.json`, which the tray
+and Layer-1 daemon read too. `inspect what would be sent` shows a
+native alert with the inspect output.
 
 headless or scripting, the cli is still there:
 

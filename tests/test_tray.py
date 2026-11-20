@@ -54,10 +54,14 @@ class TestTray(unittest.TestCase):
         self.assertTrue(callable(tray.prompt_text))
         self.assertFalse(hasattr(tray.TrayCore, "open_login"))
         self.assertFalse(hasattr(tray.TrayCore, "apply_auth_secret"))
-        src = (ROOT / "daemon" / "tray.py").read_text().lower()
-        self.assertIn("set / link api key", src)
-        self.assertNotIn("sign in with slack", src)
-        self.assertNotIn("paste auth", src)
+        src = (ROOT / "daemon" / "tray.py").read_text()
+        low = src.lower()
+        self.assertIn("set / link api key", low)
+        self.assertNotIn("sign in with slack", low)
+        self.assertNotIn("paste auth", low)
+        self.assertNotIn("import tkinter", src)
+        self.assertNotIn("_PROMPT_SCRIPT", src)
+        self.assertIn("native_ui", src)
 
     def test_browser_auth_helpers(self):
         ba_spec = importlib.util.spec_from_file_location("browser_auth", ROOT / "daemon" / "browser_auth.py")
