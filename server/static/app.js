@@ -619,6 +619,7 @@ function paintSettingsForm() {
   if ($("set-lb-opt-out")) $("set-lb-opt-out").checked = !!p.lb_opt_out;
   if ($("set-show-lb")) $("set-show-lb").checked = p.show_leaderboards !== false;
   if ($("delete-confirm")) $("delete-confirm").placeholder = p.handle || "your-handle";
+  refreshApiKeyStatus();
 }
 
 async function saveProfile(patch) {
@@ -630,6 +631,38 @@ async function saveProfile(patch) {
   paintAccount();
   toast("Saved", { kind: "ok" });
   return r;
+}
+
+let apiKeyPlain = "";
+async function refreshApiKeyStatus() {
+  if (!$("api-key-status")) return;
+  if (!isSignedIn()) {
+    $("api-key-status").textContent = "sign in to manage your API key";
+    if ($("api-key-reveal-row")) $("api-key-reveal-row").hidden = true;
+    if ($("api-key-hint")) $("api-key-hint").hidden = true;
+    return;
+  }
+  const [s, r] = await j("/v1/auth/api-key");
+  if (s !== 200) {
+    $("api-key-status").textContent = r.error || "could not load API key status";
+    return;
+  }
+  if (apiKeyPlain) {
+    $("api-key-status").textContent = "new key ready — copy it into the tray now";
+    $("api-key-value").value = apiKeyPlain;
+    $("api-key-value").type = "password";
+    $("api-key-reveal-row").hidden = false;
+    $("api-key-hint").hidden = false;
+    if ($("btn-api-key-reveal")) $("btn-api-key-reveal").textContent = "show";
+  } else if (r.configured) {
+    $("api-key-status").textContent = "configured · " + (r.prefix || "st_…");
+    $("api-key-reveal-row").hidden = true;
+    $("api-key-hint").hidden = true;
+  } else {
+    $("api-key-status").textContent = "no API key yet — generate one to link the tray";
+    $("api-key-reveal-row").hidden = true;
+    $("api-key-hint").hidden = true;
+  }
 }
 
 function fillAttachProjects() {
@@ -1460,6 +1493,47 @@ if ($("btn-delete-account")) $("btn-delete-account").addEventListener("click", a
   clearClientSession();
   toast("Account deleted", { kind: "ok" });
   navigate("/");
+});
+
+if ($("btn-api-key-regen")) $("btn-api-key-regen").addEventListener("click", async () => {
+  if (!isSignedIn()) { toast("Sign in first", { kind: "error" }); return; }
+  if (apiKeyPlain && !confirm("Regenerate? The previous key stops working immediately.")) return;
+  if (!apiKeyPlain && !confirm("Generate a new StruggleTime API key? Any previous key will stop working.")) return;
+  const [s, r] = await j("/v1/auth/api-key", {
+    method: "POST", headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ confirm: true }),
+  });
+  if (s !== 200) { toast(r.error || "Could not generate key", { kind: "error" }); return; }
+  apiKeyPlain = r.api_key || "";
+  toast("API key generated — copy it now", { kind: "ok" });
+  refreshApiKeyStatus();
+});
+if ($("btn-api-key-revoke")) $("btn-api-key-revoke").addEventListener("click", async () => {
+  if (!confirm("Revoke the API key? The tray will stop authenticating until you set a new one.")) return;
+  const [s, r] = await j("/v1/auth/api-key/revoke", {
+    method: "POST", headers: { "Content-Type": "application/json" }, body: "{}",
+  });
+  if (s !== 200) { toast(r.error || "Could not revoke", { kind: "error" }); return; }
+  apiKeyPlain = "";
+  toast("API key revoked", { kind: "ok" });
+  refreshApiKeyStatus();
+});
+if ($("btn-api-key-reveal")) $("btn-api-key-reveal").addEventListener("click", () => {
+  const inp = $("api-key-value"); if (!inp) return;
+  const show = inp.type === "password";
+  inp.type = show ? "text" : "password";
+  $("btn-api-key-reveal").textContent = show ? "hide" : "show";
+});
+if ($("btn-api-key-copy")) $("btn-api-key-copy").addEventListener("click", async () => {
+  const v = apiKeyPlain || ($("api-key-value") && $("api-key-value").value) || "";
+  if (!v) { toast("Generate a key first", { kind: "error" }); return; }
+  try {
+    await navigator.clipboard.writeText(v);
+    toast("Copied", { kind: "ok" });
+  } catch (_) {
+    $("api-key-value").type = "text"; $("api-key-value").select();
+    toast("Select the key and copy manually", { kind: "ok" });
+  }
 });
 
 (async () => {

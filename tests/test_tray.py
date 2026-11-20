@@ -46,14 +46,18 @@ class TestTray(unittest.TestCase):
         self.assertIn("pip install", tray.INSTALL_HINT)
 
     def test_login_and_link_helpers_exist(self):
-        self.assertTrue(callable(tray.TrayCore.open_login))
-        self.assertTrue(callable(tray.TrayCore.apply_session))
+        self.assertTrue(callable(tray.TrayCore.set_api_key))
+        self.assertTrue(callable(tray.TrayCore.clear_api_key))
         self.assertTrue(callable(tray.TrayCore.link_project))
+        self.assertTrue(callable(tray.TrayCore.reload_settings))
         self.assertTrue(callable(tray.git_remote_url))
+        self.assertTrue(callable(tray.prompt_text))
+        self.assertFalse(hasattr(tray.TrayCore, "open_login"))
         self.assertFalse(hasattr(tray.TrayCore, "apply_auth_secret"))
-        self.assertFalse(hasattr(tray.Tray, "_paste_auth"))
-        src = (ROOT / "daemon" / "tray.py").read_text()
-        self.assertNotIn("paste auth", src.lower())
+        src = (ROOT / "daemon" / "tray.py").read_text().lower()
+        self.assertIn("set / link api key", src)
+        self.assertNotIn("sign in with slack", src)
+        self.assertNotIn("paste auth", src)
 
     def test_browser_auth_helpers(self):
         ba_spec = importlib.util.spec_from_file_location("browser_auth", ROOT / "daemon" / "browser_auth.py")

@@ -279,9 +279,24 @@
               <label class="toggle-row"><input type="checkbox" id="set-show-lb" checked> <span>show leaderboards in the app</span></label>
               <button type="button" class="ui-btn" id="btn-save-privacy" style="margin-top:10px"><span class="nav-ico" data-glyph="checkmark"></span>save privacy</button>
             </div>
+            <div class="ui-panel" id="api-key-panel">
+              <h2><span class="nav-ico" data-glyph="private"></span> StruggleTime API key</h2>
+              <p class="sub">Link the menu-bar tray and desktop GUI without browser sign-in. Copy the key once, then paste it into the tray (<em>set API key…</em>) or settings window.</p>
+              <p class="sub" id="api-key-status">checking…</p>
+              <div class="claim-row" id="api-key-reveal-row" hidden>
+                <input class="ui-input" id="api-key-value" readonly type="password" autocomplete="off">
+                <button type="button" class="ui-btn ui-btn-ghost" id="btn-api-key-reveal" title="show / hide">show</button>
+                <button type="button" class="ui-btn" id="btn-api-key-copy"><span class="nav-ico" data-glyph="copy"></span>copy</button>
+              </div>
+              <div class="claim-row" style="margin-top:10px">
+                <button type="button" class="ui-btn" id="btn-api-key-regen"><span class="nav-ico" data-glyph="refresh"></span>generate / regenerate</button>
+                <button type="button" class="ui-btn ui-btn-ghost" id="btn-api-key-revoke">revoke</button>
+              </div>
+              <p class="sub" id="api-key-hint" hidden>This is the only time the full key is shown. Store it in the tray now.</p>
+            </div>
             <div class="ui-panel">
               <h2><span class="nav-ico" data-glyph="terminal"></span> daemon</h2>
-              <p class="sub">Track a local repo. Buckets sync about every five minutes.</p>
+              <p class="sub">Track a local repo. Buckets sync about every five minutes. Prefer the API key above over passing tokens on the CLI.</p>
               <p><code id="daemon-cmd">struggletime-helper start --repo ~/my-project --user you</code></p>
             </div>
             <div class="ui-panel danger-zone">

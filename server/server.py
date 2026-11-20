@@ -91,6 +91,11 @@ def oauth_identity(provider, code):
 def hash_token(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
+def mint_api_key():
+    """Return (plaintext, sha256_hex, display_prefix). Plaintext shown once at mint/regenerate."""
+    raw = "st_" + secrets.token_urlsafe(32)
+    return raw, hash_token(raw), raw[:11] + "…"
+
 def mint_session(c, *, handle, slack_user_id, slack_avatar="", slack_name="", days=30):
     token = secrets.token_urlsafe(32)
     now = int(time.time())
@@ -170,6 +175,7 @@ def db():
         ("country", "TEXT"),
         ("timezone", "TEXT"),
         ("show_leaderboards", "INT NOT NULL DEFAULT 1"),
+        ("api_key_prefix", "TEXT"),
     ):
         if col not in ucols: c.execute(f"ALTER TABLE user ADD COLUMN {col} {spec}")
     pcols = {r[1] for r in c.execute("PRAGMA table_info(project)")}
@@ -439,9 +445,16 @@ class H(BaseHTTPRequestHandler):
         token = token or self._bearer()
         if not token: return None
         return c.execute("SELECT * FROM session WHERE token_hash=? AND expires_at>?", (hash_token(token), int(time.time()))).fetchone()
+    def api_key_user(self, c, token=None):
+        token = token or self._bearer()
+        if not token: return None
+        return c.execute("SELECT * FROM user WHERE token_hash=? AND token_hash!='' AND token_hash IS NOT NULL",
+                         (hash_token(token),)).fetchone()
     def auth_handle(self, c):
         s = self.session(c)
-        return s["handle"] if s and s["handle"] else None
+        if s and s["handle"]: return s["handle"]
+        u = self.api_key_user(c)
+        return u["handle"] if u else None
 
     def do_GET(self):
         with _LOCK:
@@ -492,12 +505,25 @@ class H(BaseHTTPRequestHandler):
                 "github_callback": oauth_redirect("github"), "slack_callback": oauth_redirect("slack")})
         if p == ["v1", "auth", "me"]:
             s = self.session(c)
-            if not s: return self.send_json(401, {"error": "not signed in"})
-            if not s["handle"]:
-                return self.send_json(200, {"needs_handle": True, "slack_user_id": s["slack_user_id"],
-                                            "slack_avatar": s["slack_avatar"], "slack_name": s["slack_name"],
-                                            "github_linked": False, "slack_linked": True})
-            return self.send_json(200, profile_payload(c, s["handle"], s))
+            if s:
+                if not s["handle"]:
+                    return self.send_json(200, {"needs_handle": True, "slack_user_id": s["slack_user_id"],
+                                                "slack_avatar": s["slack_avatar"], "slack_name": s["slack_name"],
+                                                "github_linked": False, "slack_linked": True})
+                return self.send_json(200, profile_payload(c, s["handle"], s))
+            u = self.api_key_user(c)
+            if u:
+                return self.send_json(200, {**profile_payload(c, u["handle"]), "auth": "api_key"})
+            return self.send_json(401, {"error": "not signed in"})
+        if p == ["v1", "auth", "api-key"]:
+            # status for the signed-in web session (never returns the raw key)
+            s = self.session(c)
+            if not s or not s["handle"]:
+                return self.send_json(401, {"error": "sign in with slack first"})
+            u = c.execute("SELECT token_hash, api_key_prefix FROM user WHERE handle=?", (s["handle"],)).fetchone()
+            configured = bool(u and u["token_hash"])
+            prefix = (u["api_key_prefix"] if u and "api_key_prefix" in u.keys() else None) or None
+            return self.send_json(200, {"configured": configured, "prefix": prefix if configured else None})
         if len(p) == 3 and p[:2] == ["v1", "handles"]:
             handle = p[2].lower()
             taken = c.execute("SELECT 1 FROM user WHERE handle=?", (handle,)).fetchone()
@@ -802,6 +828,31 @@ class H(BaseHTTPRequestHandler):
             s = self.session(c)
             if s: c.execute("DELETE FROM session WHERE token_hash=?", (s["token_hash"],)); c.commit()
             return self.send_json(200, {"ok": True}, set_cookie="st_session=; Path=/; Max-Age=0")
+        if p == ["v1", "auth", "api-key"]:
+            # mint / regenerate StruggleTime API key (shown once). Requires Slack session + claimed handle.
+            s = self.session(c)
+            if not s or not s["handle"]:
+                return self.send_json(401, {"error": "sign in with slack and claim a handle first"})
+            d = self.body() or {}
+            if not d.get("confirm"):
+                return self.send_json(400, {"error": "pass confirm:true to mint or regenerate the API key"})
+            raw, th, prefix = mint_api_key()
+            c.execute(
+                "UPDATE user SET token_hash=?, api_key_prefix=? WHERE handle=?",
+                (th, prefix, s["handle"]),
+            )
+            c.commit()
+            return self.send_json(200, {
+                "api_key": raw, "prefix": prefix, "handle": s["handle"],
+                "hint": "copy now — it will not be shown again. paste into the tray or daemon GUI.",
+            })
+        if p == ["v1", "auth", "api-key", "revoke"]:
+            s = self.session(c)
+            if not s or not s["handle"]:
+                return self.send_json(401, {"error": "sign in with slack first"})
+            c.execute("UPDATE user SET token_hash='', api_key_prefix=NULL WHERE handle=?", (s["handle"],))
+            c.commit()
+            return self.send_json(200, {"ok": True, "configured": False})
         if p == ["v1", "auth", "claim-handle"]:
             s = self.session(c)
             if not s: return self.send_json(401, {"error": "sign in with slack first"})
