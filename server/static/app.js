@@ -1342,20 +1342,63 @@ function renderPaceModes(a) {
   }
 }
 
+function renderRecentBuckets(a) {
+  const box = $("recent-buckets"); if (!box) return;
+  const rows = a.recent || [];
+  if (!rows.length) {
+    box.replaceChildren(compactEmpty("no logged buckets in this range"));
+    return;
+  }
+  box.replaceChildren(...rows.slice(0, 24).map((b) => el("div", { className: "rank-row" }, [
+    el("div", { className: "idx", text: (b.day || "").slice(5) || "—" }),
+    el("div", { className: "rank-main" }, [
+      el("b", { text: b.project_label || b.project_id || "project" }),
+      el("div", { className: "sub", text: [b.state_label || b.state, b.editor, b.language, b.os].filter(Boolean).join(" · ") }),
+    ]),
+    el("b", { className: "rank-h", text: fmtH(b.weighted_hours) }),
+  ])));
+}
+
 function paintHomeAnalytics(a) {
   analytics = a;
-  renderFilterStrip(a);
-  renderKpis(a);
-  renderRanked($("rank-projects"), a.projects, "no projects in this range");
-  renderModePie(a);
-  renderSeg($("break-lang"), a.languages, "no language data yet");
-  renderSeg($("break-editor"), a.editors, "no editor data yet");
-  renderSeg($("break-os"), a.oses, "no os data yet");
-  renderSeries(a);
-  renderRhythm(a);
-  renderPaceModes(a);
-  paintFakeBadge();
-  hydrateNavIcons(document.getElementById("page-home") || document);
+  try {
+    renderFilterStrip(a);
+    renderKpis(a);
+    renderRanked($("rank-projects"), a.projects, "no projects in this range");
+    renderModePie(a);
+    renderSeg($("break-lang"), a.languages, "no language data yet");
+    renderSeg($("break-editor"), a.editors, "no editor data yet");
+    renderSeg($("break-os"), a.oses, "no os data yet");
+    renderSeries(a);
+    renderRhythm(a);
+    renderPaceModes(a);
+    renderRecentBuckets(a);
+    paintFakeBadge();
+    hydrateNavIcons(document.getElementById("page-home") || document);
+  } catch (err) {
+    console.error("paintHomeAnalytics failed", err);
+    toast("Dashboard render failed — check console", { kind: "error" });
+    if ($("kpi-strip")) $("kpi-strip").replaceChildren(compactEmpty("could not render analytics"));
+  }
+}
+
+function profileHasActivity() {
+  const p = meProfile;
+  if (!p) return false;
+  return Number(p.weighted_hours || 0) > 0 || Number(p.buckets || 0) > 0;
+}
+
+function resetDashboardFilters({ range = "7d" } = {}) {
+  filters.range = range;
+  filters.project = "all";
+  filters.language = "all";
+  filters.os = "all";
+  filters.editor = "all";
+  filters.category = "all";
+  try {
+    localStorage.setItem("st_range", range);
+    ["st_filter_language", "st_filter_os", "st_filter_editor", "st_filter_category"].forEach((k) => localStorage.removeItem(k));
+  } catch (_) {}
 }
 
 async function loadAnalytics() {
@@ -1364,19 +1407,27 @@ async function loadAnalytics() {
     return;
   }
   let [s, a] = await j("/v1/me/analytics?" + analyticsQS());
-  // If "today" is empty only because of timezone edge, fall back to 7d once so data doesn't look deleted
-  if (s === 200 && a && Number(a.total_hours || 0) === 0 && filters.range === "today") {
+  // Streak comes from unfiltered /v1/auth/me. Sticky filters (today+TZ, language, os,
+  // category, project) can zero analytics while streak still looks fine — recover once.
+  const empty = s === 200 && a && Number(a.total_hours || a.weighted_hours || 0) === 0;
+  if (empty && profileHasActivity()) {
+    const before = analyticsQS();
+    resetDashboardFilters({ range: filters.range === "today" ? "7d" : (filters.range || "7d") });
+    const after = analyticsQS();
+    if (after !== before) {
+      const [s2, a2] = await j("/v1/me/analytics?" + after);
+      if (s2 === 200 && a2 && Number(a2.total_hours || a2.weighted_hours || 0) > 0) {
+        s = s2; a = a2;
+        toast("Cleared filters that hid your hours", { kind: "info" });
+      }
+    }
+  } else if (empty && filters.range === "today") {
     const [s2, a2] = await j("/v1/me/analytics?" + new URLSearchParams({
-      range: "7d", project: filters.project || "all",
-      language: sanitizeFilter(filters.language, "all"),
-      os: sanitizeFilter(filters.os, "all"),
-      editor: sanitizeFilter(filters.editor, "all"),
-      category: sanitizeFilter(filters.category, "all"),
+      range: "7d", project: "all", language: "all", os: "all", editor: "all", category: "all",
       tz_offset: String(TZ_OFFSET),
     }).toString());
     if (s2 === 200 && a2 && Number(a2.total_hours || 0) > 0) {
-      filters.range = "7d";
-      try { localStorage.setItem("st_range", "7d"); } catch (_) {}
+      resetDashboardFilters({ range: "7d" });
       s = s2; a = a2;
       toast("Showing last 7 days — nothing in today yet", { kind: "info" });
     }
@@ -1387,6 +1438,9 @@ async function loadAnalytics() {
         s === 0 ? "could not reach server" : s === 401 ? "sign in to see your hours" : "could not load analytics"
       ));
     }
+    if ($("recent-buckets")) $("recent-buckets").replaceChildren(compactEmpty("could not load buckets"));
+    if ($("rank-projects")) $("rank-projects").replaceChildren(compactEmpty(s === 401 ? "sign in to see projects" : "could not load projects"));
+    console.warn("loadAnalytics failed", s, a);
     return;
   }
   paintHomeAnalytics(a);
@@ -1494,14 +1548,31 @@ function renderProjectCards(list, rangeAnalytics) {
 async function loadProjectsView() {
   const [ps, pr] = await j("/v1/projects");
   if (ps === 401) {
+    console.warn("projects 401 — session missing");
     renderProjectCards([], null);
     return;
   }
-  if (ps === 200) {
-    projectsCache = pr.projects || [];
-    window._projects = projectsCache;
+  if (ps !== 200) {
+    console.warn("projects failed", ps, pr);
+    if ($("project-grid")) {
+      $("project-grid").replaceChildren(el("div", { className: "ui-panel" }, [
+        empty(pr.error || "Could not load projects"),
+      ]));
+    }
+    return;
   }
-  const [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(projSearch.range)}&tz_offset=${TZ_OFFSET}`);
+  projectsCache = pr.projects || [];
+  window._projects = projectsCache;
+  let range = projSearch.range || "7d";
+  let [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(range)}&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
+  // Same streak-vs-empty trap: today+TZ can zero project hours while cards still exist
+  if (as === 200 && ar && Number(ar.total_hours || 0) === 0 && range === "today" && projectsCache.some((p) => Number(p.weighted_hours || p.buckets || 0) > 0)) {
+    range = "7d";
+    projSearch.range = "7d";
+    try { localStorage.setItem("st_proj_range", "7d"); } catch (_) {}
+    if ($("proj-range")) $("proj-range").value = "7d";
+    [as, ar] = await j(`/v1/me/analytics?range=7d&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
+  }
   renderProjectCards(projectsCache, as === 200 ? ar : null);
 }
 

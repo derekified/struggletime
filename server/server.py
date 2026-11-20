@@ -285,6 +285,9 @@ STATE_LABELS = {
     "STRUGGLE_LOOP": "struggle loop",
     "OPEN_LOOP_AGENT_DUMP": "agent dump",
     "SILENT_DEBUG": "silent debug",
+    "HUMAN_UNVERIFIED": "human unverified",
+    "IDLE": "idle",
+    "EXEC_ONLY": "exec only",
 }
 
 def _local_today(tz_offset=0):
@@ -453,16 +456,42 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
             if p["id"] not in seen:
                 filter_projects.append({"id": p["id"], "label": p["name"] or p["id"]})
 
+    # Recent logged buckets (legacy-safe) for the activity list — newest first
+    recent = []
+    for r, day, _wd, _hour, payload, os_id in sorted(filtered, key=lambda x: -int(x[0]["bucket_start_wall"] or 0))[:40]:
+        eds = payload.get("editors") or {}
+        ags = payload.get("agents") or {}
+        langs = payload.get("languages") or {}
+        recent.append({
+            "bucket_id": r["bucket_id"],
+            "project_id": r["project_id"],
+            "project_label": (proj_meta.get(r["project_id"]) or {}).get("name") or r["project_id"],
+            "day": day,
+            "state": r["state"],
+            "state_label": STATE_LABELS.get(r["state"], (r["state"] or "unknown").replace("_", " ").lower()),
+            "weighted_secs": round(float(r["weighted_secs"] or 0), 2),
+            "weighted_hours": round(float(r["weighted_secs"] or 0) / 3600, 4),
+            "bucket_secs": int(r["bucket_secs"] or 0),
+            "os": os_id or "unknown",
+            "editor": next(iter(eds.keys()), "unknown"),
+            "agent": next(iter(ags.keys()), "human"),
+            "language": next(iter(langs.keys()), "unknown"),
+        })
+
+    total_hours = round(total_w / 3600, 4)
     return {
         "range": range_key, "range_label": label, "tz_offset": int(tz_offset),
-        "total_secs": round(total_w, 2), "total_hours": round(total_w / 3600, 4),
+        "total_secs": round(total_w, 2), "total_hours": total_hours,
+        # Alias used by some clients / older UI copies that read weighted_hours
+        "weighted_hours": total_hours,
+        "bucket_count": len(filtered),
         "top_project": projects[0] if projects else None,
         "top_language": languages[0] if languages else None,
         "top_os": oses[0] if oses else None,
         "top_editor": editors[0] if editors else None,
         "top_category": categories[0] if categories else None,
         "projects": projects, "languages": languages, "oses": oses, "editors": editors, "categories": categories,
-        "series": series, "rhythm": rhythm, "pace": pace, "modes": modes,
+        "series": series, "rhythm": rhythm, "pace": pace, "modes": modes, "recent": recent,
         "filters": {
             "projects": filter_projects,
             "categories": [{"id": "all", "label": "all modes"}] + [{"id": c["id"], "label": c["label"]} for c in categories],

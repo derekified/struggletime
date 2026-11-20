@@ -180,12 +180,13 @@
     const sel = el("select", {
       id, className: "ui-input",
       onChange: (e) => onChange?.(e.target.value),
-    }, options.map((o) => {
-      const opt = el("option", { value: o.id, text: o.label });
+    }, (options || []).filter((o) => o && o.id != null).map((o) => {
+      const opt = el("option", { value: String(o.id), text: o.label != null ? String(o.label) : String(o.id) });
       if (String(o.id) === String(value)) opt.selected = true;
       return opt;
     }));
-    sel.value = value || options[0]?.id || "";
+    const allowed = (options || []).filter((o) => o && o.id != null).map((o) => String(o.id));
+    sel.value = allowed.includes(String(value)) ? String(value) : (allowed[0] || "");
     return el("label", { className: "ui-filter" }, [
       el("span", { className: "ui-filter-label" }, [
         glyph ? icon(glyph, { size: 14, className: "ui-filter-ico" }) : null,
