@@ -1,16 +1,21 @@
-# VS Code / Cursor adapter (thin enrichment)
+# VS Code family adapter (Cursor / Windsurf / Trae / VSCodium / Code)
 
-The daemon already counts this editor via filesystem + shell hooks.
-This adapter only adds: human-vs-programmatic edit distinction and focus.
+Optional enrichment only. Layer 1 already attributes these editors via the
+stdlib process registry (`daemon/editors.py` + `~/.aitime/editors.json`).
 
-Contract (the whole API): append lines to the daemon exec log /
-send `{kind, files_touched}` events to the local daemon:
+This adapter appends allowlisted lines to `~/.aitime/agent_events.jsonl`
+(counts + editor/agent labels — never document text or paths).
 
-- `onDidChangeTextDocument` (debounced 2s): if `contentChanges` came from
-  an undo/redo or typing, emit `human_edit`; bulk programmatic changes
-  emit `ai_write`. Send counts only — never document text.
-- `onDidChangeWindowState`: focused/unfocused toggles dwell accounting.
+Works in any VS Code fork that exposes `vscode.env.appName`:
 
-Reference snippet lives in `extension.js`; packaging it as a `.vsix`
-is distribution work, not protocol work. Any editor that can write a
-JSON line can be an adapter — that is the plugin approach.
+| appName contains | `editor` label |
+|---|---|
+| Cursor | `cursor` |
+| Windsurf | `windsurf` |
+| Trae | `trae` |
+| Kiro | `kiro` |
+| VSCodium / Code - OSS | `vscodium` |
+| Visual Studio Code | `vscode` |
+
+Load `extension.js` as a local extension. Any hook/wrapper that can write a
+JSON line to `agent_events.jsonl` is a valid adapter — there is no MCP server.

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: AGPL-3.0-or-later
-// Layer-2 VS Code / Cursor adapter: editor + op signals only (no paths/content).
-// Emits into ~/.aitime/agent_events.jsonl (unified bridge; no MCP).
+// Layer-2 VS Code / Cursor / Windsurf / Trae / VSCodium adapter.
+// Emits into ~/.aitime/agent_events.jsonl (unified bridge; no MCP, no paths/content).
 const vscode = require("vscode"), fs = require("fs"), os = require("os"), path = require("path");
 const log = process.env.AITIME_AGENT_EVENTS
   || process.env.AITIME_EXEC_LOG
@@ -9,6 +9,10 @@ const log = process.env.AITIME_AGENT_EVENTS
 function editorLabel() {
   const name = (vscode.env.appName || "").toLowerCase();
   if (name.includes("cursor")) return "cursor";
+  if (name.includes("windsurf")) return "windsurf";
+  if (name.includes("trae")) return "trae";
+  if (name.includes("kiro")) return "kiro";
+  if (name.includes("vscodium") || name.includes("codium") || name.includes("code - oss")) return "vscodium";
   if (name.includes("visual studio code") || name.includes("code")) return "vscode";
   return "vscode";
 }
@@ -26,7 +30,6 @@ function emit(payload) {
     source: "adapter",
     ...payload,
   };
-  // Strip anything that could carry content/paths
   delete row.path; delete row.content; delete row.text;
   fs.appendFileSync(log, JSON.stringify(row) + "\n");
 }

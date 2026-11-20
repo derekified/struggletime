@@ -19,6 +19,7 @@ sys.path.insert(0, str(HERE))
 from verify import bucket_hash, anonymized_file_id, GENESIS
 import config as dcfg
 import agent_event as agent_evt
+import editors as edreg
 
 IGNORE = {".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".aitime"}
 _STOP = False
@@ -180,7 +181,7 @@ def drain_event_log(path, offset_key, state, counts, exec_categories, attr_hint)
                 "source": "adapter",
             }
         if cat == "editor":
-            eds = detect_running_editors()
+            eds = edreg.detect_running_editors()
             attr_hint = {
                 "editor": e.get("editor") or (eds[0] if eds else "unknown"),
                 "agent": e.get("agent") or "human",
@@ -195,7 +196,7 @@ def drain_event_log(path, offset_key, state, counts, exec_categories, attr_hint)
             if not attr_hint.get("agent") or attr_hint.get("agent") == "human":
                 attr_hint = {
                     **attr_hint,
-                    "agent": e.get("agent") or (detect_running_agents() or ["unknown-agent"])[0],
+                    "agent": e.get("agent") or (edreg.detect_running_agents() or ["unknown-agent"])[0],
                     "source": attr_hint.get("source") or "adapter",
                 }
     state[offset_key] = len(lines)
@@ -211,48 +212,11 @@ def classify_burst(n_changed):
     """1–2 files = human; 5+ files = agent/formatter."""
     return "ai" if n_changed >= 5 else "human"
 
-def _process_blob():
-    try:
-        if sys.platform.startswith("win"):
-            return subprocess.run(["tasklist"], capture_output=True, text=True, timeout=3).stdout.lower()
-        return subprocess.run(["ps", "-ax", "-o", "comm="], capture_output=True, text=True, timeout=3).stdout.lower()
-    except Exception:
-        return ""
-
 def detect_running_editors():
-    """Stdlib process scan → editor labels (never 'local-daemon' when a known IDE is up)."""
-    out = _process_blob()
-    found = []
-    checks = (
-        ("cursor", "cursor"), ("code helper", "vscode"), ("visual studio code", "vscode"),
-        ("code.exe", "vscode"), ("code -", "vscode"), ("nvim", "neovim"), ("vim", "vim"),
-        ("emacs", "emacs"), ("sublime_text", "sublime"), ("zed", "zed"), ("idea", "jetbrains"),
-        ("webstorm", "jetbrains"), ("pycharm", "jetbrains"),
-    )
-    for needle, label in checks:
-        if needle in out and label not in found:
-            found.append(label)
-    env_ed = _clean_label(env("STRUGGLETIME_EDITOR", "AITIME_EDITOR", default=""), "")
-    if env_ed and env_ed not in found:
-        found.insert(0, env_ed)
-    return found
+    return edreg.detect_running_editors()
 
 def detect_running_agents():
-    """Stdlib process scan → agent labels (claude-code, codex, openclaw, …)."""
-    out = _process_blob()
-    found = []
-    checks = (
-        ("claude", "claude"), ("codex", "codex"), ("openclaw", "openclaw"),
-        ("aider", "aider"), ("cursor-agent", "cursor-agent"), ("gemini", "gemini"),
-        ("opencode", "opencode"), ("goose", "goose"), ("amp", "amp"),
-    )
-    for needle, label in checks:
-        if needle in out and label not in found:
-            found.append(label)
-    env_ag = _clean_label(env("STRUGGLETIME_AGENT", "AITIME_AGENT", default=""), "")
-    if env_ag and env_ag not in found:
-        found.insert(0, env_ag)
-    return found
+    return edreg.detect_running_agents()
 
 def host_os():
     """Populate os via stdlib platform — never 'untracked'."""
@@ -275,23 +239,9 @@ def language_from_rel(rel):
     return LANG_EXT.get(ext) or "other"
 
 def default_attr(burst_kind="human", hint=None):
-    hint = hint or {}
-    editors = detect_running_editors()
-    agents_running = detect_running_agents()
-    editor = hint.get("editor") or (editors[0] if editors else "unknown")
-    # Never stick on a fake local-daemon label when a real IDE is running
-    if editor in ("", "unknown", "local-daemon", "local_daemon") and editors:
-        editor = editors[0]
-    if hint.get("agent"):
-        agent = hint["agent"]
-    elif burst_kind == "ai":
-        agent = agents_running[0] if agents_running else "unknown-agent"
-    elif agents_running and burst_kind == "ai":
-        agent = agents_running[0]
-    else:
-        agent = "human"
-    source = hint.get("source") or ("adapter" if hint.get("editor") or hint.get("agent") else "layer1")
-    return _clean_label(editor, "unknown"), _clean_label(agent, "human"), source
+    """Extensible registry + universal fallback — never local-daemon when a tool is running."""
+    editor, agent, _kind, source = edreg.classify_active(burst_kind, hint)
+    return editor, agent, source
 
 def diff_ops(prev_snap, snap):
     """Return {rel: op} for created / modified / deleted in this poll."""

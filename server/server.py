@@ -294,6 +294,14 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         d = local_dt.date()
         return d.isoformat(), d.weekday() % 7, local_dt.hour
 
+    # Ignore legacy placeholder filter values so old localStorage doesn't blank the dashboard
+    if language in ("untracked", "local-daemon", "local_daemon"):
+        language = "all"
+    if os_name in ("untracked",):
+        os_name = "all"
+    if editor in ("local-daemon", "local_daemon", "untracked"):
+        editor = "all"
+
     filtered = []
     for r in rows:
         day, wd, hour = local_parts(r["bucket_start_wall"])
@@ -318,6 +326,8 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         if editor and editor not in ("", "all"):
             if editor not in editors_map and not any(str(k).lower() == editor for k in editors_map):
                 continue
+        if os_id in ("", "untracked"):
+            os_id = "unknown"
         filtered.append((r, day, wd, hour, payload, os_id))
 
     proj_meta = {row["id"]: dict(row) for row in c.execute("SELECT * FROM project")}

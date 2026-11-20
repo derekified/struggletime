@@ -11,12 +11,16 @@ const token = () => localStorage.getItem("st_token") || "";
 const setToken = (t) => { if (t) localStorage.setItem("st_token", t); else localStorage.removeItem("st_token"); };
 const authHdr = () => (token() ? { Authorization: "Bearer " + token() } : {});
 async function j(u, o = {}) {
-  const r = await fetch(u, {
-    credentials: "same-origin",
-    ...o,
-    headers: { ...(o.headers || {}), ...authHdr() },
-  });
-  return [r.status, await r.json().catch(() => ({}))];
+  try {
+    const r = await fetch(u, {
+      credentials: "same-origin",
+      ...o,
+      headers: { ...(o.headers || {}), ...authHdr() },
+    });
+    return [r.status, await r.json().catch(() => ({}))];
+  } catch (_) {
+    return [0, { error: "network error" }];
+  }
 }
 
 function hydrateNavIcons(root = document) {
@@ -33,9 +37,24 @@ let selected = "", authStatus = null, meProfile = null, ghReposCache = null, ghR
 let lbPeriod = "week", lbQuery = "";
 let analytics = null, projectsCache = [];
 let meLoaded = false, authStatusLoaded = false, booted = false;
+const STALE_FILTER = new Set(["untracked", "local-daemon", "local_daemon", ""]);
+function sanitizeFilter(v, fallback = "all") {
+  const s = String(v == null ? "" : v).trim();
+  if (!s || STALE_FILTER.has(s)) return fallback;
+  return s;
+}
+["st_filter_language", "st_filter_os", "st_filter_editor", "st_filter_category"].forEach((k) => {
+  try {
+    if (STALE_FILTER.has(String(localStorage.getItem(k) || "").trim())) localStorage.removeItem(k);
+  } catch (_) {}
+});
 const filters = {
   range: localStorage.getItem("st_range") || "7d",
-  project: "all", language: "all", os: "all", editor: "all", category: "all",
+  project: "all",
+  language: sanitizeFilter(localStorage.getItem("st_filter_language"), "all"),
+  os: sanitizeFilter(localStorage.getItem("st_filter_os"), "all"),
+  editor: sanitizeFilter(localStorage.getItem("st_filter_editor"), "all"),
+  category: sanitizeFilter(localStorage.getItem("st_filter_category"), "all"),
 };
 const projSearch = {
   q: "",
@@ -1015,8 +1034,13 @@ async function renderLeaderboard() {
 
 function analyticsQS() {
   const p = new URLSearchParams({
-    range: filters.range, project: filters.project, language: filters.language,
-    os: filters.os, editor: filters.editor, category: filters.category, tz_offset: String(TZ_OFFSET),
+    range: filters.range || "7d",
+    project: filters.project || "all",
+    language: sanitizeFilter(filters.language, "all"),
+    os: sanitizeFilter(filters.os, "all"),
+    editor: sanitizeFilter(filters.editor, "all"),
+    category: sanitizeFilter(filters.category, "all"),
+    tz_offset: String(TZ_OFFSET),
   });
   return p.toString();
 }
@@ -1129,16 +1153,30 @@ function onKonamiKey(e) {
 }
 document.addEventListener("keydown", onKonamiKey);
 
+function coerceFilterValue(options, value) {
+  const ids = (options || []).map((o) => String(o.id));
+  const v = sanitizeFilter(value, "all");
+  if (ids.includes(v)) return v;
+  return ids.includes("all") ? "all" : (ids[0] || "all");
+}
+
 function renderFilterStrip(meta) {
   const box = $("home-filters"); if (!box) return;
   const f = meta?.filters || {};
+  filters.range = coerceFilterValue(f.ranges, filters.range);
+  filters.project = coerceFilterValue(f.projects || [{ id: "all", label: "all projects" }], filters.project);
+  filters.language = coerceFilterValue(f.languages, filters.language);
+  filters.os = coerceFilterValue(f.oses, filters.os);
+  filters.editor = coerceFilterValue(f.editors, filters.editor);
+  filters.category = coerceFilterValue(f.categories, filters.category);
+  const persist = (key, v) => { try { localStorage.setItem(key, v); } catch (_) {} };
   box.replaceChildren(
-    selectField({ label: "Range", glyph: "clock", options: f.ranges || [], value: filters.range, onChange: (v) => { filters.range = v; localStorage.setItem("st_range", v); loadAnalytics(); } }),
+    selectField({ label: "Range", glyph: "clock", options: f.ranges || [], value: filters.range, onChange: (v) => { filters.range = v; persist("st_range", v); loadAnalytics(); } }),
     selectField({ label: "Project", glyph: "briefcase", options: f.projects || [{ id: "all", label: "all projects" }], value: filters.project, onChange: (v) => { filters.project = v; loadAnalytics(); } }),
-    selectField({ label: "Language", glyph: "code", options: f.languages || [], value: filters.language, onChange: (v) => { filters.language = v; loadAnalytics(); } }),
-    selectField({ label: "OS", glyph: "laptop", options: f.oses || [], value: filters.os, onChange: (v) => { filters.os = v; loadAnalytics(); } }),
-    selectField({ label: "Editor", glyph: "terminal", options: f.editors || [], value: filters.editor, onChange: (v) => { filters.editor = v; loadAnalytics(); } }),
-    selectField({ label: "Category", glyph: "sticker", options: f.categories || [], value: filters.category, onChange: (v) => { filters.category = v; loadAnalytics(); } }),
+    selectField({ label: "Language", glyph: "code", options: f.languages || [], value: filters.language, onChange: (v) => { filters.language = v; persist("st_filter_language", v); loadAnalytics(); } }),
+    selectField({ label: "OS", glyph: "laptop", options: f.oses || [], value: filters.os, onChange: (v) => { filters.os = v; persist("st_filter_os", v); loadAnalytics(); } }),
+    selectField({ label: "Editor", glyph: "terminal", options: f.editors || [], value: filters.editor, onChange: (v) => { filters.editor = v; persist("st_filter_editor", v); loadAnalytics(); } }),
+    selectField({ label: "Category", glyph: "sticker", options: f.categories || [], value: filters.category, onChange: (v) => { filters.category = v; persist("st_filter_category", v); loadAnalytics(); } }),
   );
 }
 
@@ -1277,9 +1315,9 @@ function paintHomeAnalytics(a) {
   renderKpis(a);
   renderRanked($("rank-projects"), a.projects, "no projects in this range");
   renderModePie(a);
-  renderSeg($("break-lang"), a.languages, "no language data yet"); // TODO: wire backend metric
-  renderSeg($("break-editor"), a.editors, "no editor data yet"); // TODO: wire backend metric
-  renderSeg($("break-os"), a.oses, "no os data yet"); // TODO: wire backend metric
+  renderSeg($("break-lang"), a.languages, "no language data yet");
+  renderSeg($("break-editor"), a.editors, "no editor data yet");
+  renderSeg($("break-os"), a.oses, "no os data yet");
   renderSeries(a);
   renderRhythm(a);
   renderPaceModes(a);
@@ -1293,7 +1331,12 @@ async function loadAnalytics() {
     return;
   }
   const [s, a] = await j("/v1/me/analytics?" + analyticsQS());
-  if (s !== 200) return;
+  if (s !== 200 || !a || typeof a !== "object") {
+    if ($("kpi-strip")) {
+      $("kpi-strip").replaceChildren(compactEmpty(s === 0 ? "could not reach server" : "could not load analytics"));
+    }
+    return;
+  }
   paintHomeAnalytics(a);
 }
 
@@ -1408,12 +1451,15 @@ async function drawFriction() {
   if (!$("fr-chart")) return;
   if (!selected) { $("fr-chart").innerHTML = '<p class="ui-empty compact">nothing here yet</p>'; return; }
   const [s, fr] = await j("/v1/projects/" + encodeURIComponent(selected) + "/friction");
-  if (s !== 200) return;
+  if (s !== 200 || !fr || !Array.isArray(fr.timeline) || !fr.timeline.length) {
+    $("fr-chart").innerHTML = '<p class="ui-empty compact">nothing here yet</p>';
+    return;
+  }
   const w = Math.max(560, fr.timeline.length * 52), h = 120, bw = 32;
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--bar").trim() || "#d7ff6a";
   const dump = getComputedStyle(document.documentElement).getPropertyValue("--dump").trim() || "#57534c";
   $("fr-chart").innerHTML = `<svg width="100%" viewBox="0 0 ${w} ${h + 20}">` + fr.timeline.map((t, i) => {
-    const bh = Math.max(3, t.friction * 95);
+    const bh = Math.max(3, (Number(t.friction) || 0) * 95);
     return `<rect x="${i * 52 + 8}" y="${h - bh}" width="${bw}" height="${bh}" rx="4" fill="${t.state === "OPEN_LOOP_AGENT_DUMP" ? dump : accent}"></rect>`;
   }).join("") + "</svg>";
 }

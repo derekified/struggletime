@@ -109,13 +109,35 @@ SIGTERM/SIGINT flush pending then exit. if you kill the daemon
 mid-bucket, that partial bucket is lost and nothing else is. the hash
 chain makes both facts visible in review.
 
+## editor / agent attribution (extensible, no plugins required)
+
+Layer 1 maps running processes to `editor` / `agent` via
+`daemon/editors.py`. Built-ins cover Cursor, VS Code, Windsurf, Trae,
+Kiro, Zed, VSCodium, Neovim, Helix, Claude Code, Codex, OpenClaw, Aider,
+Goose, OpenCode, Gemini CLI, and more. Override or extend without code
+changes:
+
+```jsonc
+// ~/.aitime/editors.json
+{
+  "signatures": [
+    {"match": "my-ide", "editor": "my-ide", "kind": "ai_ide"},
+    {"match": "my-cli", "editor": "my-cli", "agent": "my-cli", "kind": "cli_agent"}
+  ],
+  "aliases": { "code": "vscode" }
+}
+```
+
+`kind` is `ai_ide` | `editor` | `cli_agent`. Unknown tools that still
+touch the linked repo get a sanitized process-name label (never
+`local-daemon`) combined with burst shape (1–2 human vs 5+ agent).
+
 ## adapters (optional enrichment — no MCP)
 
 adapters emit compact allowlisted lines into `~/.aitime/agent_events.jsonl`
 (or via `python3 daemon/agent_event.py …`). the daemon drains that file on
-each poll tick, then falls back to stdlib process/workspace inference so
-`os` / `language` / `editor` / `agent` are never stuck on `untracked` /
-`local daemon` when a known IDE or agent is running. there is **no MCP
+each poll tick, then falls back to the registry above so
+`os` / `language` / `editor` / `agent` stay populated. there is **no MCP
 server** and no raw paths, prompts, or keystrokes in the bridge.
 
 | adapter | what it adds | setup |
