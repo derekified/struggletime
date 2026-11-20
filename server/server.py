@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-import hashlib, hmac, json, os, re, secrets, sqlite3, sys, threading, time, urllib.request, uuid
+import hashlib, hmac, json, os, re, secrets, sqlite3, sys, threading, time, urllib.error, urllib.request, uuid
 from datetime import date, datetime, timedelta, timezone
 from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
@@ -346,8 +346,15 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
             payload = {}
         langs = payload.get("languages") or {}
         editors_map = payload.get("editors") or {}
+        # Older buckets omit os/languages — still count them as unknown so dashboards aren't blank
+        if not langs:
+            langs = {"unknown": 1}
+        if not editors_map:
+            editors_map = {"unknown": 1}
         os_id = (payload.get("os") or (payload.get("os_detail") or {}).get("id") or "unknown")
         os_id = str(os_id).lower().replace(" ", "-")
+        if os_id in ("", "untracked"):
+            os_id = "unknown"
         if language and language not in ("", "all"):
             if language not in langs and not any(str(k).lower() == language for k in langs):
                 continue
@@ -357,8 +364,10 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         if editor and editor not in ("", "all"):
             if editor not in editors_map and not any(str(k).lower() == editor for k in editors_map):
                 continue
-        if os_id in ("", "untracked"):
-            os_id = "unknown"
+        # stash normalized maps for aggregation
+        payload = dict(payload)
+        payload["languages"] = langs
+        payload["editors"] = editors_map
         filtered.append((r, day, wd, hour, payload, os_id))
 
     proj_meta = {row["id"]: dict(row) for row in c.execute("SELECT * FROM project")}
@@ -492,6 +501,10 @@ def profile_payload(c, handle, session=None):
             "slack_avatar": (link["slack_avatar"] if link else None) or (session["slack_avatar"] if session else None),
             "slack_name": (link["slack_name"] if link else None) or (session["slack_name"] if session else None),
             "github_linked": bool(link and link["github_login"]),
+            "github_needs_reconnect": bool(
+                link and link["github_login"]
+                and not ((link["github_token"] if "github_token" in link.keys() else None) or "")
+            ),
             "slack_linked": bool(link and link["slack_user_id"]),
             "needs_handle": False,
             **stats_for(c, user=handle)}
@@ -510,24 +523,54 @@ class H(BaseHTTPRequestHandler):
         return json.loads(self.raw() or b"{}")
     def redirect(self, location):
         self.send_response(302); self.send_header("Location", location); self.end_headers()
-    def _bearer(self):
-        auth = self.headers.get("Authorization") or ""
-        if auth.lower().startswith("bearer "): return auth[7:].strip()
-        tok = (self.headers.get("X-Session-Token") or "").strip()
-        if tok: return tok
+    def _cookie_token(self):
         for part in (self.headers.get("Cookie") or "").split(";"):
             k, _, v = part.strip().partition("=")
             if k == "st_session" and v: return v
         return ""
+    def _auth_candidates(self):
+        """Authorization / X-Session-Token / cookie — prefer each until one authenticates."""
+        out = []
+        auth = self.headers.get("Authorization") or ""
+        if auth.lower().startswith("bearer "):
+            out.append(auth[7:].strip())
+        xs = (self.headers.get("X-Session-Token") or "").strip()
+        if xs:
+            out.append(xs)
+        ck = self._cookie_token()
+        if ck:
+            out.append(ck)
+        # de-dupe preserve order
+        seen, uniq = set(), []
+        for t in out:
+            if t and t not in seen:
+                seen.add(t); uniq.append(t)
+        return uniq
+    def _bearer(self):
+        """First presented secret (compat). Prefer session()/auth_handle() for real auth."""
+        cands = self._auth_candidates()
+        return cands[0] if cands else ""
     def session(self, c, token=None):
-        token = token or self._bearer()
-        if not token: return None
-        return c.execute("SELECT * FROM session WHERE token_hash=? AND expires_at>?", (hash_token(token), int(time.time()))).fetchone()
+        if token is not None:
+            if not token: return None
+            return c.execute("SELECT * FROM session WHERE token_hash=? AND expires_at>?",
+                             (hash_token(token), int(time.time()))).fetchone()
+        # Stale Bearer in localStorage must not mask a valid st_session cookie
+        for tok in self._auth_candidates():
+            row = c.execute("SELECT * FROM session WHERE token_hash=? AND expires_at>?",
+                            (hash_token(tok), int(time.time()))).fetchone()
+            if row: return row
+        return None
     def api_key_user(self, c, token=None):
-        token = token or self._bearer()
-        if not token: return None
-        return c.execute("SELECT * FROM user WHERE token_hash=? AND token_hash!='' AND token_hash IS NOT NULL",
-                         (hash_token(token),)).fetchone()
+        if token is not None:
+            if not token: return None
+            return c.execute("SELECT * FROM user WHERE token_hash=? AND token_hash!='' AND token_hash IS NOT NULL",
+                             (hash_token(token),)).fetchone()
+        for tok in self._auth_candidates():
+            row = c.execute("SELECT * FROM user WHERE token_hash=? AND token_hash!='' AND token_hash IS NOT NULL",
+                            (hash_token(tok),)).fetchone()
+            if row: return row
+        return None
     def auth_handle(self, c):
         s = self.session(c)
         if s and s["handle"]: return s["handle"]
@@ -734,7 +777,7 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json(400, {"error": "connect github in settings first"})
             token = (link["github_token"] if "github_token" in link.keys() else None) or os.environ.get("GITHUB_TOKEN") or ""
             if not token:
-                return self.send_json(400, {"error": "reconnect github to grant repo access for private repos"})
+                return self.send_json(401, {"error": "reconnect github to grant repo access", "reconnect": True})
             known = {r["repo_url"] for r in c.execute("SELECT repo_url FROM project WHERE repo_url IS NOT NULL")}
             known_ids = {r["id"] for r in c.execute("SELECT id FROM project")}
             try:
@@ -747,6 +790,19 @@ class H(BaseHTTPRequestHandler):
                     if not isinstance(chunk, list) or not chunk: break
                     repos.extend(chunk); page += 1
                     if len(chunk) < 100: break
+            except urllib.error.HTTPError as e:
+                # Expired / revoked OAuth token — clear it so Settings shows reconnect
+                if e.code in (401, 403) and link and "github_token" in link.keys() and link["github_token"]:
+                    try:
+                        c.execute("UPDATE link SET github_token=NULL WHERE handle=?", (handle,))
+                        c.commit()
+                    except Exception:
+                        pass
+                return self.send_json(401 if e.code in (401, 403) else 502, {
+                    "error": "github access expired — reconnect github in settings",
+                    "reconnect": True,
+                    "status": e.code,
+                })
             except Exception as e:
                 return self.send_json(502, {"error": f"github repos fetch failed: {type(e).__name__}: {e}"})
             out = []

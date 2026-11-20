@@ -21,7 +21,14 @@ async function j(u, o = {}) {
       ...fetchOpts,
       headers,
     });
-    return [r.status, await r.json().catch(() => ({}))];
+    let status = r.status;
+    let body = await r.json().catch(() => ({}));
+    // Stale localStorage bearer must not blank projects/analytics when the Slack cookie is valid
+    if (status === 401 && token() && !cookieOnly && !o.noCookieRetry) {
+      setToken("");
+      return j(u, { ...o, cookieOnly: true, noCookieRetry: true });
+    }
+    return [status, body];
   } catch (_) {
     return [0, { error: "network error" }];
   }
@@ -608,19 +615,23 @@ function paintLogin() {
 function paintAuthChecks() {
   if (!authStatus || !$("gh-check")) return;
   const p = meProfile || {}, ready = !!p.handle, linked = !!p.github_linked;
+  const needsRe = !!p.github_needs_reconnect;
   $("gh-check").innerHTML = "";
-  if (linked) {
+  if (linked && !needsRe) {
     $("gh-check").append(pill(true, "connected", "not connected"));
     if (p.github_login) $("gh-check").append(document.createTextNode(" @" + p.github_login));
+  } else if (linked && needsRe) {
+    $("gh-check").append(pill(false, "reconnect", "reconnect"));
+    if (p.github_login) $("gh-check").append(document.createTextNode(" @" + p.github_login + " — token expired"));
   } else {
     $("gh-check").append(
       pill(!!authStatus.github_ready, "ready", "not configured"),
       pill(false, "connected", "not connected"),
     );
   }
-  if ($("gh-form")) $("gh-form").hidden = linked || !ready;
-  if ($("gh-connected")) $("gh-connected").hidden = !linked;
-  if ($("gh-oauth")) $("gh-oauth").disabled = !ready || !authStatus.github_ready || linked;
+  if ($("gh-form")) $("gh-form").hidden = (linked && !needsRe) || !ready;
+  if ($("gh-connected")) $("gh-connected").hidden = !(linked && !needsRe);
+  if ($("gh-oauth")) $("gh-oauth").disabled = !ready || !authStatus.github_ready || (linked && !needsRe);
   if ($("sl-oauth")) $("sl-oauth").disabled = !authStatus.slack_ready;
   if ($("login-slack")) $("login-slack").disabled = !authStatus.slack_ready;
   if ($("login-slack-hint") && !authStatus.slack_ready) $("login-slack-hint").textContent = "Slack OAuth is not configured on this server.";
@@ -789,7 +800,16 @@ async function fetchGhRepos(force = false) {
   if (!(meProfile && meProfile.github_linked)) return null;
   if (!force && ghReposCache && Date.now() - ghReposAt < 5 * 60 * 1000) return ghReposCache;
   const [s, r] = await j("/v1/me/github-repos");
-  if (s !== 200) { toast(r.error || "Could not load GitHub repos", { kind: "error" }); return null; }
+  if (s !== 200) {
+    if (r && r.reconnect) {
+      if (meProfile) meProfile.github_linked = false;
+      toast(r.error || "Reconnect GitHub in settings", { kind: "error" });
+      paintAuthChecks();
+    } else {
+      toast(r.error || "Could not load GitHub repos", { kind: "error" });
+    }
+    return null;
+  }
   ghReposCache = r; ghReposAt = Date.now();
   return r;
 }
