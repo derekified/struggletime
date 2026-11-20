@@ -159,6 +159,7 @@ class TrayCore:
         return f"Status: No active session · {auth} · {format_duration(self.hours)} today"
 
     def refresh_auth(self):
+        self.s["server"] = dcfg.normalize_server(self.s.get("server"))
         token = self.s.get("token") or ""
         if not token:
             self.auth = {"ok": False, "handle": None, "needs_handle": False}
@@ -171,6 +172,10 @@ class TrayCore:
         elif code == 200 and data.get("needs_handle"):
             self.auth = {"ok": True, "handle": None, "needs_handle": True}
         else:
+            # Stale/revoked key — drop it so the tray prompts to re-link
+            if code in (401, 403):
+                self.s["token"] = ""
+                self.persist()
             self.auth = {"ok": False, "handle": None, "needs_handle": False}
         return self.auth
 
@@ -182,7 +187,13 @@ class TrayCore:
         key = (raw or "").strip()
         if not key:
             return False, "no key entered"
+        if key.startswith("<") or "ngrok" in key.lower():
+            return False, "that looks like a placeholder — paste the real st_… key from Settings"
+        self.s["server"] = dcfg.normalize_server(self.s.get("server"))
         code, data = api_json(self.s["server"], "GET", "/v1/auth/me", token=key)
+        if code == 0:
+            err = (data.get("error") if isinstance(data, dict) else None) or "network error"
+            return False, f"cannot reach {self.s['server']}: {err}"
         if code != 200 or not data.get("handle"):
             err = (data.get("error") if isinstance(data, dict) else None) or f"rejected ({code})"
             return False, f"API key invalid: {err}"
@@ -346,6 +357,7 @@ class Tray(TrayCore):
             pystray.MenuItem(lambda _item: f"Today: {format_duration(self.hours)}", None, enabled=False),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("set / link API key…", self._action(self._do_set_api_key, background=True)),
+            pystray.MenuItem("get API key in browser…", self._action(self._do_open_api_key_page, background=True)),
             pystray.MenuItem("clear API key", self._action(self._do_clear_api_key), enabled=lambda _i: bool(self.s.get("token"))),
             pystray.MenuItem("link project / repo…", self._action(self._do_link, background=True), enabled=lambda _i: self.signed_in()),
             pystray.Menu.SEPARATOR,
@@ -391,7 +403,17 @@ class Tray(TrayCore):
             return
         ok, msg = self.set_api_key(val)
         self._notify(msg)
+        if not ok:
+            native_ui.alert("StruggleTime", msg)
         self._refresh_ui()
+
+    def _do_open_api_key_page(self):
+        """Open Settings so the user can mint an API key on the web dashboard."""
+        try:
+            browser_auth.open_default_browser(self.browser_base() + "/settings")
+            self._notify("opened Settings — Generate API key, then paste it here")
+        except Exception as e:
+            self._notify(f"could not open browser: {e}")
 
     def _do_clear_api_key(self):
         if not native_ui.confirm("StruggleTime", "Clear the StruggleTime API key from this machine?"):

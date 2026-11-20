@@ -11,7 +11,11 @@ const token = () => localStorage.getItem("st_token") || "";
 const setToken = (t) => { if (t) localStorage.setItem("st_token", t); else localStorage.removeItem("st_token"); };
 const authHdr = () => (token() ? { Authorization: "Bearer " + token() } : {});
 async function j(u, o = {}) {
-  const r = await fetch(u, { ...o, headers: { ...(o.headers || {}), ...authHdr() } });
+  const r = await fetch(u, {
+    credentials: "same-origin",
+    ...o,
+    headers: { ...(o.headers || {}), ...authHdr() },
+  });
   return [r.status, await r.json().catch(() => ({}))];
 }
 
@@ -673,8 +677,14 @@ async function consumeAuthCode() {
   const q = new URLSearchParams(location.search);
   const code = q.get("auth");
   if (!code) return false;
-  const [s, r] = await j("/v1/auth/session", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ code }) });
+  const [s, r] = await j("/v1/auth/session", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ code }),
+  });
   q.delete("auth");
+  const oauth = q.get("oauth");
+  q.delete("oauth");
   const clean = location.pathname + (q.toString() ? "?" + q : "");
   history.replaceState({}, "", clean);
   if (s === 200 && r.token) {
@@ -684,10 +694,11 @@ async function consumeAuthCode() {
       navigate("/home");
       return true;
     }
-    navigate("/login" + (q.get("oauth") ? "?oauth=" + encodeURIComponent(q.get("oauth")) : ""));
+    navigate("/login" + (oauth ? "?oauth=" + encodeURIComponent(oauth) : ""));
     return true;
   }
-  toast(r.error || "Auth failed", { kind: "error" });
+  toast(r.error || "Sign-in failed — try Slack again", { kind: "error" });
+  navigate("/login" + (oauth ? "?oauth=" + encodeURIComponent(oauth) : ""));
   return false;
 }
 

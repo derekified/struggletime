@@ -78,6 +78,7 @@ class TestTray(unittest.TestCase):
         src = (ROOT / "daemon" / "tray.py").read_text()
         low = src.lower()
         self.assertIn("set / link api key", low)
+        self.assertIn("get api key in browser", low)
         self.assertNotIn("sign in with slack", low)
         self.assertNotIn("paste auth", low)
         self.assertNotIn("import tkinter", src)

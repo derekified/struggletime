@@ -96,6 +96,17 @@ def mint_api_key():
     raw = "st_" + secrets.token_urlsafe(32)
     return raw, hash_token(raw), raw[:11] + "…"
 
+def session_cookie(token="", *, clear=False):
+    """Set/clear st_session. Secure when the public redirect base is https (Cloudflare/ngrok)."""
+    if clear or not token:
+        base = "st_session=; Path=/; Max-Age=0; HttpOnly; SameSite=Lax"
+    else:
+        base = f"st_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000"
+    pub = (os.environ.get("OAUTH_REDIRECT_BASE") or "").lower()
+    if pub.startswith("https://"):
+        base += "; Secure"
+    return base
+
 def mint_session(c, *, handle, slack_user_id, slack_avatar="", slack_name="", days=30):
     token = secrets.token_urlsafe(32)
     now = int(time.time())
@@ -481,6 +492,7 @@ class H(BaseHTTPRequestHandler):
             ctype = "application/javascript" if p[0].endswith(".js") else "text/css"
             body = f.read_bytes(); self.send_response(200)
             self.send_header("Content-Type", ctype); self.send_header("Content-Length", str(len(body)))
+            self.send_header("Cache-Control", "no-cache")
             self.end_headers(); self.wfile.write(body); return
         if len(p) == 2 and p[0] == "img" and re.fullmatch(r"[a-z0-9][a-z0-9._-]{0,63}\.(svg|png|webp|jpe?g)", p[1], re.I):
             f = STATIC / "img" / p[1]
@@ -818,7 +830,7 @@ class H(BaseHTTPRequestHandler):
             token = row["token"]
             s = c.execute("SELECT * FROM session WHERE token_hash=?", (hash_token(token),)).fetchone()
             if not s: return self.send_json(400, {"error": "session missing"})
-            cookie = f"st_session={token}; Path=/; HttpOnly; SameSite=Lax; Max-Age=2592000"
+            cookie = session_cookie(token)
             if s["handle"]:
                 return self.send_json(200, {"token": token, **profile_payload(c, s["handle"], s)}, set_cookie=cookie)
             return self.send_json(200, {"token": token, "needs_handle": True, "slack_user_id": s["slack_user_id"],
@@ -827,7 +839,7 @@ class H(BaseHTTPRequestHandler):
         if p == ["v1", "auth", "logout"]:
             s = self.session(c)
             if s: c.execute("DELETE FROM session WHERE token_hash=?", (s["token_hash"],)); c.commit()
-            return self.send_json(200, {"ok": True}, set_cookie="st_session=; Path=/; Max-Age=0")
+            return self.send_json(200, {"ok": True}, set_cookie=session_cookie(clear=True))
         if p == ["v1", "auth", "api-key"]:
             # mint / regenerate StruggleTime API key (shown once). Requires Slack session + claimed handle.
             s = self.session(c)
@@ -940,7 +952,7 @@ class H(BaseHTTPRequestHandler):
             c.execute("DELETE FROM user WHERE handle=?", (who,))
             c.commit()
             return self.send_json(200, {"ok": True, "deleted": who},
-                                  set_cookie="st_session=; Path=/; Max-Age=0")
+                                  set_cookie=session_cookie(clear=True))
         if p == ["v1", "users"]:
             # legacy create without slack is closed; use claim-handle after slack login
             return self.send_json(410, {"error": "claim a handle after signing in with slack (/v1/auth/claim-handle)"})

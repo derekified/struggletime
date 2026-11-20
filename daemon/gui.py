@@ -74,6 +74,10 @@ def set_api_key_interactive(s):
     if not key:
         native_ui.alert("StruggleTime", "No key entered.")
         return s, "no key"
+    if key.startswith("<") or "ngrok" in key.lower():
+        native_ui.alert("StruggleTime", "That looks like a placeholder. Paste the real st_… key from Settings.")
+        return s, "placeholder"
+    s["server"] = dcfg.normalize_server(s.get("server"))
     code, data = browser_auth.api_json(s["server"], "GET", "/v1/auth/me", token=key)
     if code != 200 or not data.get("handle"):
         err = (data.get("error") if isinstance(data, dict) else None) or f"rejected ({code})"
