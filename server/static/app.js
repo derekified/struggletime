@@ -1,4 +1,4 @@
-const { esc, el, toast, modal, field, btn, pill, empty, tabs, avatar, icon, iconBtn, selectField, pieChart } = UI;
+const { esc, el, toast, modal, field, btn, pill, empty, tabs, avatar, icon, iconBtn, selectField, comboField, pathField, pieChart } = UI;
 const $ = (id) => document.getElementById(id);
 const fmt = (n, d = 2) => Number(n || 0).toFixed(d);
 const fmtH = (h) => {
@@ -669,8 +669,35 @@ async function refreshApiKeyStatus() {
   }
 }
 
-function fillAttachProjects() {
-  // project↔repo linking lives in Edit Project modal now
+function ghRepoOptions(repos, { includeCurrent } = {}) {
+  const opts = [{ id: "", label: "None — no GitHub repo", search: "none optional" }];
+  const seen = new Set([""]);
+  for (const repo of repos || []) {
+    const url = repo.repo_url || "";
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const name = repo.full_name || repo.name || url;
+    opts.push({
+      id: url,
+      label: `${name}${repo.private ? " (private)" : ""}${repo.already_added ? " · linked" : ""}`,
+      search: `${name} ${url}`,
+    });
+  }
+  if (includeCurrent && includeCurrent.trim() && !seen.has(includeCurrent.trim())) {
+    opts.push({ id: includeCurrent.trim(), label: includeCurrent.trim(), search: includeCurrent });
+  }
+  return opts;
+}
+
+function projectSelectOptions(list, { allowEmpty } = {}) {
+  const active = (list || []).filter((p) => !p.deleted && !p.archived && p.registered !== false);
+  const opts = active.map((p) => ({
+    id: p.id,
+    label: p.name && p.name !== p.id ? `${p.name} (${p.id})` : (p.name || p.id),
+    search: `${p.name || ""} ${p.id} ${p.repo_slug || ""} ${p.local_path || ""}`,
+  }));
+  if (allowEmpty) opts.unshift({ id: "", label: "Select a project…", search: "" });
+  return opts;
 }
 
 async function consumeAuthCode() {
@@ -741,26 +768,30 @@ function openProjectModal(existing) {
     navigate("/login");
     return;
   }
-  const nameId = "m-name", repoId = "m-repo", pickId = "m-repo-pick", archId = "m-archived";
+  const nameId = "m-name", archId = "m-archived", ghId = "m-gh", dirId = "m-dir";
+  const ghCombo = comboField({
+    label: "GitHub repo (optional)",
+    id: ghId,
+    glyph: "github",
+    placeholder: "filter repos…",
+    value: existing?.repo_url || "",
+    options: ghRepoOptions([], { includeCurrent: existing?.repo_url }),
+    hint: meProfile.github_linked
+      ? "Pick None to leave the project without a GitHub repo."
+      : "Connect GitHub in Settings to choose from your repos — None is always allowed.",
+  });
+  const dirField = pathField({
+    label: "Local directory",
+    id: dirId,
+    glyph: "docs",
+    value: existing?.local_path || "",
+    placeholder: "/home/you/code/my-project",
+  });
   const kids = [
     field({ label: "Name", id: nameId, value: existing?.name || "", placeholder: "my project", required: true }),
-    field({
-      label: "GitHub repo URL",
-      id: repoId,
-      value: existing?.repo_url || "",
-      placeholder: existing?.last_repo_url || "https://github.com/you/repo",
-    }),
+    ghCombo,
+    dirField,
   ];
-  if (meProfile.github_linked) {
-    kids.push(el("label", { className: "ui-field" }, [
-      el("span", { text: "Or pick from your GitHub repos" }),
-      el("select", { id: pickId, className: "ui-input" }, [
-        el("option", { value: "", text: "loading repos…" }),
-      ]),
-    ]));
-  } else {
-    kids.push(el("p", { className: "sub", text: "Connect GitHub in Settings to pick from your private repos." }));
-  }
   if (existing) {
     kids.push(el("label", { className: "toggle-row" }, [
       el("input", { type: "checkbox", id: archId, checked: !!existing.archived }),
@@ -799,49 +830,131 @@ function openProjectModal(existing) {
   }
   const body = el("div", {}, kids);
   modal({
-    title: existing ? "Edit project / repo" : "Create project",
+    title: existing ? "Edit project" : "Create project",
     glyph: existing ? "edit" : "plus",
-    confirmText: existing ? "Save" : "Create",
+    confirmText: existing ? "Save" : "Create & link",
     confirmGlyph: existing ? "checkmark" : "plus",
     cancelGlyph: "view-close",
     body,
     onConfirm: async () => {
       const name = document.getElementById(nameId).value.trim();
-      const repo_url = document.getElementById(repoId).value.trim() || null;
+      const repo_url = (ghCombo.getValue?.() || "").trim() || null;
+      const local_path = dirField.getValue?.() || null;
       if (!name) { toast("Name required", { kind: "error" }); return false; }
       if (existing) {
         const archived = !!document.getElementById(archId)?.checked;
         const [s, r] = await j("/v1/projects/" + encodeURIComponent(existing.id) + "/edit", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, repo_url, archived }),
+          body: JSON.stringify({ name, repo_url, archived, local_path }),
         });
         if (s !== 200) { toast(r.error || "Could not save", { kind: "error" }); return false; }
-        toast("Project updated", { kind: "ok" });
+        toast(local_path ? "Project updated · directory saved for the tray" : "Project updated", { kind: "ok" });
       } else {
         const [s, r] = await j("/v1/projects", {
           method: "POST", headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ name, repo_url }),
+          body: JSON.stringify({ name, repo_url, local_path }),
         });
         if (s !== 201) { toast(r.error || "Could not create", { kind: "error" }); return false; }
-        toast(r.repo_slug ? `Created /${String(r.repo_slug).split("/").pop()}` : `Created ${r.id}`, { kind: "ok" });
+        toast(
+          local_path
+            ? `Created ${r.id} · directory ready for tray link`
+            : (r.repo_slug ? `Created /${String(r.repo_slug).split("/").pop()}` : `Created ${r.id}`),
+          { kind: "ok" },
+        );
       }
       refresh();
     },
   });
-  if (meProfile.github_linked) {
-    (async () => {
-      const data = await fetchGhRepos();
-      const sel = document.getElementById(pickId);
-      if (!sel) return;
-      const repos = data?.repos || [];
-      sel.innerHTML = '<option value="">choose a repo…</option>' +
-        repos.map((repo) => `<option value="${esc(repo.repo_url)}">${esc(repo.full_name || repo.name)}${repo.private ? " (private)" : ""}</option>`).join("");
-      if (existing?.repo_url) sel.value = existing.repo_url;
-      sel.addEventListener("change", () => {
-        if (sel.value) document.getElementById(repoId).value = sel.value;
-      });
-    })();
+  (async () => {
+    if (!meProfile.github_linked) return;
+    const data = await fetchGhRepos();
+    ghCombo.setOptions?.(
+      ghRepoOptions(data?.repos || [], { includeCurrent: existing?.repo_url }),
+      existing?.repo_url || "",
+    );
+  })();
+}
+
+/** Link an existing project: project dropdown + optional GitHub + local directory. */
+function openLinkProjectModal() {
+  if (!(meProfile && meProfile.handle)) {
+    toast("Sign in with Slack first", { kind: "error" });
+    navigate("/login");
+    return;
   }
+  const projCombo = comboField({
+    label: "Project",
+    id: "m-link-project",
+    glyph: "briefcase",
+    placeholder: "filter projects…",
+    options: projectSelectOptions(projectsCache, { allowEmpty: true }),
+    value: "",
+    hint: "Choose which StruggleTime project this folder belongs to.",
+  });
+  const ghCombo = comboField({
+    label: "GitHub repo (optional)",
+    id: "m-link-gh",
+    glyph: "github",
+    placeholder: "filter repos…",
+    options: ghRepoOptions([]),
+    value: "",
+    hint: "None leaves the project without a GitHub link.",
+  });
+  const dirField = pathField({
+    label: "Local directory",
+    id: "m-link-dir",
+    glyph: "docs",
+    value: "",
+    placeholder: "/home/you/code/my-project",
+  });
+  projCombo.addEventListener?.("change", () => {});
+  // Sync defaults when project changes
+  const projSel = projCombo.querySelector("select");
+  if (projSel) {
+    projSel.addEventListener("change", () => {
+      const p = (projectsCache || []).find((x) => x.id === projSel.value);
+      if (!p) return;
+      ghCombo.setValue?.(p.repo_url || "");
+      if (p.local_path) dirField.setValue?.(p.local_path);
+    });
+  }
+  modal({
+    title: "Link project",
+    glyph: "link",
+    confirmText: "Link",
+    confirmGlyph: "link",
+    cancelGlyph: "view-close",
+    body: el("div", {}, [projCombo, ghCombo, dirField]),
+    onConfirm: async () => {
+      const project_id = (projCombo.getValue?.() || "").trim();
+      const repo_url = (ghCombo.getValue?.() || "").trim() || null;
+      const local_path = dirField.getValue?.() || null;
+      if (!project_id) { toast("Pick a project", { kind: "error" }); return false; }
+      const existing = (projectsCache || []).find((p) => p.id === project_id);
+      const [s, r] = await j("/v1/projects/" + encodeURIComponent(project_id) + "/edit", {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          name: existing?.name || project_id,
+          repo_url,
+          local_path,
+        }),
+      });
+      if (s !== 200) { toast(r.error || "Could not link", { kind: "error" }); return false; }
+      toast(local_path ? `Linked ${project_id} · set the same folder in the tray` : `Linked ${project_id}`, { kind: "ok" });
+      refresh();
+    },
+  });
+  (async () => {
+    const [ps, pr] = await j("/v1/projects");
+    if (ps === 200) {
+      projectsCache = pr.projects || [];
+      projCombo.setOptions?.(projectSelectOptions(projectsCache, { allowEmpty: true }), "");
+    }
+    if (meProfile.github_linked) {
+      const data = await fetchGhRepos();
+      ghCombo.setOptions?.(ghRepoOptions(data?.repos || []), "");
+    }
+  })();
 }
 
 window.claimProject = async (e, id) => {
@@ -1249,6 +1362,10 @@ function renderProjectCards(list, rangeAnalytics) {
           el("span", { text: p.repo_url ? "repo linked" : (p.last_repo_url ? "repo deleted" : "no repo") }),
         ]),
         el("span", { className: "meta-item" }, [
+          icon(p.local_path ? "docs" : "private", { size: 14 }),
+          el("span", { text: p.local_path ? "dir linked" : "no dir", title: p.local_path || "" }),
+        ]),
+        el("span", { className: "meta-item" }, [
           icon("history", { size: 14 }),
           el("span", { text: hours > 0 ? "active" : "idle" }),
         ]),
@@ -1256,10 +1373,10 @@ function renderProjectCards(list, rangeAnalytics) {
       el("div", { className: "actions" }, [
         p.registered === false
           ? iconBtn({ glyph: "plus", title: "Claim", onClick: (e) => claimProject(e, p.id) })
-          : iconBtn({ glyph: "edit", title: "Edit project / repo", onClick: () => openProjectModal(p) }),
+          : iconBtn({ glyph: "edit", title: "Edit project", onClick: () => openProjectModal(p) }),
         p.repo_url
           ? iconBtn({ glyph: "external", title: "Open repo", onClick: () => window.open(p.repo_url, "_blank", "noopener") })
-          : iconBtn({ glyph: "link", title: "Link repo", onClick: () => openProjectModal(p) }),
+          : iconBtn({ glyph: "link", title: "Link project / directory", onClick: () => openLinkProjectModal() }),
         iconBtn({ glyph: "dashboard-meter", title: "Open on dashboard", onClick: () => {
           filters.project = p.id; localStorage.setItem("st_range", filters.range); navigate("/home");
         } }),
@@ -1439,6 +1556,7 @@ if ($("gh-form")) $("gh-form").addEventListener("submit", (e) => {
   location.href = "/v1/auth/github/start?session=" + encodeURIComponent(token());
 });
 if ($("btn-create-project")) $("btn-create-project").addEventListener("click", () => openProjectModal(null));
+if ($("btn-link-project")) $("btn-link-project").addEventListener("click", () => openLinkProjectModal());
 if ($("proj-search")) $("proj-search").addEventListener("input", (e) => { projSearch.q = e.target.value; renderProjectCards(projectsCache, analytics); });
 if ($("proj-range")) {
   $("proj-range").value = projSearch.range;

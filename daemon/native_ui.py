@@ -380,6 +380,151 @@ def choose_folder(title="Choose folder", start=""):
         return _stdin_prompt(f"{title} (path)", secret=False)
 
 
+def _stdin_choose(title, message, options, default=0):
+    if not options:
+        return None
+    print(f"\n{title}", flush=True)
+    if message:
+        print(message, flush=True)
+    for i, opt in enumerate(options):
+        mark = "*" if i == default else " "
+        print(f"  {mark}{i + 1}) {opt}", flush=True)
+    if not sys.stdin.isatty():
+        return default if 0 <= default < len(options) else None
+    try:
+        raw = input(f"choice [{default + 1}]: ").strip()
+    except (EOFError, KeyboardInterrupt):
+        return None
+    if not raw:
+        return default if 0 <= default < len(options) else None
+    try:
+        n = int(raw)
+    except ValueError:
+        return None
+    if 1 <= n <= len(options):
+        return n - 1
+    return None
+
+
+def _mac_choose(title, message, options, default=0):
+    # AppleScript choose from list
+    items = ", ".join(f'"{_mac_escape(o)}"' for o in options)
+    default_item = _mac_escape(options[default]) if 0 <= default < len(options) else _mac_escape(options[0])
+    script = (
+        f'set opts to {{{items}}}\n'
+        f'set r to choose from list opts with prompt "{_mac_escape(message or title)}" '
+        f'default items {{"{default_item}"}} OK button name "OK" cancel button name "Cancel"\n'
+        f'if r is false then return ""\n'
+        f'return item 1 of r'
+    )
+    r = _run(["osascript", "-e", script], timeout=600)
+    if r is None or r.returncode != 0:
+        return None
+    picked = (r.stdout or "").rstrip("\n")
+    if not picked:
+        return None
+    try:
+        return options.index(picked)
+    except ValueError:
+        return None
+
+
+def _win_choose(title, message, options, default=0):
+    safe_title = (title or "").replace("'", "''")
+    safe_msg = (message or "").replace("'", "''")
+    # Build a simple WinForms list dialog
+    items_ps = "@(" + ",".join("'" + str(o).replace("'", "''") + "'" for o in options) + ")"
+    script = f"""
+Add-Type -AssemblyName System.Windows.Forms
+Add-Type -AssemblyName System.Drawing
+$form = New-Object System.Windows.Forms.Form
+$form.Text = '{safe_title}'
+$form.Width = 480; $form.Height = 360
+$form.StartPosition = 'CenterScreen'
+$form.FormBorderStyle = 'FixedDialog'
+$form.MaximizeBox = $false; $form.MinimizeBox = $false
+$label = New-Object System.Windows.Forms.Label
+$label.Text = '{safe_msg}'; $label.Left = 12; $label.Top = 12; $label.Width = 440; $label.Height = 40
+$list = New-Object System.Windows.Forms.ListBox
+$list.Left = 12; $list.Top = 56; $list.Width = 440; $list.Height = 220
+$items = {items_ps}
+$list.Items.AddRange($items)
+if ($list.Items.Count -gt 0) {{ $list.SelectedIndex = {int(default)} }}
+$ok = New-Object System.Windows.Forms.Button
+$ok.Text = 'OK'; $ok.Left = 280; $ok.Top = 288; $ok.DialogResult = [System.Windows.Forms.DialogResult]::OK
+$cancel = New-Object System.Windows.Forms.Button
+$cancel.Text = 'Cancel'; $cancel.Left = 360; $cancel.Top = 288; $cancel.DialogResult = [System.Windows.Forms.DialogResult]::Cancel
+$form.Controls.AddRange(@($label,$list,$ok,$cancel))
+$form.AcceptButton = $ok; $form.CancelButton = $cancel
+if ($form.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK -and $list.SelectedIndex -ge 0) {{
+  Write-Output $list.SelectedIndex
+}} else {{ exit 1 }}
+"""
+    r = _win_ps(script)
+    if r is None or r.returncode != 0:
+        return None
+    try:
+        return int((r.stdout or "").strip())
+    except ValueError:
+        return None
+
+
+def _linux_choose(title, message, options, default=0):
+    env = _linux_env()
+    zenity = _which("zenity")
+    if zenity:
+        cmd = [
+            zenity, "--list", f"--title={title}", f"--text={message or title}",
+            "--column=Option", "--hide-header", "--width=480", "--height=360",
+        ]
+        if 0 <= default < len(options):
+            # zenity has no great default; prepend marker
+            pass
+        cmd.extend(options)
+        r = _run(cmd, env=env, timeout=600)
+        if r and r.returncode == 0:
+            picked = (r.stdout or "").rstrip("\n")
+            try:
+                return options.index(picked)
+            except ValueError:
+                return None
+        return None
+    kdialog = _which("kdialog")
+    if kdialog:
+        # menu returns selected tag
+        cmd = [kdialog, "--title", title, "--menu", message or title]
+        for i, opt in enumerate(options):
+            cmd.extend([str(i), opt])
+        r = _run(cmd, env=env, timeout=600)
+        if r and r.returncode == 0:
+            try:
+                return int((r.stdout or "").strip())
+            except ValueError:
+                return None
+        return None
+    return _stdin_choose(title, message, options, default=default)
+
+
+def choose(title, message, options, *, default=0):
+    """Pick one item from a list. Returns 0-based index, or None if cancelled."""
+    options = [str(o) for o in (options or [])]
+    if not options:
+        return None
+    if default < 0 or default >= len(options):
+        default = 0
+    try:
+        if sys.platform == "darwin":
+            return _mac_choose(title, message, options, default=default)
+        if sys.platform.startswith("win"):
+            return _win_choose(title, message, options, default=default)
+        if has_display():
+            return _linux_choose(title, message, options, default=default)
+        return _stdin_choose(title, message, options, default=default)
+    except Exception as e:
+        print(f"[native_ui] choose error: {e}", flush=True)
+        return _stdin_choose(title, message, options, default=default)
+
+
 def backend_name():
     if sys.platform == "darwin":
         return "osascript"

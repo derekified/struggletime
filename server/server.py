@@ -194,6 +194,7 @@ def db():
         ("archived", "INT NOT NULL DEFAULT 0"),
         ("deleted", "INT NOT NULL DEFAULT 0"),
         ("last_repo_url", "TEXT"),
+        ("local_path", "TEXT"),
     ):
         if col not in pcols: c.execute(f"ALTER TABLE project ADD COLUMN {col} {spec}")
     c.commit()
@@ -640,7 +641,7 @@ class H(BaseHTTPRequestHandler):
             payload["handle"] = who
             return self.send_json(200, payload)
         if p == ["v1", "me", "github-repos"]:
-            s = self.session(c); handle = s["handle"] if s else None
+            handle = self.auth_handle(c)
             if not handle: return self.send_json(401, {"error": "sign in with slack and claim a handle first"})
             link = link_row(c, handle)
             if not link or not link["github_login"]:
@@ -701,6 +702,7 @@ class H(BaseHTTPRequestHandler):
                     "archived": bool(_urow(r, "archived", 0)),
                     "deleted": bool(_urow(r, "deleted", 0)),
                     "last_repo_url": _urow(r, "last_repo_url"),
+                    "local_path": _urow(r, "local_path"),
                     "repo_slug": repo_slug(r["repo_url"]) or repo_slug(_urow(r, "last_repo_url")),
                     **stats_for(c, project=r["id"]),
                 })
@@ -708,7 +710,7 @@ class H(BaseHTTPRequestHandler):
             for r in c.execute("SELECT DISTINCT project_id FROM bucket WHERE user_id=?", (who,)):
                 if r[0] not in known:
                     out.append({"id": r[0], "owner": who, "name": r[0], "repo_url": None, "repo_slug": None,
-                                "archived": False, "deleted": False, "last_repo_url": None,
+                                "archived": False, "deleted": False, "last_repo_url": None, "local_path": None,
                                 "registered": False, **stats_for(c, project=r[0])})
             return self.send_json(200, {"projects": out})
         if p == ["v1", "leaderboard"]:
@@ -1013,16 +1015,19 @@ class H(BaseHTTPRequestHandler):
             if not name: return self.send_json(400, {"error": "name required"})
             if not re.fullmatch(r"[a-z0-9][a-z0-9_-]{0,39}", pid):
                 return self.send_json(400, {"error": "id must be lowercase letters, numbers, - and _"})
+            repo_url = (d.get("repo_url") or "").strip() or None
+            local_path = (d.get("local_path") or "").strip() or None
             try:
                 c.execute(
-                    "INSERT INTO project(id, owner, name, repo_url, head_from, head_to) VALUES (?,?,?,?,?,?)",
-                    (pid, owner, name, d.get("repo_url"), None, None),
+                    "INSERT INTO project(id, owner, name, repo_url, head_from, head_to, local_path) VALUES (?,?,?,?,?,?,?)",
+                    (pid, owner, name, repo_url, None, None, local_path),
                 )
                 c.commit()
             except sqlite3.IntegrityError: return self.send_json(409, {"error": "project exists"})
             return self.send_json(201, {
-                "id": pid, "owner": owner, "name": name, "repo_url": d.get("repo_url"),
-                "repo_slug": repo_slug(d.get("repo_url")), "archived": False, "deleted": False, "last_repo_url": None,
+                "id": pid, "owner": owner, "name": name, "repo_url": repo_url,
+                "repo_slug": repo_slug(repo_url), "archived": False, "deleted": False,
+                "last_repo_url": None, "local_path": local_path,
             })
         if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "edit":
             d = self.body(); who = self.auth_handle(c)
@@ -1040,15 +1045,20 @@ class H(BaseHTTPRequestHandler):
                 last_repo = row["repo_url"]
             if "repo_url" in d and (repo_url or "").strip():
                 last_repo = None
+            if "local_path" in d:
+                local_path = (d.get("local_path") or "").strip() or None
+            else:
+                local_path = _urow(row, "local_path")
             c.execute(
-                "UPDATE project SET name=?, repo_url=?, archived=?, last_repo_url=? WHERE id=?",
-                (name, (repo_url or None), archived, last_repo, p[2]),
+                "UPDATE project SET name=?, repo_url=?, archived=?, last_repo_url=?, local_path=? WHERE id=?",
+                (name, (repo_url or None), archived, last_repo, local_path, p[2]),
             )
             c.commit()
             return self.send_json(200, {
                 "id": p[2], "owner": who, "name": name, "repo_url": repo_url or None,
                 "repo_slug": repo_slug(repo_url), "archived": bool(archived),
                 "deleted": bool(_urow(row, "deleted", 0)), "last_repo_url": last_repo,
+                "local_path": local_path,
             })
         if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "archive":
             d = self.body(); who = self.auth_handle(c)

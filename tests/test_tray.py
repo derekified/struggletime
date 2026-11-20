@@ -79,6 +79,8 @@ class TestTray(unittest.TestCase):
         low = src.lower()
         self.assertIn("set / link api key", low)
         self.assertIn("get api key in browser", low)
+        self.assertIn("link / create project", low)
+        self.assertIn("project_link", src)
         self.assertNotIn("sign in with slack", low)
         self.assertNotIn("paste auth", low)
         self.assertNotIn("import tkinter", src)

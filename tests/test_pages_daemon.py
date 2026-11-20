@@ -61,8 +61,15 @@ class TestPagesDaemon(unittest.TestCase):
         self.assertNotIn("attach-project", html)
         proj = req(self.port, "GET", "/projects")[1]
         self.assertIn("btn-create-project", proj)
+        self.assertIn("btn-link-project", proj)
         self.assertIn("proj-status", proj)
-        self.assertIn("icons.hackclub.com", req(self.port, "GET", "/ui.js")[1])
+        ui = req(self.port, "GET", "/ui.js")[1]
+        self.assertIn("icons.hackclub.com", ui)
+        self.assertIn("comboField", ui)
+        self.assertIn("pathField", ui)
+        app = req(self.port, "GET", "/app.js")[1]
+        self.assertIn("openLinkProjectModal", app)
+        self.assertIn("None — no GitHub repo", app)
 
     def test_handle_login_removed(self):
         self.assertEqual(req(self.port, "POST", "/v1/auth/signin", {"handle": "signinuser"})[0], 410)

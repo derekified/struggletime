@@ -195,6 +195,114 @@
     ]);
   }
 
+  /** Searchable dropdown: filter box + select. options: [{id, label, search?}] */
+  function comboField({ label, id, options = [], value = "", glyph = "search", placeholder = "filter…", onChange, hint }) {
+    const state = { options: options.slice(), value: value == null ? "" : String(value) };
+    const sel = el("select", {
+      id, className: "ui-input",
+      onChange: (e) => { state.value = e.target.value; onChange?.(e.target.value); },
+    });
+    function paint(filter = "") {
+      const q = filter.trim().toLowerCase();
+      const filtered = state.options.filter((o) => {
+        if (!q) return true;
+        const hay = `${o.label || ""} ${o.search || ""} ${o.id || ""}`.toLowerCase();
+        return hay.includes(q);
+      });
+      const keep = filtered.length ? filtered : state.options.slice(0, 1);
+      sel.innerHTML = "";
+      keep.forEach((o) => {
+        const opt = el("option", { value: o.id == null ? "" : String(o.id), text: o.label });
+        sel.appendChild(opt);
+      });
+      const ids = keep.map((o) => String(o.id == null ? "" : o.id));
+      if (ids.includes(state.value)) sel.value = state.value;
+      else if (keep.length) {
+        sel.value = String(keep[0].id == null ? "" : keep[0].id);
+        state.value = sel.value;
+      }
+    }
+    paint();
+    const search = el("input", {
+      className: "ui-input ui-combo-search",
+      type: "search",
+      placeholder,
+      onInput: (e) => paint(e.target.value),
+    });
+    const wrap = el("label", { className: "ui-field ui-combo" }, [
+      el("span", { className: "ui-field-label" }, [
+        glyph ? icon(glyph, { size: 14, className: "ui-field-ico" }) : null,
+        el("span", { text: label }),
+      ]),
+      el("div", { className: "ui-combo-row" }, [
+        icon("search", { size: 14, className: "ui-combo-search-ico" }),
+        search,
+      ]),
+      sel,
+      hint ? el("span", { className: "ui-field-hint", text: hint }) : null,
+    ]);
+    wrap.getValue = () => sel.value;
+    wrap.setOptions = (next, nextValue) => {
+      state.options = (next || []).slice();
+      if (nextValue !== undefined) state.value = nextValue == null ? "" : String(nextValue);
+      paint(search.value || "");
+      onChange?.(sel.value);
+    };
+    wrap.setValue = (v) => {
+      state.value = v == null ? "" : String(v);
+      paint(search.value || "");
+    };
+    return wrap;
+  }
+
+  /** Local directory path + choose button (browser path input / directory picker when available). */
+  function pathField({ label, id, value = "", glyph = "docs", placeholder = "/path/to/project", onChange }) {
+    const input = el("input", {
+      id, className: "ui-input", type: "text", value: value || "", placeholder,
+      onInput: (e) => onChange?.(e.target.value),
+    });
+    async function pick() {
+      if (typeof window.showDirectoryPicker === "function") {
+        try {
+          const handle = await window.showDirectoryPicker({ mode: "read" });
+          // Browsers rarely expose absolute paths; prefer typed path, use folder name as hint.
+          if (!input.value.trim() && handle?.name) {
+            input.value = handle.name;
+            onChange?.(input.value);
+            toast("Browsers hide full paths — paste the absolute folder path for the tray daemon.", { kind: "info", duration: 4500 });
+          } else {
+            toast("Paste the absolute folder path the tray should track.", { kind: "info" });
+          }
+          input.focus();
+          return;
+        } catch (e) {
+          if (e && e.name === "AbortError") return;
+        }
+      }
+      input.focus();
+      toast("Enter the absolute local folder path for the tray.", { kind: "info" });
+    }
+    const wrap = el("label", { className: "ui-field" }, [
+      el("span", { className: "ui-field-label" }, [
+        glyph ? icon(glyph, { size: 14, className: "ui-field-ico" }) : null,
+        el("span", { text: label }),
+      ]),
+      el("div", { className: "ui-path-row" }, [
+        input,
+        el("button", {
+          type: "button",
+          className: "ui-btn ui-btn-ghost ui-path-btn",
+          title: "Choose directory",
+          onClick: pick,
+        }, [icon("docs", { size: 14 }), "Choose"]),
+      ]),
+      el("span", { className: "ui-field-hint", text: "Optional on the web; the tray uses this path for --repo." }),
+    ]);
+    wrap.getValue = () => input.value.trim();
+    wrap.setValue = (v) => { input.value = v || ""; };
+    return wrap;
+  }
+
   /** Theme-token SVG pie — slices use CSS vars, no hardcoded palette */
   function pieChart(items = [], { size = 152, hole = 0.52 } = {}) {
     const wrap = el("div", { className: "ui-pie" });
@@ -252,5 +360,5 @@
     return wrap;
   }
 
-  global.UI = { esc, el, toast, modal, field, btn, pill, empty, tabs, avatar, panel, searchInput, icon, iconBtn, selectField, pieChart };
+  global.UI = { esc, el, toast, modal, field, btn, pill, empty, tabs, avatar, panel, searchInput, icon, iconBtn, selectField, comboField, pathField, pieChart };
 })(window);

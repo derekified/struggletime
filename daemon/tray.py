@@ -32,6 +32,7 @@ sys.path.insert(0, str(HERE))
 import config as dcfg
 import browser_auth
 import native_ui
+import project_link
 
 spec = importlib.util.spec_from_file_location("st_gui", HERE / "gui.py")
 st_gui = importlib.util.module_from_spec(spec); spec.loader.exec_module(st_gui)
@@ -209,34 +210,46 @@ class TrayCore:
         self.refresh_auth()
         return "API key cleared"
 
-    def link_project(self, project_id=None):
+    def link_project(self, project_id=None, *, repo_url=None, local_path=None, create=False, name=None):
+        """Programmatic link/create: optional GitHub (None = no repo) + directory → API + gui.json."""
         if not self.signed_in():
             return False, "set an API key first"
-        repo = self.s.get("repo")
-        if not repo or not Path(repo).expanduser().is_dir():
-            return False, "pick a repo in settings first"
-        pid = (project_id or self.s.get("project") or Path(repo).expanduser().name).strip()
-        remote = git_remote_url(repo)
-        code, data = api_json(
-            self.s["server"], "POST", "/v1/projects",
-            token=self.s["token"],
-            body={"id": pid, "name": pid, "repo_url": remote},
+        path = local_path or self.s.get("repo") or ""
+        if path:
+            path = str(Path(path).expanduser())
+        if not path or not Path(path).is_dir():
+            return False, "choose a local directory first"
+        pid = (project_id or self.s.get("project") or Path(path).name).strip()
+        if repo_url is None and create is False and project_id:
+            # CLI shorthand: prefer git remote when present, else leave unlinked
+            gh = git_remote_url(path)
+        else:
+            gh = repo_url
+        ok, data, err = project_link.upsert_project(
+            self.s["server"], self.s["token"],
+            project_id=pid, name=name or pid, repo_url=gh, local_path=path,
+            create=bool(create) or not project_id,
         )
-        if code == 409:
-            code, data = api_json(
-                self.s["server"], "POST", f"/v1/projects/{pid}/edit",
-                token=self.s["token"],
-                body={"name": pid, "repo_url": remote},
-            )
-        if code not in (200, 201):
-            return False, (data.get("error") if isinstance(data, dict) else None) or f"link failed ({code})"
-        self.s["project"] = pid
-        self.persist()
+        if not ok:
+            return False, err or "link failed"
+        pid = (data or {}).get("id") or pid
+        self.s = project_link.save_local_mapping(self.s, project_id=pid, local_path=path, repo_url=gh)
+        self.reload_settings()
         if self.tracking():
             self.stop_daemon()
             self.spawn()
-        linked = remote or "(no git remote — project id only)"
-        return True, f"linked {pid} → {linked}"
+        return True, f"linked {pid} → {path}" + (f" · {gh}" if gh else " · no GitHub repo")
+
+    def link_project_interactive(self, *, prefer_create=False):
+        if not self.signed_in():
+            return False, "set an API key first"
+        was_tracking = self.tracking()
+        self.s, msg = project_link.interactive_link(self.s, prefer_create=prefer_create)
+        self.reload_settings()
+        if was_tracking and self.s.get("repo") and self.s.get("project"):
+            self.stop_daemon()
+            self.spawn()
+        return bool(isinstance(msg, str) and msg.startswith("linked ")), msg
 
     def spawn(self):
         self.reload_settings()
@@ -359,7 +372,8 @@ class Tray(TrayCore):
             pystray.MenuItem("set / link API key…", self._action(self._do_set_api_key, background=True)),
             pystray.MenuItem("get API key in browser…", self._action(self._do_open_api_key_page, background=True)),
             pystray.MenuItem("clear API key", self._action(self._do_clear_api_key), enabled=lambda _i: bool(self.s.get("token"))),
-            pystray.MenuItem("link project / repo…", self._action(self._do_link, background=True), enabled=lambda _i: self.signed_in()),
+            pystray.MenuItem("link / create project…", self._action(self._do_link, background=True), enabled=lambda _i: self.signed_in()),
+            pystray.MenuItem("create project…", self._action(self._do_create_project, background=True), enabled=lambda _i: self.signed_in()),
             pystray.Menu.SEPARATOR,
             pystray.MenuItem("start tracking", self._action(self._do_start), enabled=lambda _i: not self.tracking()),
             pystray.MenuItem("stop tracking", self._action(self._do_stop), enabled=lambda _i: self.tracking()),
@@ -425,13 +439,19 @@ class Tray(TrayCore):
         self._refresh_ui()
 
     def _do_link(self):
-        suggested = self.s.get("project") or Path(self.s.get("repo") or ".").name
-        pid = prompt_text("Link project / repo", f"Project id (default {suggested}):")
-        if pid is None:
-            self._notify("cancelled")
-            return
-        ok, msg = self.link_project(pid or None)
+        self._notify("link project — pick project, optional GitHub, directory…")
+        ok, msg = self.link_project_interactive(prefer_create=False)
         self._notify(msg)
+        if not ok and msg != "cancelled":
+            native_ui.alert("StruggleTime", msg)
+        self._refresh_ui()
+
+    def _do_create_project(self):
+        self._notify("create project — name, optional GitHub, directory…")
+        ok, msg = self.link_project_interactive(prefer_create=True)
+        self._notify(msg)
+        if not ok and msg != "cancelled":
+            native_ui.alert("StruggleTime", msg)
         self._refresh_ui()
 
     def _do_inspect(self):
@@ -523,7 +543,7 @@ def run_headless(overrides):
     print("struggletime tray: headless mode (no display / pystray)", flush=True)
     print(INSTALL_HINT if pystray is None else "no DISPLAY/WAYLAND_DISPLAY — CLI control loop", flush=True)
     print(
-        "commands: status | apikey <key> | clear-key | link [project] | start | stop | pause | resume | sync | dashboard | config | quit",
+        "commands: status | apikey <key> | clear-key | link [project] | create | start | stop | pause | resume | sync | dashboard | config | quit",
         flush=True,
     )
     if core.signed_in() and not st_gui.validate(core.s):
@@ -563,9 +583,15 @@ def run_headless(overrides):
             print(msg, flush=True)
         elif low in ("clear-key", "logout", "clear"):
             print(core.clear_api_key(), flush=True)
+        elif low == "create":
+            ok, msg = core.link_project_interactive(prefer_create=True)
+            print(msg, flush=True)
         elif low == "link" or low.startswith("link "):
             parts = line.split(None, 1)
-            ok, msg = core.link_project(parts[1] if len(parts) > 1 else None)
+            if len(parts) == 1 and sys.stdin.isatty():
+                ok, msg = core.link_project_interactive(prefer_create=False)
+            else:
+                ok, msg = core.link_project(parts[1] if len(parts) > 1 else None)
             print(msg, flush=True)
         elif low == "start":
             print(core.spawn()[1], flush=True)

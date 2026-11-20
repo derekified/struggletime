@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).parent))
 import config as dcfg
 import browser_auth
 import native_ui
+import project_link
 
 # Kept for tray/tests that historically checked gui.tk — always None (no tkinter).
 tk = None
@@ -97,12 +98,17 @@ def clear_api_key_interactive(s):
     return s, "cleared"
 
 def pick_repo(s):
-    path = native_ui.choose_folder("Repo to track", s.get("repo") or str(Path.home()))
+    path = native_ui.choose_folder("Local directory to track", s.get("repo") or str(Path.home()))
     if not path:
         return s, "cancelled"
     s["repo"] = path
     save_settings(s)
     return s, path
+
+def link_or_create_project(s, *, prefer_create=False):
+    s, msg = project_link.interactive_link(s, prefer_create=prefer_create)
+    save_settings(s)
+    return s, msg
 
 def edit_field(s, key, title, secret=False):
     cur = str(s.get(key) or "")
@@ -183,7 +189,8 @@ def print_status(s, tracker):
     print(f"\nstruggletime settings  [{native_ui.backend_name()} dialogs]")
     print(f"  status:  {state} · {auth}")
     print(f"  handle:  {s.get('handle') or '—'}")
-    print(f"  repo:    {s.get('repo') or '—'}")
+    print(f"  project: {s.get('project') or '—'}")
+    print(f"  dir:     {s.get('repo') or '—'}")
     print(f"  server:  {s.get('server')}")
     print(f"  bucket:  {s.get('bucket_mins')} min")
     print(f"  config:  {dcfg.GUI_SETTINGS}")
@@ -201,13 +208,15 @@ def run_menu(initial):
     actions = [
         ("1", "set / link API key", lambda: set_api_key_interactive(s)),
         ("2", "clear API key", lambda: clear_api_key_interactive(s)),
-        ("3", "choose repo folder", lambda: pick_repo(s)),
-        ("4", "edit server URL", lambda: edit_field(s, "server", "Server URL")),
-        ("5", "edit bucket minutes", lambda: edit_field(s, "bucket_mins", "Bucket minutes")),
-        ("6", "start tracking", None),
-        ("7", "stop tracking", None),
-        ("8", "inspect what would be sent", lambda: (inspect_repo(s), s, "ok")[1:]),
-        ("9", "open dashboard", lambda: (open_dashboard(s), s, "ok")[1:]),
+        ("3", "link / create project", lambda: link_or_create_project(s)),
+        ("4", "create project", lambda: link_or_create_project(s, prefer_create=True)),
+        ("5", "choose directory only", lambda: pick_repo(s)),
+        ("6", "edit server URL", lambda: edit_field(s, "server", "Server URL")),
+        ("7", "edit bucket minutes", lambda: edit_field(s, "bucket_mins", "Bucket minutes")),
+        ("8", "start tracking", None),
+        ("9", "stop tracking", None),
+        ("i", "inspect what would be sent", lambda: (inspect_repo(s), s, "ok")[1:]),
+        ("d", "open dashboard", lambda: (open_dashboard(s), s, "ok")[1:]),
         ("s", "show status", None),
         ("q", "quit", None),
     ]
@@ -227,19 +236,19 @@ def run_menu(initial):
             break
         if choice == "s" or choice == "":
             continue
-        if choice == "6":
+        if choice == "8":
             ok, msg = tracker.start(s)
             print(msg)
             if not ok:
                 native_ui.alert("StruggleTime", msg)
             continue
-        if choice == "7":
+        if choice == "9":
             print(tracker.stop())
             continue
-        if choice == "8":
+        if choice == "i":
             inspect_repo(s)
             continue
-        if choice == "9":
+        if choice == "d":
             open_dashboard(s)
             continue
         matched = next((a for a in actions if a[0] == choice), None)

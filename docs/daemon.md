@@ -39,7 +39,9 @@ are linked via API key and set up, shows today's weighted time next to
 the icon (`42m`, `1h 15m`), refreshed every 15 seconds, and its menu
 has start/stop, **set / link API key** (paste the key from dashboard
 Settings → StruggleTime API key into `~/.aitime/gui.json`), clear key,
-link project/repo, open dashboard, inspect, settings, and quit.
+**link / create project** (project list, optional GitHub repo with None,
+local directory picker → API + `gui.json`), open dashboard, inspect,
+settings, and quit.
 linux needs a tray backend
 (`sudo apt install gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`);
 gnome without the appindicator extension has no tray area — the tray
