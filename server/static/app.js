@@ -1080,7 +1080,13 @@ function analyticsQS() {
 
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "KeyB", "KeyA"];
 let konamiBuf = [];
-let fakeStatsMode = sessionStorage.getItem("st_fake_stats") === "1";
+// Real telemetry by default. Never restore sample mode from a prior tab session —
+// stale sessionStorage "1" made the dashboard look fake until Konami was toggled off.
+try {
+  sessionStorage.removeItem("st_fake_stats");
+  localStorage.removeItem("st_fake_stats");
+} catch (_) {}
+let fakeStatsMode = false;
 
 function buildFakeAnalytics() {
   const days = [];
@@ -1137,6 +1143,17 @@ function buildFakeAnalytics() {
     rhythm,
     pace: { today_hours: 6.3, baseline_hours: 5.4, delta_pct: 17 },
     modes: { human_hours: 34.1, ai_hours: 8.5, human_pct: 80, ai_pct: 20 },
+    recent: projects.slice(0, 4).map((p, i) => ({
+      day: days[days.length - 1 - (i % days.length)].day,
+      project_id: p.id,
+      project_label: p.label,
+      state: "CLOSED_LOOP",
+      state_label: "closed loop",
+      weighted_hours: p.hours / 10,
+      editor: editors[i % editors.length].label,
+      language: languages[i % languages.length].label,
+      os: oses[0].label,
+    })),
     filters: {
       ranges: [
         { id: "today", label: "today" }, { id: "7d", label: "7 days" },
@@ -1160,7 +1177,13 @@ function paintFakeBadge() {
 
 function setFakeStatsMode(on) {
   fakeStatsMode = !!on;
-  sessionStorage.setItem("st_fake_stats", fakeStatsMode ? "1" : "0");
+  try {
+    if (fakeStatsMode) sessionStorage.setItem("st_fake_stats", "1");
+    else {
+      sessionStorage.removeItem("st_fake_stats");
+      localStorage.removeItem("st_fake_stats");
+    }
+  } catch (_) {}
   paintFakeBadge();
   toast(fakeStatsMode ? "Sample stats on" : "Back to your real stats", { kind: fakeStatsMode ? "info" : "ok", glyph: fakeStatsMode ? "sticker" : "checkmark" });
   loadAnalytics();
