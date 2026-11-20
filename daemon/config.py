@@ -4,6 +4,21 @@
 import json, os
 from pathlib import Path
 
+def _load_dotenv():
+    here = Path(__file__).resolve().parent.parent
+    for candidate in (Path.cwd() / ".env", here / ".env"):
+        if not candidate.exists():
+            continue
+        for line in candidate.read_text().splitlines():
+            line = line.strip()
+            if not line or line.startswith("#") or "=" not in line:
+                continue
+            k, v = line.split("=", 1)
+            os.environ.setdefault(k.strip(), v.strip().strip("'\""))
+        break
+
+_load_dotenv()
+
 HOME = Path(os.environ.get("STRUGGLETIME_HOME") or os.environ.get("AITIME_HOME") or (Path.home() / ".aitime"))
 GUI_SETTINGS = HOME / "gui.json"
 PAUSE_FLAG = HOME / "paused"
@@ -24,6 +39,14 @@ def env(*keys, default=""):
             return v
     return default
 
+def public_url(fallback=""):
+    """Browser-facing base (OAuth / dashboard). Prefer tunnel/public host over localhost."""
+    return (
+        env("OAUTH_REDIRECT_BASE", "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL", default="")
+        or fallback
+        or env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=DEFAULTS["server"])
+    ).rstrip("/")
+
 def load_settings(path=None):
     p = Path(path or GUI_SETTINGS)
     data = dict(DEFAULTS)
@@ -33,6 +56,10 @@ def load_settings(path=None):
     except Exception:
         pass
     data["server"] = env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=data.get("server") or DEFAULTS["server"])
+    # if settings still point at loopback but a public tunnel is configured, use that for the app URL
+    pub = env("OAUTH_REDIRECT_BASE", "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL", default="")
+    if pub and ("127.0.0.1" in data["server"] or "localhost" in data["server"]):
+        data["server"] = pub.rstrip("/")
     data["token"] = env("STRUGGLETIME_TOKEN", "AITIME_TOKEN", default=data.get("token") or "")
     data["handle"] = env("STRUGGLETIME_USER", "AITIME_USER", default=data.get("handle") or "")
     data["repo"] = env("STRUGGLETIME_REPO", "AITIME_REPO", default=data.get("repo") or "")
@@ -67,6 +94,7 @@ def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_p
     project = cli_project or s.get("project") or ""
     return {
         "server": server,
+        "public_url": public_url(server),
         "token": token,
         "handle": user,
         "repo": repo,

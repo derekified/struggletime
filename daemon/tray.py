@@ -185,11 +185,15 @@ class TrayCore:
             self.auth = {"ok": False, "handle": None, "needs_handle": False}
         return self.auth
 
+    def browser_base(self):
+        """Public/tunnel URL for browser OAuth + dashboard (never prefer loopback when configured)."""
+        return dcfg.public_url(self.s.get("server") or "")
+
     def open_login(self):
-        """Open Slack OAuth in the browser (same flow as the dashboard)."""
-        url = self.s["server"].rstrip("/") + "/v1/auth/slack/start"
+        """Open Slack OAuth in the browser on the public host (Cloudflare/ngrok), not localhost."""
+        url = self.browser_base() + "/v1/auth/slack/start"
         webbrowser.open(url)
-        return "opened Slack sign-in — after the browser finishes, use “paste auth code / token…”"
+        return f"opened Slack sign-in at {url} — after the browser finishes, use “paste auth code / token…”"
 
     def apply_auth_secret(self, raw):
         """Accept a one-time ?auth= code or a session bearer token; save to gui.json."""
@@ -323,7 +327,8 @@ class TrayCore:
             pass
 
     def open_dashboard(self):
-        webbrowser.open(self.s["server"].rstrip("/") + ("/home" if self.signed_in() else "/login"))
+        base = self.browser_base()
+        webbrowser.open(base + ("/home" if self.signed_in() else "/login"))
 
     def open_config(self):
         dcfg.HOME.mkdir(parents=True, exist_ok=True)

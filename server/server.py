@@ -482,6 +482,13 @@ class H(BaseHTTPRequestHandler):
             provider = p[2]; cfg = oauth_config(provider)
             qs = parse_qs(parsed.query)
             if p[3] == "start":
+                # If OAuth is registered on a public tunnel, never start the flow from loopback —
+                # bounce to the public host so cookies/callbacks stay on the same origin.
+                public = os.environ.get("OAUTH_REDIRECT_BASE", "").rstrip("/")
+                host = (self.headers.get("Host") or "").split(":")[0].lower()
+                if public and host in ("127.0.0.1", "localhost", "::1"):
+                    q = ("?" + parsed.query) if parsed.query else ""
+                    return self.redirect(public + "/v1/auth/" + provider + "/start" + q)
                 if not (cfg["client_id"] and cfg["client_secret"]):
                     return self.redirect(("/settings" if provider == "github" else "/login") + "?oauth=" + provider + "_not_configured")
                 if provider == "slack":
