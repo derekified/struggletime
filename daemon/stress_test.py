@@ -9,7 +9,7 @@
   python3 daemon/stress_test.py --smoke
 
   # against a running server (session bearer required):
-  python3 daemon/stress_test.py --server https://paper-identifier-specialist-sold.trycloudflare.com --token "$TOKEN" --count 1000
+  python3 daemon/stress_test.py --server https://rap-minds-question-representatives.trycloudflare.com --token "$TOKEN" --count 1000
 
   # remove synthetic projects from a prior run:
   python3 daemon/stress_test.py --server … --token … --cleanup --run-id abcdef

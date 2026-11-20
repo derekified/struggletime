@@ -374,7 +374,7 @@ def main():
         cli_repo=a.repo, cli_project=a.project or "",
     )
     if not rt["repo"]:
-        print("repo required (--repo or ~/.aitime/gui.json)", file=sys.stderr)
+        print("repo required (--repo or ~/.config/struggletime/settings.json)", file=sys.stderr)
         return 1
     repo = Path(rt["repo"]).expanduser().resolve()
     if not repo.is_dir():

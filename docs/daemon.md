@@ -4,8 +4,10 @@ One python file (`daemon/daemon.py`), stdlib only, polling instead of
 native watchers so it runs the same on a 10-year-old windows laptop as
 on a new mac. expect tens of mb of ram and near-zero cpu while idle.
 
-Config lives in `~/.aitime/gui.json` (and env overrides). There is no
-`~/.wakatime.cfg` in this architecture.
+Settings live in `~/.config/struggletime/settings.json` (XDG; env
+overrides via `STRUGGLETIME_CONFIG`). Runtime logs/events stay in
+`~/.aitime/`. Legacy `~/.aitime/gui.json` is migrated automatically.
+There is no `~/.wakatime.cfg` in this architecture.
 
 ## what it watches
 
@@ -38,7 +40,7 @@ the appindicator area on linux. it starts tracking on launch if you
 are linked via API key and set up, shows today's weighted time next to
 the icon (`42m`, `1h 15m`), refreshed every 15 seconds, and its menu
 has start/stop, **set / link API key** (paste the key from dashboard
-Settings → StruggleTime API key into `~/.aitime/gui.json`), clear key,
+Settings → StruggleTime API key into `~/.config/struggletime/settings.json`), clear key,
 **link / create project** (project list, optional GitHub repo with None,
 local directory picker → API + `gui.json`), open dashboard, inspect,
 settings, and quit.
@@ -57,22 +59,31 @@ make gui                 # or: python3 daemon/gui.py
 
 **set API key** (from Settings on the dashboard), then **link / create
 project** (project + optional GitHub / None + local directory), start
-tracking. settings are stored in `~/.aitime/gui.json`, which the tray
-and Layer-1 daemon read too. `inspect what would be sent` shows a
-native alert with the inspect output.
+tracking. settings are stored in `~/.config/struggletime/settings.json`,
+which the tray and Layer-1 daemon read too. `inspect what would be sent`
+shows a native alert with the inspect output.
+
+start on login (tray + linked daemon):
+
+```bash
+sh daemon/autostart.sh    # or: sh daemon/install.sh
+```
+
+this writes `~/.config/autostart/struggletime.desktop` (Linux), a systemd
+user unit, or a macOS LaunchAgent, and installs `~/.local/bin/struggletime-login`.
 
 headless or scripting, the cli is still there:
 
 ```bash
 python3 daemon/daemon.py --repo ~/my-project \
-  --server https://paper-identifier-specialist-sold.trycloudflare.com --user you
+  --server https://rap-minds-question-representatives.trycloudflare.com --user you
 ```
 
 or via the helper (background + logs):
 
 ```bash
 python3 daemon/helper.py start --repo ~/my-project --user you \
-  --server https://paper-identifier-specialist-sold.trycloudflare.com --token "$ST_API_KEY"
+  --server https://rap-minds-question-representatives.trycloudflare.com --token "$ST_API_KEY"
 python3 daemon/helper.py status
 python3 daemon/helper.py sync --repo ~/my-project --user you   # flush pending now
 python3 daemon/helper.py pause
@@ -118,7 +129,7 @@ Goose, OpenCode, Gemini CLI, and more. Override or extend without code
 changes:
 
 ```jsonc
-// ~/.aitime/editors.json
+// ~/.config/struggletime/editors.json
 {
   "signatures": [
     {"match": "my-ide", "editor": "my-ide", "kind": "ai_ide"},

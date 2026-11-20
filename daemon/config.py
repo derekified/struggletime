@@ -1,7 +1,15 @@
 #!/usr/bin/env python3
 # SPDX-License-Identifier: AGPL-3.0-or-later
-"""Shared aitime daemon config: ~/.aitime/gui.json only (no wakatime.cfg)."""
-import json, os
+"""Shared StruggleTime/aitime config paths.
+
+Settings (API key, server, linked repo) live under XDG config:
+  ~/.config/struggletime/settings.json
+Runtime data (logs, events, pause flag) stay under:
+  ~/.aitime/
+
+Legacy ~/.aitime/gui.json is migrated automatically on first load.
+"""
+import json, os, shutil
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -20,12 +28,27 @@ def _load_dotenv():
 
 _load_dotenv()
 
+def _xdg_config_home():
+    return Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
+
+# Runtime / state dir (logs, agent_events, pause). Overridable for tests.
 HOME = Path(os.environ.get("STRUGGLETIME_HOME") or os.environ.get("AITIME_HOME") or (Path.home() / ".aitime"))
-GUI_SETTINGS = HOME / "gui.json"
+
+# Persistent settings dir (XDG). STRUGGLETIME_CONFIG / AITIME_CONFIG override.
+CONFIG_HOME = Path(
+    os.environ.get("STRUGGLETIME_CONFIG")
+    or os.environ.get("AITIME_CONFIG")
+    or (_xdg_config_home() / "struggletime")
+)
+
+GUI_SETTINGS = CONFIG_HOME / "settings.json"
+LEGACY_GUI_SETTINGS = HOME / "gui.json"
+EDITORS_JSON = CONFIG_HOME / "editors.json"
+LEGACY_EDITORS_JSON = HOME / "editors.json"
 PAUSE_FLAG = HOME / "paused"
 
 # Public Cloudflare tunnel (replaces stale <NGROK …> / localhost defaults).
-PUBLIC_SERVER = "https://paper-identifier-specialist-sold.trycloudflare.com"
+PUBLIC_SERVER = "https://rap-minds-question-representatives.trycloudflare.com"
 
 DEFAULTS = {
     "handle": "",
@@ -50,7 +73,6 @@ def normalize_server(url, fallback=None):
     if not raw:
         return fallback
     low = raw.lower()
-    # Explicit stale placeholders (e.g. "<NGROK, nothing after it>")
     if raw.startswith("<") or "ngrok" in low and not low.startswith("http"):
         return fallback
     if "<ngrok" in low or "nothing after" in low:
@@ -63,7 +85,6 @@ def normalize_server(url, fallback=None):
         return fallback
     if u.scheme not in ("http", "https") or not u.netloc:
         return fallback
-    # reject scheme-only / malformed hosts
     if u.netloc.startswith("<") or " " in u.netloc:
         return fallback
     return raw.rstrip("/")
@@ -76,8 +97,35 @@ def public_url(fallback=""):
         or env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=DEFAULTS["server"])
     )
 
+def _migrate_legacy_settings():
+    """Copy ~/.aitime/gui.json → ~/.config/struggletime/settings.json once."""
+    if GUI_SETTINGS.exists():
+        return
+    if not LEGACY_GUI_SETTINGS.exists():
+        return
+    try:
+        CONFIG_HOME.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(LEGACY_GUI_SETTINGS, GUI_SETTINGS)
+    except Exception:
+        pass
+
+def _migrate_legacy_editors():
+    if EDITORS_JSON.exists() or not LEGACY_EDITORS_JSON.exists():
+        return
+    try:
+        CONFIG_HOME.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(LEGACY_EDITORS_JSON, EDITORS_JSON)
+    except Exception:
+        pass
+
+def settings_path(path=None):
+    if path:
+        return Path(path)
+    _migrate_legacy_settings()
+    return GUI_SETTINGS
+
 def load_settings(path=None):
-    p = Path(path or GUI_SETTINGS)
+    p = settings_path(path)
     data = dict(DEFAULTS)
     raw_server = None
     try:
@@ -87,7 +135,6 @@ def load_settings(path=None):
     except Exception:
         pass
     data["server"] = env("STRUGGLETIME_SERVER", "AITIME_SERVER", default=data.get("server") or DEFAULTS["server"])
-    # if settings still point at loopback but a public tunnel is configured, use that for the app URL
     pub = env("OAUTH_REDIRECT_BASE", "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL", default="")
     if pub and ("127.0.0.1" in data["server"] or "localhost" in data["server"]):
         data["server"] = pub.rstrip("/")
@@ -95,7 +142,6 @@ def load_settings(path=None):
     data["token"] = env("STRUGGLETIME_TOKEN", "AITIME_TOKEN", default=data.get("token") or "")
     data["handle"] = env("STRUGGLETIME_USER", "AITIME_USER", default=data.get("handle") or "")
     data["repo"] = env("STRUGGLETIME_REPO", "AITIME_REPO", default=data.get("repo") or "")
-    # Persist when on-disk server was a placeholder / invalid / superseded by public URL
     if p.exists() and raw_server is not None:
         if data["server"] != (raw_server or "").strip().rstrip("/"):
             try:
@@ -105,13 +151,21 @@ def load_settings(path=None):
     return data
 
 def save_settings(s, path=None):
-    p = Path(path or GUI_SETTINGS)
+    p = settings_path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
+    HOME.mkdir(parents=True, exist_ok=True)
     keep = {k: s.get(k, DEFAULTS.get(k, "")) for k in DEFAULTS}
     keep["server"] = normalize_server(keep.get("server"))
     if s.get("token"):
         keep["token"] = s["token"]
-    p.write_text(json.dumps(keep, indent=1))
+    p.write_text(json.dumps(keep, indent=1) + "\n")
+    # Keep a compatibility copy for older tooling that still reads ~/.aitime/gui.json
+    try:
+        if p.resolve() != LEGACY_GUI_SETTINGS.resolve():
+            LEGACY_GUI_SETTINGS.parent.mkdir(parents=True, exist_ok=True)
+            LEGACY_GUI_SETTINGS.write_text(p.read_text())
+    except Exception:
+        pass
 
 def is_paused(path=None):
     return Path(path or PAUSE_FLAG).exists()
@@ -125,7 +179,7 @@ def set_paused(paused, path=None):
         p.unlink(missing_ok=True)
 
 def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_project=""):
-    """Merge CLI > env > ~/.aitime/gui.json."""
+    """Merge CLI > env > settings.json."""
     s = load_settings()
     server = normalize_server(cli_server or s.get("server") or DEFAULTS["server"])
     token = cli_token or s.get("token") or ""
@@ -141,3 +195,7 @@ def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_p
         "project": project,
         "bucket_mins": int(s.get("bucket_mins") or 5),
     }
+
+def editors_path():
+    _migrate_legacy_editors()
+    return Path(os.environ.get("AITIME_EDITORS_JSON") or EDITORS_JSON)

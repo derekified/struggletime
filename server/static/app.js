@@ -12,10 +12,14 @@ const setToken = (t) => { if (t) localStorage.setItem("st_token", t); else local
 const authHdr = () => (token() ? { Authorization: "Bearer " + token() } : {});
 async function j(u, o = {}) {
   try {
+    const headers = { ...(o.headers || {}) };
+    if (!o.cookieOnly) Object.assign(headers, authHdr());
+    else delete headers.Authorization;
+    const { cookieOnly, ...fetchOpts } = o;
     const r = await fetch(u, {
       credentials: "same-origin",
-      ...o,
-      headers: { ...(o.headers || {}), ...authHdr() },
+      ...fetchOpts,
+      headers,
     });
     return [r.status, await r.json().catch(() => ({}))];
   } catch (_) {
@@ -74,7 +78,11 @@ function pathToPage(pathname) {
 }
 
 function isSignedIn() {
-  return !!(token() && meProfile && meProfile.handle);
+  // Prefer profile from /v1/auth/me (cookie or bearer). localStorage alone is not enough.
+  return !!(meProfile && meProfile.handle);
+}
+function hasSession() {
+  return !!(meProfile && (meProfile.handle || meProfile.needs_handle));
 }
 
 function pendingAuthCode() {
@@ -519,7 +527,7 @@ function paintWhoAction(label, href, glyph) {
 }
 
 function paintAccount() {
-  const p = meProfile, signed = !!token();
+  const p = meProfile, signed = hasSession();
   const q = new URLSearchParams(location.search).get("oauth");
   const stats = $("nav-stats");
   const ident = $("nav-identity");
@@ -582,7 +590,7 @@ function paintAccount() {
 
 function paintLogin() {
   if (activePage !== "login") return;
-  const p = meProfile, signed = !!token();
+  const p = meProfile, signed = hasSession();
   const q = new URLSearchParams(location.search);
   const status = $("login-status");
   if (q.get("signed_out")) status.textContent = "You're signed out.";
@@ -749,11 +757,15 @@ async function consumeAuthCode() {
 }
 
 async function loadMe(force = false) {
-  if (!token()) { meProfile = null; meLoaded = true; return; }
   if (meLoaded && !force && meProfile) return;
-  const [s, r] = await j("/v1/auth/me");
-  if (s === 401) {
+  // Always hit /v1/auth/me — cookie session works even with empty localStorage.
+  // Stale bearer in localStorage must not mask a valid st_session cookie.
+  let [s, r] = await j("/v1/auth/me");
+  if (s === 401 && token()) {
     setToken("");
+    [s, r] = await j("/v1/auth/me", { cookieOnly: true });
+  }
+  if (s === 401) {
     meProfile = null;
     meLoaded = true;
     if ($("nav-identity")) $("nav-identity").hidden = true;
@@ -762,6 +774,7 @@ async function loadMe(force = false) {
     return;
   }
   if (s === 200) meProfile = r;
+  else if (!meProfile) meProfile = null;
   meLoaded = true;
 }
 
@@ -1599,7 +1612,10 @@ if ($("login-handle")) $("login-handle").addEventListener("input", async (e) => 
 if ($("gh-form")) $("gh-form").addEventListener("submit", (e) => {
   e.preventDefault();
   if (!(meProfile && meProfile.handle)) { toast("Claim a handle first", { kind: "error" }); return; }
-  location.href = "/v1/auth/github/start?session=" + encodeURIComponent(token());
+  // Prefer cookie session; only pass localStorage token when it looks like a web session (not st_ API key).
+  const t = token();
+  const q = t && !t.startsWith("st_") ? ("?session=" + encodeURIComponent(t)) : "";
+  location.href = "/v1/auth/github/start" + q;
 });
 if ($("btn-create-project")) $("btn-create-project").addEventListener("click", () => openProjectModal(null));
 if ($("btn-link-project")) $("btn-link-project").addEventListener("click", () => openLinkProjectModal());

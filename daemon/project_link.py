@@ -3,7 +3,7 @@
 """Shared project link / create flow for tray + settings GUI.
 
 Projects dropdown + optional GitHub repo (None allowed) + local directory,
-persisted to the API and ~/.aitime/gui.json so daemon.py tracks --repo/--project.
+persisted to the API and ~/.config/struggletime/settings.json so daemon.py tracks --repo/--project.
 """
 from __future__ import annotations
 
@@ -75,7 +75,7 @@ def list_github_repos(server, token):
 
 
 def save_local_mapping(settings, *, project_id, local_path, repo_url=None, path=None):
-    """Write project + directory into ~/.aitime/gui.json (and optional handle/server)."""
+    """Write project + directory into settings.json (and optional handle/server)."""
     s = dict(settings or {})
     s["server"] = dcfg.normalize_server(s.get("server"))
     if project_id:

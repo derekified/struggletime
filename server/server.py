@@ -144,6 +144,37 @@ DB = os.environ.get("SERVER_DB", "server.db")
 STATIC = Path(__file__).parent / "static"
 
 _LOCK = threading.RLock(); _CONN = None
+
+class _HeadSink:
+    """Pass through response headers; discard the body for HTTP HEAD."""
+    def __init__(self, real):
+        self._real = real
+        self._buf = b""
+        self._headers_done = False
+    def write(self, data):
+        if data is None:
+            return 0
+        if isinstance(data, str):
+            data = data.encode()
+        if self._headers_done:
+            return len(data)
+        self._buf += data
+        idx = self._buf.find(b"\r\n\r\n")
+        if idx < 0:
+            return len(data)
+        self._real.write(self._buf[: idx + 4])
+        self._headers_done = True
+        self._buf = b""
+        return len(data)
+    def flush(self):
+        if not self._headers_done and self._buf:
+            self._real.write(self._buf)
+            self._buf = b""
+            self._headers_done = True
+        self._real.flush()
+    def __getattr__(self, name):
+        return getattr(self._real, name)
+
 def db():
     global _CONN
     if _CONN is not None: return _CONN
@@ -508,6 +539,19 @@ class H(BaseHTTPRequestHandler):
             try: return self._get()
             except (BrokenPipeError, ConnectionResetError): pass
             except Exception as e: return self.send_json(500, {"error": f"internal: {type(e).__name__}"})
+    def do_HEAD(self):
+        """Cloudflare and browsers probe with HEAD — same headers as GET, no body."""
+        with _LOCK:
+            real = self.wfile
+            self.wfile = _HeadSink(real)
+            try:
+                return self._get()
+            except (BrokenPipeError, ConnectionResetError):
+                pass
+            except Exception as e:
+                return self.send_json(500, {"error": f"internal: {type(e).__name__}"})
+            finally:
+                self.wfile = real
     def _get(self):
         parsed = urlparse(self.path); p = parsed.path.strip("/").split("/") if parsed.path.strip("/") else []
         c = db()
@@ -599,7 +643,12 @@ class H(BaseHTTPRequestHandler):
                     intent, handle = "login", ""
                 else:
                     intent = "link"
-                    sess = self.session(c, token=(qs.get("session", [""])[0] or None))
+                    # Prefer ?session= when it is a real web session; fall back to cookie
+                    # so a stale localStorage API key cannot block GitHub linking.
+                    raw_sess = (qs.get("session", [""])[0] or "").strip()
+                    sess = self.session(c, token=raw_sess or None) if raw_sess else None
+                    if not sess or not sess["handle"]:
+                        sess = self.session(c)
                     if not sess or not sess["handle"]:
                         return self.redirect("/login?oauth=sign_in_with_slack_first")
                     handle = sess["handle"]
@@ -659,6 +708,8 @@ class H(BaseHTTPRequestHandler):
                 return self.redirect("/settings?oauth=github_linked")
         if p == ["v1", "me", "analytics"]:
             who = self.auth_handle(c)
+            if not who:
+                return self.send_json(401, {"error": "not signed in"})
             qs = parse_qs(parsed.query)
             try: tz_offset = int((qs.get("tz_offset") or ["0"])[0])
             except ValueError: tz_offset = 0

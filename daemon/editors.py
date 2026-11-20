@@ -3,7 +3,7 @@
 """Extensible editor / AI-agent signature registry for Layer-1 attribution.
 
 Built-in signatures cover major + niche IDEs/CLIs. Users can override or
-extend via ~/.aitime/editors.json without per-IDE plugins. Stdlib only.
+extend via ~/.config/struggletime/editors.json without per-IDE plugins. Stdlib only.
 """
 from __future__ import annotations
 
@@ -84,7 +84,7 @@ def _token_hit(needle, blob):
         return False
     return re.search(r"(?<![a-z0-9])" + re.escape(needle) + r"(?![a-z0-9])", blob) is not None
 
-EDITORS_JSON = dcfg.HOME / "editors.json"
+EDITORS_JSON = dcfg.EDITORS_JSON
 
 
 def _clean_label(v, default=""):
@@ -97,7 +97,7 @@ def _clean_label(v, default=""):
 
 
 def _load_user_signatures():
-    path = Path(os.environ.get("AITIME_EDITORS_JSON") or EDITORS_JSON)
+    path = dcfg.editors_path()
     try:
         mtime = path.stat().st_mtime
     except OSError:

@@ -21,15 +21,20 @@ class TestTray(unittest.TestCase):
 
     def test_aitime_gui_json_and_pause(self):
         with tempfile.TemporaryDirectory() as d:
-            home = pathlib.Path(d)
-            gui = home / "gui.json"
+            home = pathlib.Path(d) / "aitime"
+            cfg = pathlib.Path(d) / "config"
+            home.mkdir(); cfg.mkdir()
+            gui = cfg / "settings.json"
             gui.write_text(json.dumps({"handle": "rowan", "repo": "/tmp/x", "server": "http://127.0.0.1:18765", "bucket_mins": 5}))
             os.environ["STRUGGLETIME_HOME"] = str(home)
+            os.environ["STRUGGLETIME_CONFIG"] = str(cfg)
             for k in ("STRUGGLETIME_SERVER", "AITIME_SERVER", "OAUTH_REDIRECT_BASE",
                       "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL"):
                 os.environ.pop(k, None)
             dcfg.HOME = home
+            dcfg.CONFIG_HOME = cfg
             dcfg.GUI_SETTINGS = gui
+            dcfg.LEGACY_GUI_SETTINGS = home / "gui.json"
             dcfg.PAUSE_FLAG = home / "paused"
             s = dcfg.load_settings(gui)
             self.assertEqual(s["handle"], "rowan")
@@ -41,6 +46,30 @@ class TestTray(unittest.TestCase):
             dcfg.set_paused(False)
             self.assertFalse(dcfg.is_paused())
 
+    def test_migrate_legacy_gui_json(self):
+        with tempfile.TemporaryDirectory() as d:
+            home = pathlib.Path(d) / "aitime"
+            cfg = pathlib.Path(d) / "config"
+            home.mkdir()
+            legacy = home / "gui.json"
+            legacy.write_text(json.dumps({"handle": "mig", "repo": "/tmp/r", "server": "http://127.0.0.1:9", "bucket_mins": 5, "token": "st_x"}))
+            for k in ("STRUGGLETIME_SERVER", "AITIME_SERVER", "OAUTH_REDIRECT_BASE",
+                      "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL"):
+                os.environ.pop(k, None)
+            os.environ["STRUGGLETIME_HOME"] = str(home)
+            os.environ["STRUGGLETIME_CONFIG"] = str(cfg)
+            dcfg.HOME = home
+            dcfg.CONFIG_HOME = cfg
+            dcfg.GUI_SETTINGS = cfg / "settings.json"
+            dcfg.LEGACY_GUI_SETTINGS = legacy
+            dcfg.PAUSE_FLAG = home / "paused"
+            s = dcfg.load_settings()
+            self.assertEqual(s["handle"], "mig")
+            self.assertTrue((cfg / "settings.json").exists())
+            dcfg.save_settings({**s, "bucket_mins": 7})
+            self.assertEqual(json.loads((cfg / "settings.json").read_text())["bucket_mins"], 7)
+            self.assertTrue(legacy.exists())  # compat mirror
+
     def test_normalize_ngrok_placeholder(self):
         self.assertEqual(
             dcfg.normalize_server("<NGROK, nothing after it>"),
@@ -48,15 +77,22 @@ class TestTray(unittest.TestCase):
         )
         self.assertEqual(dcfg.normalize_server(""), dcfg.PUBLIC_SERVER.rstrip("/"))
         self.assertEqual(dcfg.normalize_server("not-a-url"), dcfg.PUBLIC_SERVER.rstrip("/"))
-        self.assertTrue(dcfg.PUBLIC_SERVER.startswith("https://paper-identifier-specialist-sold.trycloudflare.com"))
+        self.assertTrue(dcfg.PUBLIC_SERVER.startswith("https://rap-minds-question-representatives.trycloudflare.com"))
         with tempfile.TemporaryDirectory() as d:
-            home = pathlib.Path(d)
-            gui = home / "gui.json"
+            home = pathlib.Path(d) / "aitime"
+            cfg = pathlib.Path(d) / "config"
+            home.mkdir(); cfg.mkdir()
+            gui = cfg / "settings.json"
             gui.write_text(json.dumps({"handle": "x", "repo": "/tmp", "server": "<NGROK, nothing after it>", "bucket_mins": 5}))
             for k in ("STRUGGLETIME_SERVER", "AITIME_SERVER", "OAUTH_REDIRECT_BASE",
                       "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL"):
                 os.environ.pop(k, None)
+            os.environ["STRUGGLETIME_HOME"] = str(home)
+            os.environ["STRUGGLETIME_CONFIG"] = str(cfg)
+            dcfg.HOME = home
+            dcfg.CONFIG_HOME = cfg
             dcfg.GUI_SETTINGS = gui
+            dcfg.LEGACY_GUI_SETTINGS = home / "gui.json"
             s = dcfg.load_settings(gui)
             self.assertEqual(s["server"], dcfg.PUBLIC_SERVER.rstrip("/"))
             saved = json.loads(gui.read_text())

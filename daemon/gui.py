@@ -6,7 +6,7 @@
   python3 daemon/gui.py --repo ~/my-project --user you
 
 Uses native OS dialogs (osascript / zenity / PowerShell) when a display is
-available, otherwise a simple terminal menu. Shared state: ~/.aitime/gui.json.
+available, otherwise a simple terminal menu. Shared state: ~/.config/struggletime/settings.json.
 """
 import argparse, json, os, subprocess, sys, threading, time
 from pathlib import Path

@@ -8,7 +8,7 @@
 Live status + today's weighted time, start/stop, API key linking,
 open dashboard, inspect, settings, quit. Falls back to a headless CLI
 when no display / AppIndicator is available.
-Settings come from ~/.aitime/gui.json only (custom aitime architecture).
+Settings come from ~/.config/struggletime/settings.json (XDG; custom aitime).
 """
 import importlib.util, json, os, signal, subprocess, sys, threading, time, traceback, urllib.request
 from pathlib import Path
@@ -114,7 +114,7 @@ class TrayCore:
         self.reload_settings()
 
     def reload_settings(self):
-        """Re-read ~/.aitime/gui.json so tray/gui/daemon stay in sync."""
+        """Re-read ~/.config/struggletime/settings.json so tray/gui/daemon stay in sync."""
         self.s = st_gui.load_settings()
         self.s.update(self.overrides)
         rt = dcfg.resolve_runtime(
@@ -184,7 +184,7 @@ class TrayCore:
         return dcfg.public_url(self.s.get("server") or "")
 
     def set_api_key(self, raw):
-        """Validate and persist a StruggleTime API key into ~/.aitime/gui.json."""
+        """Validate and persist a StruggleTime API key into settings.json."""
         key = (raw or "").strip()
         if not key:
             return False, "no key entered"
