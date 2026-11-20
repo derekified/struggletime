@@ -35,10 +35,12 @@ make tray                                     # or: python3 daemon/tray.py
 
 it lives in the menu bar on macos, the system tray on windows, and
 the appindicator area on linux. it starts tracking on launch if you
-are set up, shows today's weighted time next to the icon (`42m`,
-`1h 15m`), refreshed every 15 seconds, and its menu has start/stop,
-sign in / paste auth code, link project/repo, open dashboard, inspect,
-settings, and quit. linux needs a tray backend
+are signed in and set up, shows today's weighted time next to the icon
+(`42m`, `1h 15m`), refreshed every 15 seconds, and its menu has
+start/stop, **sign in with slack** (opens your default browser; the
+session is saved to `~/.aitime/gui.json` automatically — no token
+paste), link project/repo, open dashboard, inspect, settings, and quit.
+linux needs a tray backend
 (`sudo apt install gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1`);
 gnome without the appindicator extension has no tray area — the tray
 falls back to a headless CLI loop, or use the gui.
@@ -49,11 +51,12 @@ the settings window is stdlib tkinter, no installs:
 make gui                 # or: python3 daemon/gui.py
 ```
 
-pick your handle, repo and server, press **start tracking**. it runs
-the same daemon underneath, shows its log live and how many sealed
-buckets are waiting to send, and remembers your settings in
-`~/.aitime/gui.json`, which the tray reads too. `inspect what would
-be sent` runs the inspect command from inside the window.
+**sign in with slack**, pick your repo (and handle once claimed), press
+**start tracking**. it runs the same daemon underneath, shows its log
+live and how many sealed buckets are waiting to send, and remembers
+your settings in `~/.aitime/gui.json`, which the tray reads too.
+`inspect what would be sent` runs the inspect command from inside the
+window.
 
 headless or scripting, the cli is still there:
 

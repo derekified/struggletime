@@ -43,6 +43,30 @@ def oauth_redirect(provider):
     base = os.environ.get("OAUTH_REDIRECT_BASE", "http://127.0.0.1:18765").rstrip("/")
     return f"{base}/v1/auth/{provider}/callback"
 
+def valid_desktop_redirect(url):
+    """Only allow tray/GUI callbacks on loopback http (no open redirects)."""
+    try:
+        u = urlparse((url or "").strip())
+    except Exception:
+        return False
+    if u.scheme != "http" or u.username or u.password:
+        return False
+    if (u.hostname or "").lower() not in ("127.0.0.1", "localhost"):
+        return False
+    if (u.path or "/") not in ("/", "/callback"):
+        return False
+    return True
+
+def append_query(url, **params):
+    base = urlparse(url)
+    q = parse_qs(base.query, keep_blank_values=True)
+    for k, v in params.items():
+        if v is not None:
+            q[k] = [str(v)]
+    from urllib.parse import urlencode
+    flat = [(k, v) for k, vs in q.items() for v in vs]
+    return base._replace(query=urlencode(flat)).geturl()
+
 def oauth_identity(provider, code):
     cfg = oauth_config(provider)
     if provider == "github":
@@ -138,6 +162,7 @@ def db():
         if col not in cols: c.execute(f"ALTER TABLE link ADD COLUMN {col} TEXT")
     ocols = {r[1] for r in c.execute("PRAGMA table_info(oauth_state)")}
     if "intent" not in ocols: c.execute("ALTER TABLE oauth_state ADD COLUMN intent TEXT DEFAULT 'link'")
+    if "desktop_redirect" not in ocols: c.execute("ALTER TABLE oauth_state ADD COLUMN desktop_redirect TEXT DEFAULT ''")
     ucols = {r[1] for r in c.execute("PRAGMA table_info(user)")}
     for col, spec in (
         ("display_name", "TEXT"),
@@ -486,11 +511,16 @@ class H(BaseHTTPRequestHandler):
                 # bounce to the public host so cookies/callbacks stay on the same origin.
                 public = os.environ.get("OAUTH_REDIRECT_BASE", "").rstrip("/")
                 host = (self.headers.get("Host") or "").split(":")[0].lower()
-                if public and host in ("127.0.0.1", "localhost", "::1"):
+                pub_host = (urlparse(public).hostname or "").lower() if public else ""
+                # Only bounce loopback → remote tunnel. Same-host public (local tests) must proceed.
+                if public and host in ("127.0.0.1", "localhost", "::1") and pub_host not in ("", "127.0.0.1", "localhost", "::1"):
                     q = ("?" + parsed.query) if parsed.query else ""
                     return self.redirect(public + "/v1/auth/" + provider + "/start" + q)
                 if not (cfg["client_id"] and cfg["client_secret"]):
                     return self.redirect(("/settings" if provider == "github" else "/login") + "?oauth=" + provider + "_not_configured")
+                desktop = (qs.get("desktop_redirect", [""])[0] or "").strip()
+                if desktop and not valid_desktop_redirect(desktop):
+                    desktop = ""
                 if provider == "slack":
                     intent, handle = "login", ""
                 else:
@@ -500,8 +530,10 @@ class H(BaseHTTPRequestHandler):
                         return self.redirect("/login?oauth=sign_in_with_slack_first")
                     handle = sess["handle"]
                 state = secrets.token_urlsafe(24)
-                c.execute("INSERT INTO oauth_state(state, provider, handle, created_at, intent) VALUES (?,?,?,?,?)",
-                          (state, provider, handle, int(time.time()), intent)); c.commit()
+                c.execute(
+                    "INSERT INTO oauth_state(state, provider, handle, created_at, intent, desktop_redirect) VALUES (?,?,?,?,?,?)",
+                    (state, provider, handle, int(time.time()), intent, desktop or ""),
+                ); c.commit()
                 if provider == "github":
                     loc = (cfg["base"] + "/login/oauth/authorize?client_id=" + cfg["client_id"]
                            + "&scope=read:user%20repo&state=" + state
@@ -533,6 +565,14 @@ class H(BaseHTTPRequestHandler):
                     _, auth_code = mint_session(c, handle=handle, slack_user_id=ident["id"],
                                                 slack_avatar=ident["avatar"], slack_name=ident["name"])
                     c.commit()
+                    desktop = ""
+                    if "desktop_redirect" in row.keys():
+                        desktop = (row["desktop_redirect"] or "").strip()
+                    if desktop and valid_desktop_redirect(desktop):
+                        return self.redirect(append_query(
+                            desktop, auth=auth_code,
+                            oauth=("slack_linked" if handle else "claim_handle"),
+                        ))
                     if handle:
                         return self.redirect("/home?auth=" + quote(auth_code) + "&oauth=slack_linked")
                     return self.redirect("/login?auth=" + quote(auth_code) + "&oauth=claim_handle")

@@ -111,5 +111,25 @@ class TestOAuth(unittest.TestCase):
         s, loc, _ = get(self.port, "/v1/auth/github/start")
         self.assertIn("sign_in_with_slack_first", loc)
 
+    def test_slack_desktop_redirect_to_loopback(self):
+        cb = "http://127.0.0.1:39201/callback"
+        s, loc, _ = get(self.port, "/v1/auth/slack/start?desktop_redirect=" + cb)
+        self.assertEqual(s, 302, loc); state = parse_qs(urlparse(loc).query)["state"][0]
+        s, loc2, _ = get(self.port, f"/v1/auth/slack/callback?code=testcode&state={state}")
+        self.assertEqual(s, 302)
+        self.assertTrue(loc2.startswith(cb), loc2)
+        self.assertIn("auth=", loc2)
+        code = parse_qs(urlparse(loc2).query)["auth"][0]
+        s, sess = req(self.port, "POST", "/v1/auth/session", {"code": code})
+        self.assertEqual(s, 200); self.assertIn("token", sess)
+
+    def test_slack_rejects_non_loopback_desktop_redirect(self):
+        s, loc, _ = get(self.port, "/v1/auth/slack/start?desktop_redirect=https://evil.example/x")
+        self.assertEqual(s, 302, loc); state = parse_qs(urlparse(loc).query)["state"][0]
+        s, loc2, _ = get(self.port, f"/v1/auth/slack/callback?code=testcode&state={state}")
+        self.assertEqual(s, 302)
+        self.assertIn("/login?auth=", loc2)
+        self.assertNotIn("evil.example", loc2)
+
 if __name__ == "__main__":
     unittest.main()

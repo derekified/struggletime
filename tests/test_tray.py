@@ -25,8 +25,9 @@ class TestTray(unittest.TestCase):
             gui = home / "gui.json"
             gui.write_text(json.dumps({"handle": "rowan", "repo": "/tmp/x", "server": "http://127.0.0.1:18765", "bucket_mins": 5}))
             os.environ["STRUGGLETIME_HOME"] = str(home)
-            os.environ.pop("STRUGGLETIME_SERVER", None)
-            os.environ.pop("AITIME_SERVER", None)
+            for k in ("STRUGGLETIME_SERVER", "AITIME_SERVER", "OAUTH_REDIRECT_BASE",
+                      "STRUGGLETIME_PUBLIC_URL", "AITIME_PUBLIC_URL"):
+                os.environ.pop(k, None)
             dcfg.HOME = home
             dcfg.GUI_SETTINGS = gui
             dcfg.PAUSE_FLAG = home / "paused"
@@ -46,9 +47,22 @@ class TestTray(unittest.TestCase):
 
     def test_login_and_link_helpers_exist(self):
         self.assertTrue(callable(tray.TrayCore.open_login))
-        self.assertTrue(callable(tray.TrayCore.apply_auth_secret))
+        self.assertTrue(callable(tray.TrayCore.apply_session))
         self.assertTrue(callable(tray.TrayCore.link_project))
         self.assertTrue(callable(tray.git_remote_url))
+        self.assertFalse(hasattr(tray.TrayCore, "apply_auth_secret"))
+        self.assertFalse(hasattr(tray.Tray, "_paste_auth"))
+        src = (ROOT / "daemon" / "tray.py").read_text()
+        self.assertNotIn("paste auth", src.lower())
+
+    def test_browser_auth_helpers(self):
+        ba_spec = importlib.util.spec_from_file_location("browser_auth", ROOT / "daemon" / "browser_auth.py")
+        browser_auth = importlib.util.module_from_spec(ba_spec); ba_spec.loader.exec_module(browser_auth)
+        self.assertTrue(callable(browser_auth.open_default_browser))
+        self.assertTrue(callable(browser_auth.DesktopLogin))
+        self.assertTrue(browser_auth.valid_desktop_redirect("http://127.0.0.1:9/callback"))
+        self.assertFalse(browser_auth.valid_desktop_redirect("https://evil.example/callback"))
+        self.assertFalse(browser_auth.valid_desktop_redirect("http://example.com/callback"))
 
     @unittest.skipIf(tray.pystray is None, "pystray/pillow not installed")
     def test_icon_renders(self):

@@ -6,17 +6,31 @@
   python3 daemon/tray.py
 
 StruggleTime-inspired tray lifecycle: live status + today's weighted time,
-start/stop, open dashboard, inspect, settings, quit. Falls back to a
-headless CLI loop when no display / AppIndicator is available.
+start/stop, browser sign-in, open dashboard, inspect, settings, quit.
+Falls back to a headless CLI loop when no display / AppIndicator is available.
 Settings come from ~/.aitime/gui.json only (custom aitime architecture).
 """
-import importlib.util, json, os, signal, subprocess, sys, threading, time, urllib.error, urllib.request, webbrowser
+import importlib.util, json, os, signal, subprocess, sys, threading, time, urllib.error, urllib.request
 from pathlib import Path
+
+# Prefer AppIndicator on Linux before pystray imports a broken backend.
+if sys.platform.startswith("linux") and not os.environ.get("PYSTRAY_BACKEND"):
+    try:
+        import gi
+        try:
+            gi.require_version("AyatanaAppIndicator3", "0.1")
+            os.environ["PYSTRAY_BACKEND"] = "appindicator"
+        except Exception:
+            gi.require_version("AppIndicator3", "0.1")
+            os.environ["PYSTRAY_BACKEND"] = "appindicator"
+    except Exception:
+        pass
 
 HERE = Path(__file__).parent
 sys.path = [p for p in sys.path if Path(p or ".").resolve() != HERE.resolve()]
 sys.path.insert(0, str(HERE))
 import config as dcfg
+import browser_auth
 
 spec = importlib.util.spec_from_file_location("st_gui", HERE / "gui.py")
 st_gui = importlib.util.module_from_spec(spec); spec.loader.exec_module(st_gui)
@@ -32,7 +46,8 @@ INSTALL_HINT = (
     "  pip install -r daemon/tray-requirements.txt\n"
     "linux also needs a tray backend, e.g.\n"
     "  sudo apt install gir1.2-gtk-3.0 gir1.2-ayatanaappindicator3-0.1\n"
-    "some desktops have no tray area; use `python3 daemon/gui.py` or headless mode."
+    "some desktops (plain GNOME without AppIndicator) have no tray area;\n"
+    "use `python3 daemon/gui.py` or `python3 daemon/tray.py --headless`."
 )
 
 def has_display():
@@ -53,12 +68,7 @@ def format_duration(hours):
     return f"{h}h {m:02d}m" if h and m else (f"{h}h" if h else f"{m}m")
 
 def weighted_title(hours, tracking=None):
-    base = format_duration(hours)
-    if tracking is False:
-        return base
-    if tracking is True:
-        return base
-    return base
+    return format_duration(hours)
 
 def make_icon(tracking, paused=False):
     img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
@@ -75,25 +85,10 @@ def make_icon(tracking, paused=False):
     return img
 
 def api_json(server, method, path, token=None, body=None, timeout=12):
-    url = server.rstrip("/") + path
-    data = None if body is None else json.dumps(body).encode()
-    headers = {"Content-Type": "application/json", "Accept": "application/json"}
-    if token:
-        headers["Authorization"] = "Bearer " + token
-    req = urllib.request.Request(url, method=method, data=data, headers=headers)
-    try:
-        with urllib.request.urlopen(req, timeout=timeout) as x:
-            return x.status, json.loads(x.read() or b"{}")
-    except urllib.error.HTTPError as e:
-        try:
-            return e.code, json.loads(e.read() or b"{}")
-        except Exception:
-            return e.code, {"error": str(e)}
-    except Exception as e:
-        return 0, {"error": str(e)}
+    return browser_auth.api_json(server, method, path, token=token, body=body, timeout=timeout)
 
 def prompt_text(title, prompt):
-    """Small tk prompt when available; otherwise None (caller uses stdin/headless)."""
+    """Small tk prompt when available (used for project id only, never tokens)."""
     if st_gui.tk is None or not has_display():
         return None
     try:
@@ -136,7 +131,8 @@ class TrayCore:
         self.proc = None
         self.hours = 0.0
         self.auth = {"ok": False, "handle": None, "needs_handle": False}
-        self._stop = False
+        self._stop_flag = False
+        self._login_lock = threading.Lock()
         self.refresh_auth()
 
     def persist(self):
@@ -186,41 +182,40 @@ class TrayCore:
         return self.auth
 
     def browser_base(self):
-        """Public/tunnel URL for browser OAuth + dashboard (never prefer loopback when configured)."""
         return dcfg.public_url(self.s.get("server") or "")
 
-    def open_login(self):
-        """Open Slack OAuth in the browser on the public host (Cloudflare/ngrok), not localhost."""
-        url = self.browser_base() + "/v1/auth/slack/start"
-        webbrowser.open(url)
-        return f"opened Slack sign-in at {url} — after the browser finishes, use “paste auth code / token…”"
-
-    def apply_auth_secret(self, raw):
-        """Accept a one-time ?auth= code or a session bearer token; save to gui.json."""
-        raw = (raw or "").strip()
-        if not raw:
-            return False, "nothing pasted"
-        # auth codes from /login?auth=… are exchanged; long tokens are used as bearer
-        if len(raw) < 80 and " " not in raw:
-            code, data = api_json(self.s["server"], "POST", "/v1/auth/session", body={"code": raw})
-            if code == 200 and data.get("token"):
-                self.s["token"] = data["token"]
-                if data.get("handle"):
-                    self.s["handle"] = data["handle"]
-                self.persist()
-                self.refresh_auth()
-                if data.get("needs_handle"):
-                    return True, "signed in — claim a handle on the dashboard, then reopen the tray"
-                return True, f"signed in as @{self.s.get('handle')}"
-            # fall through: maybe it was already a short token
-        self.s["token"] = raw
+    def apply_session(self, data):
+        """Persist token/handle from a /v1/auth/session payload."""
+        if not data or not data.get("token"):
+            return False, "no session"
+        self.s["token"] = data["token"]
+        if data.get("handle"):
+            self.s["handle"] = data["handle"]
         self.persist()
         self.refresh_auth()
-        if self.signed_in():
-            return True, f"signed in as @{self.auth['handle']}"
-        if self.auth.get("needs_handle"):
-            return True, "token saved — claim a handle on the dashboard"
-        return False, "token rejected — sign in again"
+        if data.get("needs_handle"):
+            return True, "signed in — claim a handle on the dashboard"
+        return True, f"signed in as @{self.s.get('handle') or self.auth.get('handle') or '?'}"
+
+    def open_login(self):
+        """Seamless browser Slack sign-in; token lands in ~/.aitime/gui.json automatically."""
+        if not self._login_lock.acquire(blocking=False):
+            return "sign-in already in progress"
+        try:
+            login = browser_auth.DesktopLogin(self.s["server"], self.browser_base())
+            ok, data, msg = login.run(timeout=300)
+            if ok and data:
+                self.apply_session(data)
+                if data.get("needs_handle"):
+                    try:
+                        browser_auth.open_default_browser(self.browser_base() + "/login")
+                    except Exception:
+                        pass
+            return msg
+        except Exception as e:
+            return f"sign-in failed: {e}"
+        finally:
+            self._login_lock.release()
 
     def sign_out(self):
         token = self.s.get("token")
@@ -232,7 +227,6 @@ class TrayCore:
         return "signed out"
 
     def link_project(self, project_id=None):
-        """Create/claim project and attach this repo's git remote via existing APIs."""
         if not self.signed_in():
             return False, "sign in first"
         repo = self.s.get("repo")
@@ -256,7 +250,6 @@ class TrayCore:
             return False, (data.get("error") if isinstance(data, dict) else None) or f"link failed ({code})"
         self.s["project"] = pid
         self.persist()
-        # restart tracker against the linked project id if already running
         if self.tracking():
             self.stop_daemon()
             self.spawn()
@@ -273,7 +266,10 @@ class TrayCore:
         cmd = st_gui.daemon_cmd(self.s)
         if self.s.get("token"):
             cmd += ["--token", self.s["token"]]
-        self.proc = subprocess.Popen(cmd, stdout=log, stderr=log, stdin=subprocess.DEVNULL)
+        kwargs = {"stdout": log, "stderr": log, "stdin": subprocess.DEVNULL}
+        if sys.platform.startswith("win"):
+            kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+        self.proc = subprocess.Popen(cmd, **kwargs)
         who = self.s.get("handle") or "?"
         return True, f"tracking {self.s['repo']} as @{who}"
 
@@ -328,12 +324,16 @@ class TrayCore:
 
     def open_dashboard(self):
         base = self.browser_base()
-        webbrowser.open(base + ("/home" if self.signed_in() else "/login"))
+        path = "/home" if self.signed_in() else "/login"
+        browser_auth.open_default_browser(base + path)
 
     def open_config(self):
         dcfg.HOME.mkdir(parents=True, exist_ok=True)
         if has_display() and st_gui.tk is not None:
-            subprocess.Popen([sys.executable, str(HERE / "gui.py")])
+            kwargs = {}
+            if sys.platform.startswith("win"):
+                kwargs["creationflags"] = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+            subprocess.Popen([sys.executable, str(HERE / "gui.py")], **kwargs)
             return "opened settings window"
         return f"config: {dcfg.GUI_SETTINGS}"
 
@@ -341,124 +341,162 @@ class Tray(TrayCore):
     def __init__(self, overrides):
         super().__init__(overrides)
         self._icon_state = None
-        self.icon = pystray.Icon("struggletime", make_icon(False), weighted_title(0), self._menu())
+        self._ui_lock = threading.Lock()
+        self.icon = pystray.Icon(
+            "struggletime",
+            make_icon(False),
+            weighted_title(0),
+            self._menu(),
+        )
         self._auto_start()
 
     def _menu(self):
-        # StruggleTime-style status + core actions; Login / Linking added for aitime
         return pystray.Menu(
-            pystray.MenuItem(lambda _: self.status_line(), None, enabled=False),
-            pystray.MenuItem(lambda _: f"Today: {format_duration(self.hours)}", None, enabled=False),
+            pystray.MenuItem(lambda _item: self.status_line(), None, enabled=False),
+            pystray.MenuItem(lambda _item: f"Today: {format_duration(self.hours)}", None, enabled=False),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("sign in with slack…", self._login, visible=lambda _: not self.signed_in()),
-            pystray.MenuItem("paste auth code / token…", self._paste_auth, visible=lambda _: not self.signed_in() or self.auth.get("needs_handle")),
-            pystray.MenuItem("sign out", self._sign_out, visible=lambda _: bool(self.s.get("token"))),
-            pystray.MenuItem("link project / repo…", self._link, visible=lambda _: self.signed_in()),
+            pystray.MenuItem("sign in with slack…", self._on_login, visible=lambda _i: not self.signed_in()),
+            pystray.MenuItem("claim handle on dashboard…", self._on_claim, visible=lambda _i: bool(self.auth.get("needs_handle"))),
+            pystray.MenuItem("sign out", self._on_sign_out, visible=lambda _i: bool(self.s.get("token"))),
+            pystray.MenuItem("link project / repo…", self._on_link, visible=lambda _i: self.signed_in()),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("start tracking", self._start, visible=lambda _: not self.tracking()),
-            pystray.MenuItem("stop tracking", self._stop, visible=lambda _: self.tracking()),
+            pystray.MenuItem("start tracking", self._on_start, visible=lambda _i: not self.tracking()),
+            pystray.MenuItem("stop tracking", self._on_stop_tracking, visible=lambda _i: self.tracking()),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("open dashboard", lambda *_: self.open_dashboard(), default=True),
-            pystray.MenuItem("inspect what would be sent", self._inspect),
-            pystray.MenuItem("settings…", self._settings),
+            pystray.MenuItem("open dashboard", self._on_dashboard, default=True),
+            pystray.MenuItem("inspect what would be sent", self._on_inspect),
+            pystray.MenuItem("settings…", self._on_settings),
             pystray.Menu.SEPARATOR,
-            pystray.MenuItem("quit", self._quit),
+            pystray.MenuItem("quit", self._on_quit),
         )
 
     def _auto_start(self):
-        if st_gui.validate(self.s):
-            self._notify("not set up yet. open config / settings… from the tray menu.")
+        if not self.signed_in() or st_gui.validate(self.s):
+            if not self.signed_in():
+                self._notify("sign in with slack from the tray menu to get started")
+            else:
+                self._notify("not set up yet — open settings… from the tray menu")
             return
         ok, msg = self.spawn()
-        self._notify(msg if ok else msg)
+        self._notify(msg)
 
-    def _start(self, *_):
-        ok, msg = self.spawn(); self._notify(msg); self._refresh()
+    def _on_start(self, _icon=None, _item=None):
+        ok, msg = self.spawn(); self._notify(msg); self._refresh_ui()
 
-    def _stop(self, *_):
+    def _on_stop_tracking(self, _icon=None, _item=None):
         self.stop_daemon()
         self._notify("stopped. sealed buckets stay in the repo ledger.")
-        self._refresh()
+        self._refresh_ui()
 
-    def _pause(self, *_):
-        self.pause(); self._notify("paused"); self._refresh()
+    def _on_login(self, _icon=None, _item=None):
+        self._notify("opening browser for Slack sign-in…")
+        def work():
+            msg = self.open_login()
+            self._notify(msg)
+            self._refresh_ui()
+        threading.Thread(target=work, daemon=True).start()
 
-    def _resume(self, *_):
-        self.resume(); self._notify("resumed"); self._refresh()
+    def _on_claim(self, _icon=None, _item=None):
+        try:
+            browser_auth.open_default_browser(self.browser_base() + "/login")
+            self._notify("opened dashboard to claim a handle")
+        except Exception as e:
+            self._notify(f"could not open browser: {e}")
 
-    def _flush(self, *_):
-        ok, msg = self.flush(); self._notify(msg if ok else f"sync failed: {msg}")
+    def _on_sign_out(self, _icon=None, _item=None):
+        self._notify(self.sign_out()); self._refresh_ui()
 
-    def _login(self, *_):
-        self._notify(self.open_login())
-
-    def _paste_auth(self, *_):
-        val = prompt_text("StruggleTime sign-in", "Paste the ?auth= code from the browser URL, or your session token:")
-        if val is None:
-            self._notify("open settings or run tray --headless to paste a token")
-            return
-        ok, msg = self.apply_auth_secret(val)
-        self._notify(msg)
-        self._refresh()
-
-    def _sign_out(self, *_):
-        self._notify(self.sign_out()); self._refresh()
-
-    def _link(self, *_):
+    def _on_link(self, _icon=None, _item=None):
         suggested = self.s.get("project") or Path(self.s.get("repo") or ".").name
         pid = prompt_text("Link project / repo", f"Project id to create or update (default {suggested}):")
         if pid is None:
             pid = ""
         ok, msg = self.link_project(pid or None)
         self._notify(msg)
-        self._refresh()
+        self._refresh_ui()
 
-    def _inspect(self, *_):
-        r = subprocess.run([sys.executable, str(HERE / "tracker_inspect.py"), self.s["repo"]], capture_output=True, text=True)
+    def _on_inspect(self, _icon=None, _item=None):
+        repo = self.s.get("repo") or "."
+        r = subprocess.run([sys.executable, str(HERE / "tracker_inspect.py"), repo], capture_output=True, text=True)
         first = (r.stdout or r.stderr).strip().splitlines()
         self._notify(first[1] if len(first) > 1 else "nothing to inspect yet")
 
-    def _settings(self, *_):
+    def _on_settings(self, _icon=None, _item=None):
         self._notify(self.open_config())
 
-    def _quit(self, *_):
+    def _on_dashboard(self, _icon=None, _item=None):
+        try:
+            self.open_dashboard()
+        except Exception as e:
+            self._notify(f"could not open browser: {e}")
+
+    def _on_quit(self, _icon=None, _item=None):
+        self._stop_flag = True
         self.stop_daemon()
-        self.icon.stop()
+        try:
+            self.icon.stop()
+        except Exception:
+            pass
 
     def _notify(self, msg):
-        try: self.icon.notify(msg, "struggletime")
-        except Exception: print(f"[tray] {msg}", flush=True)
+        try:
+            self.icon.notify(str(msg), "struggletime")
+        except Exception:
+            print(f"[tray] {msg}", flush=True)
 
-    def _refresh(self):
-        state = (self.tracking(), self.paused())
-        if state != self._icon_state:
-            self._icon_state = state
-            self.icon.icon = make_icon(state[0], paused=state[1])
-        self.icon.title = weighted_title(self.hours, tracking=self.tracking())
+    def _refresh_ui(self):
+        with self._ui_lock:
+            state = (self.tracking(), self.paused())
+            try:
+                if state != self._icon_state:
+                    self._icon_state = state
+                    self.icon.icon = make_icon(state[0], paused=state[1])
+                self.icon.title = weighted_title(self.hours, tracking=self.tracking())
+                self.icon.update_menu()
+            except Exception:
+                pass
 
     def _poll(self):
-        while not self._stop:
+        while not self._stop_flag:
             time.sleep(15)
-            self.fetch_hours()
-            if self.proc is not None and not self.tracking():
-                self.proc = None
-                self._notify("daemon stopped unexpectedly. check ~/.aitime/daemon.log")
-            self._refresh()
-            try: self.icon.update_menu()
-            except Exception: pass
+            if self._stop_flag:
+                break
+            try:
+                self.fetch_hours()
+                if self.proc is not None and not self.tracking():
+                    self.proc = None
+                    self._notify("daemon stopped unexpectedly. check ~/.aitime/daemon.log")
+                self._refresh_ui()
+            except Exception as e:
+                print(f"[tray] poll error: {e}", flush=True)
 
     def run(self):
-        self.fetch_hours(); self._refresh()
-        threading.Thread(target=self._poll, daemon=True).start()
+        self.fetch_hours()
+        self._refresh_ui()
+        threading.Thread(target=self._poll, name="tray-poll", daemon=True).start()
+
+        def _sig(*_):
+            self._on_quit()
+        for sig in (signal.SIGTERM, signal.SIGINT):
+            try:
+                signal.signal(sig, _sig)
+            except Exception:
+                pass
+        # pystray requires the UI loop on the main thread (esp. macOS NSApp / Win32).
         self.icon.run()
+        self._stop_flag = True
+        self.stop_daemon()
 
 def run_headless(overrides):
     """Safe fallback when running without a tray/display server."""
     core = TrayCore(overrides)
     print("struggletime tray: headless mode (no display / pystray)", flush=True)
     print(INSTALL_HINT if pystray is None else "no DISPLAY/WAYLAND_DISPLAY — CLI control loop", flush=True)
-    print("commands: status | login | token <code|token> | logout | link [project] | start | stop | pause | resume | sync | dashboard | config | quit", flush=True)
-    if not st_gui.validate(core.s):
+    print(
+        "commands: status | login | logout | link [project] | start | stop | pause | resume | sync | dashboard | config | quit",
+        flush=True,
+    )
+    if core.signed_in() and not st_gui.validate(core.s):
         ok, msg = core.spawn()
         print(msg, flush=True)
     stop = {"v": False}
@@ -470,7 +508,7 @@ def run_headless(overrides):
         except Exception: pass
 
     def poll():
-        while not stop["v"]:
+        while not stop["v"] and not core._stop_flag:
             time.sleep(15)
             core.fetch_hours()
             if core.proc is not None and not core.tracking():
@@ -482,44 +520,47 @@ def run_headless(overrides):
     print(core.status_line(), flush=True)
 
     def handle(line):
-        line = (line or "").strip().lower()
-        if not line:
+        line = (line or "").strip()
+        low = line.lower()
+        if not low:
             return False
-        if line in ("q", "quit", "exit"):
+        if low in ("q", "quit", "exit"):
             return True
-        if line == "status":
+        if low == "status":
             core.fetch_hours(); print(core.status_line(), flush=True)
-        elif line == "login":
+        elif low == "login":
+            print("opening browser for Slack sign-in…", flush=True)
             print(core.open_login(), flush=True)
-        elif line.startswith("token ") or line.startswith("auth "):
-            ok, msg = core.apply_auth_secret(line.split(None, 1)[1])
-            print(msg, flush=True)
-        elif line == "logout":
+        elif low == "logout":
             print(core.sign_out(), flush=True)
-        elif line == "link" or line.startswith("link "):
+        elif low == "link" or low.startswith("link "):
             parts = line.split(None, 1)
             ok, msg = core.link_project(parts[1] if len(parts) > 1 else None)
             print(msg, flush=True)
-        elif line == "start":
+        elif low == "start":
             print(core.spawn()[1], flush=True)
-        elif line == "stop":
+        elif low == "stop":
             core.stop_daemon(); print("stopped", flush=True)
-        elif line == "pause":
+        elif low == "pause":
             core.pause(); print("paused", flush=True)
-        elif line == "resume":
+        elif low == "resume":
             core.resume(); print("resumed", flush=True)
-        elif line in ("sync", "flush"):
+        elif low in ("sync", "flush"):
             print(core.flush()[1], flush=True)
-        elif line == "dashboard":
-            core.open_dashboard(); print("opened dashboard", flush=True)
-        elif line == "config":
+        elif low == "dashboard":
+            try:
+                core.open_dashboard(); print("opened dashboard", flush=True)
+            except Exception as e:
+                print(f"could not open browser: {e}", flush=True)
+        elif low == "config":
             print(core.open_config(), flush=True)
+        elif low.startswith("token ") or low.startswith("auth "):
+            print("manual token paste removed — use `login` (opens the browser)", flush=True)
         else:
             print("unknown command", flush=True)
         return False
 
     if not sys.stdin.isatty():
-        # piped/CI: consume commands then exit (service mode: no stdin → idle until signal)
         had = False
         for line in sys.stdin:
             had = True
@@ -528,6 +569,7 @@ def run_headless(overrides):
         if not had:
             while not stop["v"]:
                 time.sleep(1)
+        core._stop_flag = True
         core.stop_daemon()
         return 0
     while not stop["v"]:
@@ -537,6 +579,7 @@ def run_headless(overrides):
             break
         if handle(line):
             break
+    core._stop_flag = True
     core.stop_daemon()
     return 0
 
@@ -546,7 +589,7 @@ def main():
     ap.add_argument("--repo", default="")
     ap.add_argument("--user", default="")
     ap.add_argument("--server", default="")
-    ap.add_argument("--token", default="")
+    ap.add_argument("--token", default="", help="optional session bearer (scripting); prefer browser login")
     ap.add_argument("--headless", action="store_true", help="force CLI mode (no tray)")
     ap.add_argument("--check", action="store_true", help="verify tray dependencies on this machine, then exit")
     a = ap.parse_args()
@@ -566,7 +609,12 @@ def main():
             print(INSTALL_HINT, flush=True)
         return run_headless(overrides)
 
-    Tray(overrides).run()
+    try:
+        Tray(overrides).run()
+    except Exception as e:
+        print(f"tray failed to start: {e}", flush=True)
+        print(INSTALL_HINT, flush=True)
+        return run_headless(overrides)
     return 0
 
 if __name__ == "__main__":

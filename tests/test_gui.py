@@ -21,5 +21,13 @@ class TestGui(unittest.TestCase):
         self.assertIn("daemon.py", cmd[1]); self.assertIn("300", cmd)
         self.assertEqual(cmd[cmd.index("--user") + 1], "rowan")
 
+    def test_no_token_paste_ui(self):
+        src = (ROOT / "daemon" / "gui.py").read_text()
+        low = src.lower()
+        self.assertNotIn("paste auth", low)
+        self.assertNotIn("askstring", low)
+        self.assertIn("sign in with slack", low)
+        self.assertIn("browser_auth", src)
+
 if __name__ == "__main__":
     unittest.main()
