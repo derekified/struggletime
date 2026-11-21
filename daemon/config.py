@@ -254,11 +254,22 @@ def upsert_linked_project(settings, *, project_id, local_path):
     s["projects"] = _normalize_projects(rows, s.get("repo") or "", s.get("project") or "")
     return s
 
-def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_project=""):
-    """Merge CLI > env > settings.json."""
+def resolve_runtime(cli_server=None, cli_token=None, cli_user="", cli_repo="", cli_project=""):
+    """Merge CLI > env > settings.json.
+
+    cli_server/cli_token: None = fall back to settings; "" = explicit offline / no token.
+    """
     s = load_settings()
-    server = normalize_server(cli_server or s.get("server") or DEFAULTS["server"])
-    token = cli_token or s.get("token") or ""
+    if cli_server is None:
+        server = normalize_server(s.get("server") or DEFAULTS["server"])
+    elif not str(cli_server).strip():
+        server = ""  # intentional offline (do not coerce to PUBLIC_SERVER)
+    else:
+        server = normalize_server(cli_server)
+    if cli_token is None:
+        token = s.get("token") or ""
+    else:
+        token = str(cli_token)
     user = cli_user or s.get("handle") or ""
     repo = cli_repo or s.get("repo") or ""
     project = cli_project or s.get("project") or ""
@@ -270,7 +281,7 @@ def resolve_runtime(cli_server="", cli_token="", cli_user="", cli_repo="", cli_p
         )
     return {
         "server": server,
-        "public_url": public_url(server),
+        "public_url": public_url(server) if server else "",
         "token": token,
         "handle": user,
         "repo": repo,

@@ -26,7 +26,8 @@ class TestCliIde(unittest.TestCase):
         for cmd in (["git","init","-q",str(repo)], ["git","-C",str(repo),"config","user.email","t@t.t"], ["git","-C",str(repo),"config","user.name","t"]): subprocess.run(cmd)
         (repo/"app.py").write_text("a=1\n"); subprocess.run(["git","-C",str(repo),"add","."]); subprocess.run(["git","-C",str(repo),"commit","-qm","i"])
         env = {**os.environ, "AITIME_EXEC_LOG": str(pathlib.Path(tmp)/"none.jsonl")}
-        proc = subprocess.Popen([sys.executable, str(ROOT/"daemon/daemon.py"), "--repo", str(repo), "--project", "ideproj", "--bucket-secs", "3", "--once"],
+        proc = subprocess.Popen([sys.executable, str(ROOT/"daemon/daemon.py"), "--repo", str(repo), "--project", "ideproj",
+                                 "--bucket-secs", "3", "--once", "--server", ""],
                                 stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, env=env)
         import time; time.sleep(1.2)
         (repo/"app.py").write_text("a=2\n")  # a single editor save: 1 file, human burst shape

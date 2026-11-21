@@ -1,0 +1,17 @@
+{
+  "name": "struggletime",
+  "displayName": "StruggleTime",
+  "description": "Layer-2 enrichment for StruggleTime — optional; Layer-1 works without it.",
+  "version": "0.4.0",
+  "publisher": "struggletime",
+  "license": "AGPL-3.0-or-later",
+  "engines": { "vscode": "^1.80.0" },
+  "categories": ["Other"],
+  "activationEvents": ["onStartupFinished"],
+  "main": "./extension.js",
+  "contributes": {
+    "commands": [
+      { "command": "struggletime.status", "title": "StruggleTime: Status" }
+    ]
+  }
+}

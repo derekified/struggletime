@@ -108,7 +108,7 @@ class TestStrugglePipeline(unittest.TestCase):
         r = subprocess.run(
             [sys.executable, str(ROOT / "daemon" / "daemon.py"),
              "--repo", str(self.repo), "--project", "live",
-             "--bucket-secs", "2", "--once", "--server", ""],
+             "--bucket-secs", "2", "--once", "--server", "", "--token", ""],
             capture_output=True, text=True, env=env, timeout=30,
         )
         self.assertEqual(r.returncode, 0, r.stdout + r.stderr)

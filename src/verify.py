@@ -1,11 +1,16 @@
 #!/usr/bin/env python3
+# SPDX-License-Identifier: AGPL-3.0-or-later
 """Reference chain verifier + causal weighting. Stdlib only.
 
 Usage: python3 src/verify.py examples/session-closed-loop.json
+
+Formula source of truth: this file. `weighting/rules-v0.4.0.yaml` and
+`schemas/heartbeat.schema.json` are generated mirrors — do not edit them first.
 """
 import hashlib, json, sys
 
 GENESIS = "0" * 64
+FORMULA_VERSION = "v0.4.0-alpha"
 
 # Quiet follow-up after real work: keep partial credit for 5–12 minutes, then AFK=0.
 SILENT_FULL_SECS = 300   # ≤5m still counts as silent debugging
@@ -14,7 +19,7 @@ SILENT_ZERO_SECS = 720   # ≥12m dead air → 0
 ALLOWED_TOP = {
     "v","bucket_id","install_id","project_id","repo_remote_hash","bucket_start_wall","bucket_secs",
     "mono_delta_ms","counts","git","files","exec_categories","editors","agents","languages",
-    "os","os_detail","formula_version","prev_hash","hash","signature",
+    "os","os_detail","formula_version","prev_hash","hash","signature","install_pubkey","sig_alg",
 }
 ALLOWED_COUNTS = {
     "human_edits","ai_writes","prompts","executions","exec_failures","commits","dwell_diff_secs",
@@ -22,6 +27,9 @@ ALLOWED_COUNTS = {
     # Passive AI-struggle friction counters (IDE/agent agnostic)
     "same_file_reedit_count","ai_retry_loops","failed_exec_count",
     "test_fail_to_pass_transitions","agent_turn_churn","human_recovery_edits",
+    # Zero-hook struggle tomography
+    "atomic_agent_writes","git_plumbing_pulses","reflog_reverts",
+    "build_test_cycles","cache_fail_to_pass",
 }
 ALLOWED_GIT = {"head_commit","lines_added","lines_deleted","dirty_files"}
 # op/editor/agent/source/language are metadata labels only — never raw paths or content
@@ -82,7 +90,11 @@ def validate_allowlist(bucket):
     return errs
 
 def _has_activity(c):
-    return any(c.get(k) for k in ("human_edits", "ai_writes", "prompts", "executions", "commits"))
+    return any(c.get(k) for k in (
+        "human_edits", "ai_writes", "prompts", "executions", "commits",
+        "same_file_reedit_count", "atomic_agent_writes", "git_plumbing_pulses",
+        "build_test_cycles", "cache_fail_to_pass", "test_fail_to_pass_transitions",
+    ))
 
 def is_silent(bucket):
     """No edit/exec/prompt/commit signals — quiet stretch (reading, thinking, AFK)."""
@@ -127,11 +139,14 @@ def billable_secs(bucket):
 def friction(bucket):
     c = bucket["counts"]
     struggle = (
-        0.15 * min(c.get("same_file_reedit_count", 0), 5) / 5
-        + 0.15 * min(c.get("ai_retry_loops", 0), 4) / 4
-        + 0.15 * min(c.get("test_fail_to_pass_transitions", 0), 3) / 3
-        + 0.10 * min(c.get("human_recovery_edits", 0), 4) / 4
-        + 0.10 * min(c.get("agent_turn_churn", 0), 5) / 5
+        0.12 * min(c.get("same_file_reedit_count", 0), 5) / 5
+        + 0.12 * min(c.get("ai_retry_loops", 0), 4) / 4
+        + 0.12 * min(c.get("test_fail_to_pass_transitions", 0) or c.get("cache_fail_to_pass", 0), 3) / 3
+        + 0.08 * min(c.get("human_recovery_edits", 0), 4) / 4
+        + 0.08 * min(c.get("agent_turn_churn", 0), 5) / 5
+        + 0.08 * min(c.get("atomic_agent_writes", 0), 4) / 4
+        + 0.08 * min(c.get("git_plumbing_pulses", 0), 4) / 4
+        + 0.08 * min(c.get("build_test_cycles", 0), 4) / 4
     )
     raw = (
         0.25 * min(c.get("exec_failures", 0) or c.get("failed_exec_count", 0), 3) / 3
@@ -178,24 +193,25 @@ def _idle_decay_factor(idle_secs):
     return round((SILENT_ZERO_SECS - idle) / (SILENT_ZERO_SECS - SILENT_FULL_SECS), 4)
 
 def is_ai_struggle(c):
-    """Iterative AI/human recovery across any IDE/agent — not a single-pass dump."""
+    """Iterative recovery from event sequences + zero-hook tomography — not a bulk dump."""
     reedit = int(c.get("same_file_reedit_count") or 0)
     retries = int(c.get("ai_retry_loops") or 0)
-    fail_pass = int(c.get("test_fail_to_pass_transitions") or 0)
+    fail_pass = int(c.get("test_fail_to_pass_transitions") or 0) + int(c.get("cache_fail_to_pass") or 0)
     churn = int(c.get("agent_turn_churn") or 0)
     recovery = int(c.get("human_recovery_edits") or 0)
     failed = int(c.get("failed_exec_count") or 0) or int(c.get("exec_failures") or 0)
     ai = int(c.get("ai_writes") or 0)
     prompts = int(c.get("prompts") or 0)
     human = int(c.get("human_edits") or 0)
+    atomic = int(c.get("atomic_agent_writes") or 0)
+    git_pulses = int(c.get("git_plumbing_pulses") or 0)
+    build_cycles = int(c.get("build_test_cycles") or 0)
+    reverts = int(c.get("reflog_reverts") or 0)
 
-    # Canonical: any fail→pass transition is iterative recovery (edits may be prior bucket)
     if fail_pass > 0:
         return True
-    # Failures + same-file re-edits (pass may land in the next bucket)
-    if failed > 0 and reedit > 0 and (ai > 0 or churn > 0 or prompts > 0 or human > 0 or recovery > 0):
+    if failed > 0 and reedit > 0 and (ai > 0 or churn > 0 or prompts > 0 or human > 0 or recovery > 0 or atomic > 0):
         return True
-    # Open failure pressure with re-edits even before the passing run is sealed
     if failed > 0 and (retries > 0 or recovery > 0) and (reedit > 0 or human > 0 or ai > 0):
         return True
     if retries >= 2 and (failed > 0 or recovery > 0 or fail_pass > 0):
@@ -204,10 +220,18 @@ def is_ai_struggle(c):
         return True
     if recovery > 0 and (ai > 0 or failed > 0) and (reedit > 0 or fail_pass > 0 or retries > 0):
         return True
-    # Passive same-file iteration (zero hooks): repeated re-edits are structural struggle
+    # Zero-hook tomography: re-edits + build/test cache or git plumbing thrash
+    if reedit >= 2 and (build_cycles >= 1 or git_pulses >= 2 or atomic >= 1):
+        return True
+    if build_cycles >= 2 and (reedit >= 1 or atomic >= 1 or human >= 1 or ai >= 1):
+        return True
+    if atomic >= 2 and reedit >= 2:
+        return True
+    if git_pulses >= 3 and (reedit >= 1 or reverts >= 1 or build_cycles >= 1):
+        return True
     if reedit >= 2 and (retries >= 1 or recovery >= 1 or ai > 0 or human >= 2):
         return True
-    if reedit >= 3 and (ai > 0 or prompts > 0 or churn > 0 or failed > 0):
+    if reedit >= 3 and (ai > 0 or prompts > 0 or churn > 0 or failed > 0 or atomic > 0):
         return True
     return False
 
@@ -237,6 +261,10 @@ def weight(bucket):
         and not ai_struggle
         and c.get("same_file_reedit_count", 0) == 0
         and c.get("ai_retry_loops", 0) == 0
+        and c.get("git_plumbing_pulses", 0) == 0
+        and c.get("build_test_cycles", 0) == 0
+        and c.get("atomic_agent_writes", 0) == 0
+        and c.get("cache_fail_to_pass", 0) == 0
     )
     # Passive AI-generation staring: AI writes then long idle, no recovery
     ai_stare = (

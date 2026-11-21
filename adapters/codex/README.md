@@ -1,28 +1,32 @@
 # Codex / Aider / any CLI agent
 
-No MCP server. Prefer the unified agent-event bridge:
+Layer 1 already classifies `codex` / `aider` / `claude` process names as
+`ai_cli`. This adapter only enriches turn boundaries.
+
+## Install (one line)
 
 ```bash
-# start of a turn
+# from repo root
+chmod +x adapters/codex/wrap.sh
+alias codex='$PWD/adapters/codex/wrap.sh codex'
+alias aider='$PWD/adapters/codex/wrap.sh aider'
+```
+
+Or copy the wrapper into `~/.local/bin/codex-st` and point your shell alias at it.
+
+## What it writes
+
+Allowlisted metadata only via `daemon/agent_event.py` →
+`~/.aitime/agent_events.jsonl` (`start` / `stop`, exit code, editor/agent labels).
+No prompts, no args, no file contents.
+
+## Manual bridge
+
+```bash
 python3 daemon/agent_event.py --editor codex --agent codex --event-type start
-# or wrap the binary:
-codex() {
-  python3 "$(dirname "$0")/../../daemon/agent_event.py" --editor codex --agent codex --event-type start
-  command codex "$@"
-  local ec=$?
-  python3 "$(dirname "$0")/../../daemon/agent_event.py" --editor codex --agent codex --event-type stop --op modified --exit-code "$ec" --files-touched-count 1
-  return $ec
-}
+codex "$@"
+python3 daemon/agent_event.py --editor codex --agent codex --event-type stop \
+  --op modified --exit-code $? --files-touched-count 1
 ```
 
-Shell-only fallback (still allowlisted metadata):
-
-```bash
-codex() {
-  echo '{"event_type":"start","category":"ai_cli","verb":"start","editor":"codex","agent":"codex","exit_code":0,"files_touched_count":0}' >> ~/.aitime/agent_events.jsonl
-  command codex "$@"
-  echo "{\"event_type\":\"stop\",\"category\":\"ai_cli\",\"verb\":\"stop\",\"editor\":\"codex\",\"agent\":\"codex\",\"op\":\"modified\",\"exit_code\":$?,\"files_touched_count\":1}" >> ~/.aitime/agent_events.jsonl
-}
-```
-
-Layer 1 also classifies `codex` / `aider` / `claude` process names as `ai_cli` if no adapter event arrives. Unattended dumps are discounted by the state machine, not by the adapter.
+Unattended dumps are discounted by the causal state machine, not by this adapter.

@@ -1,0 +1,76 @@
+# Mirror of src/verify.py — regenerate with: python3 scripts/sync_formula_docs.py
+# Do not treat this file as the runtime engine; verify.py is authoritative.
+formula_version: v0.4.0-alpha
+bucket_secs_default: 300
+silent_full_secs: 300   # ≤5m quiet follow-up keeps 0.70×
+silent_zero_secs: 720   # ≥12m dead air → 0 (gradual decay between)
+
+# Per-bucket causal state machine (first matching rule wins in verify.weight).
+states:
+  - id: AI_STRUGGLE
+    when: { is_ai_struggle: true }
+    weight: 1.0
+    note: fail→fix→pass, re-edits, retries, recovery, tomography counters
+  - id: STRUGGLE_LOOP
+    when: { exec_failures_gt: 0, executions_gt: 1, any_followup: true }
+    weight: 1.0
+  - id: CLOSED_LOOP
+    when: { any_steering: true, executions_gt: 0, any_followup: true }
+    weight: 1.0
+  - id: AI_REVIEWED
+    when: { ai_writes_gt: 0, dwell_diff_secs_gte: 30, any_followup: true }
+    weight: 0.85
+  - id: OPEN_LOOP_AGENT_DUMP
+    when: { ai_writes_gt: 0, human_edits_eq: 0, executions_eq: 0, dwell_diff_secs_lt: 30, not_ai_struggle: true }
+    weight: 0.20
+    reviewer_reason: UNATTENDED_AGENT_DUMP
+  - id: HUMAN_UNVERIFIED
+    when: { human_edits_gt: 0 }
+    weight: 0.70
+    reviewer_reason: NO_TEST_ITERATION
+  - id: AI_UNREVIEWED
+    when: { ai_writes_gt: 0 }
+    weight: 0.25
+    reviewer_reason: UNATTENDED_AGENT_DUMP
+  - id: EXEC_ONLY
+    when: { executions_gt: 0 }
+    weight: 0.50
+  - id: SILENT_DEBUG
+    when: { no_activity: true }
+    weight: sequence_decay
+    note: >-
+      0.70 for the first 5 min silent across the sequence, linear decay to 0 at 12 min.
+  - id: FALLBACK
+    when: {}
+    weight: 0.0
+
+idle_decay:
+  note: After SILENT_FULL_SECS of within-bucket idle, non-struggle states scale toward 0 at SILENT_ZERO_SECS (no 240s cliff).
+  exempt_states: [AI_STRUGGLE, STRUGGLE_LOOP, SILENT_DEBUG, FALLBACK]
+
+billing:
+  active_span: true
+  note: billable_secs = min(bucket_secs, active_secs) when active_secs present and bucket is not silent
+
+reviewer_reason_codes:
+  - UNATTENDED_AGENT_DUMP
+  - IDLE_INFLATION
+  - NO_TEST_ITERATION
+  - BOILERPLATE_HEAVY
+  - CHAIN_BROKEN
+  - GIT_MISMATCH
+  - UNSIGNED_INSTALL
+  - NONE
+
+outlier_flags:
+  hours_per_kloc: { warn_above: 10 }
+  exec_success_only: { warn_when: "executions >= 5 and exec_failures == 0 and commits == 0" }
+  ai_human_ratio: { warn_above: 5 }
+  chain_broken: { warn_when: "any prev_hash mismatch or mono_delta regression" }
+  git_mismatch: { warn_when: "claimed lines/commits do not appear between head_from..head_to" }
+
+calibration:
+  labelled_sessions: 20
+  results: weighting/calibration-20.md
+  tune_only_on: [labelled_sessions, pilot_100_projects]
+  never_tune_on: unlabelled_production_hours

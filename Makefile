@@ -1,7 +1,7 @@
 PY ?= python3
 PORT ?= 18765
 
-.PHONY: help check test server daemon gui tray inspect demo stress-smoke stress clean
+.PHONY: help check test server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs clean
 help:
 	@echo "make check    verify python, git and the test suite"
 	@echo "make test     run all tests"
@@ -11,6 +11,9 @@ help:
 	@echo "make daemon   track a repo:  make daemon REPO=~/my-project USER=you"
 	@echo "make demo     start a server with demo data on :18766"
 	@echo "make inspect  show what a repo would send:  make inspect REPO=~/my-project"
+	@echo "make package  build dist/struggletime-*.tar.gz"
+	@echo "make calibrate run 20-session calibration report"
+	@echo "make sync-docs assert YAML/schema match verify.py"
 	@echo "make stress-smoke  acceptance smoke: 5 weighted projects"
 	@echo "make stress        acceptance: 1000 weighted projects (ephemeral server)"
 
@@ -19,6 +22,7 @@ check:
 
 test:
 	$(PY) -m unittest discover -s tests
+	$(PY) scripts/sync_formula_docs.py
 
 server:
 	PORT=$(PORT) $(PY) server/server.py
@@ -45,6 +49,15 @@ stress-smoke:
 
 stress:
 	$(PY) daemon/stress_test.py --count 1000 --cleanup-after
+
+package:
+	sh scripts/package.sh
+
+calibrate:
+	$(PY) scripts/run_calibration_20.py
+
+sync-docs:
+	$(PY) scripts/sync_formula_docs.py
 
 clean:
 	find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; true

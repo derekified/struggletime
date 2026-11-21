@@ -34,6 +34,8 @@ def main():
     STRUGGLE_KEYS = (
         "same_file_reedit_count", "ai_retry_loops", "failed_exec_count",
         "test_fail_to_pass_transitions", "agent_turn_churn", "human_recovery_edits",
+        "atomic_agent_writes", "git_plumbing_pulses", "reflog_reverts",
+        "build_test_cycles", "cache_fail_to_pass",
         "exec_failures", "ai_writes", "human_edits", "active_secs", "idle_secs",
     )
     for b, (w, state) in zip(buckets, weight_sequence(buckets)):

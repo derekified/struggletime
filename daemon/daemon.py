@@ -18,7 +18,8 @@ HERE = Path(__file__).parent
 sys.path = [p for p in sys.path if Path(p or ".").resolve() != HERE.resolve()]
 sys.path.insert(0, str(HERE.parent / "src"))
 sys.path.insert(0, str(HERE))
-from verify import bucket_hash, anonymized_file_id, GENESIS, SILENT_ZERO_SECS
+from verify import bucket_hash, anonymized_file_id, GENESIS, SILENT_ZERO_SECS, FORMULA_VERSION
+import install_sig
 import config as dcfg
 import agent_event as agent_evt
 import editors as edreg
@@ -26,7 +27,26 @@ import editors as edreg
 IGNORE = {".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".aitime"}
 _STOP = False
 SWITCH_QUIET_SECS = 30  # early-seal prior project after this quiet when another is active
-FORMULA = "v0.3.1-alpha"
+FORMULA = FORMULA_VERSION
+
+# Git plumbing + build/test cache markers (stat only — never read contents)
+GIT_PULSE_RELS = (".git/index", ".git/HEAD", ".git/logs/HEAD", ".git/ORIG_HEAD", ".git/FETCH_HEAD")
+CACHE_FILE_MARKERS = (
+    ".pytest_cache/v/cache/lastfailed",
+    ".pytest_cache/v/cache/nodeids",
+    ".coverage",
+    "tsconfig.tsbuildinfo",
+    ".tsbuildinfo",
+)
+CACHE_DIR_MARKERS = (
+    "node_modules/.cache",
+    ".next/cache",
+    "target/debug/.fingerprint",
+    ".ruff_cache",
+    ".mypy_cache",
+    "__pycache__",
+    ".tox",
+)
 
 # Shell hook categories (name only — never arguments)
 EXEC_CATS = {
@@ -108,16 +128,34 @@ def git_anchor(repo, salt=None, bursts=None, file_meta=None):
     return anchor, list(files.values())[:50]
 
 def snapshot(repo):
+    """Rich tree snapshot: mtime_ns + size + inode (detects atomic agent write-renames)."""
     out = {}
     for root, dirs, files in os.walk(repo):
         dirs[:] = [d for d in dirs if d not in IGNORE]
         for f in files:
             p = Path(root) / f
             try:
-                out[str(p.relative_to(repo))] = p.stat().st_mtime_ns
+                st = p.stat()
+                out[str(p.relative_to(repo))] = {
+                    "mtime_ns": st.st_mtime_ns,
+                    "size": int(st.st_size),
+                    "ino": int(getattr(st, "st_ino", 0) or 0),
+                }
             except Exception:
                 pass
     return out
+
+def _meta_mtime(meta):
+    if isinstance(meta, dict):
+        return meta.get("mtime_ns")
+    return meta  # legacy int snapshot
+
+def _stat_pulse(path):
+    try:
+        st = Path(path).stat()
+        return (st.st_mtime_ns, int(st.st_size))
+    except Exception:
+        return None
 
 def classify_name(name, verb=""):
     name = (name or "").lower().strip()
@@ -192,7 +230,22 @@ def empty():
         "test_fail_to_pass_transitions": 0,
         "agent_turn_churn": 0,
         "human_recovery_edits": 0,
+        # Zero-hook struggle tomography (filesystem / git plumbing / caches)
+        "atomic_agent_writes": 0,
+        "git_plumbing_pulses": 0,
+        "reflog_reverts": 0,
+        "build_test_cycles": 0,
+        "cache_fail_to_pass": 0,
     }
+
+def _push_event(w, kind, ts, **extra):
+    """Ordered micro-event log (local only; never sealed — drives counters)."""
+    seq = w.setdefault("event_seq", [])
+    row = {"t": int(ts), "k": kind}
+    row.update({k: v for k, v in extra.items() if k in ("exit", "ino_flip", "fid")})
+    seq.append(row)
+    if len(seq) > 80:
+        del seq[: len(seq) - 80]
 
 def _track_reedits(w, touched_rels, kind):
     """Count overlapping re-edits / AI retry loops (rel paths stay local; sealed as file_id)."""
@@ -279,10 +332,19 @@ def default_attr(burst_kind="human", hint=None):
 
 def diff_ops(prev_snap, snap):
     ops = {}
-    for rel in snap:
+    for rel, meta in snap.items():
         if rel not in prev_snap:
             ops[rel] = "created"
-        elif snap[rel] != prev_snap[rel]:
+            continue
+        old = prev_snap[rel]
+        if isinstance(old, dict) and isinstance(meta, dict):
+            if (
+                old.get("mtime_ns") != meta.get("mtime_ns")
+                or old.get("size") != meta.get("size")
+                or old.get("ino") != meta.get("ino")
+            ):
+                ops[rel] = "modified"
+        elif _meta_mtime(old) != _meta_mtime(meta):
             ops[rel] = "modified"
     for rel in prev_snap:
         if rel not in snap:
@@ -372,7 +434,19 @@ def save_ledger(ledger, state):
     ledger.write_text(json.dumps(state, indent=2))
 
 def flush_pending(state, server, user, token, ledger, project=None):
-    if not server or not state.get("pending"):
+    if not state.get("pending"):
+        return False
+    if not server:
+        print(f"offline: {len(state['pending'])} bucket(s) kept in ledger for {project or '?'}", flush=True)
+        save_ledger(ledger, state)
+        return False
+    if not token:
+        print(
+            f"sync deferred ({len(state['pending'])} pending) for {project or '?'}: "
+            f"no API token — set via struggletime-helper apikey <st_…> (ledger kept)",
+            flush=True,
+        )
+        save_ledger(ledger, state)
         return False
     ok, msg = post_buckets(server, user, token, state["pending"])
     if ok:
@@ -381,9 +455,12 @@ def flush_pending(state, server, user, token, ledger, project=None):
         save_ledger(ledger, state)
         return True
     print(f"sync deferred ({len(state['pending'])} pending) for {project or '?'}: {msg}", flush=True)
+    save_ledger(ledger, state)
     if "prev_hash mismatch" in (msg or "") and project:
         if adopt_chain_head(state, server, token, project, ledger):
             return False
+    if "401" in (msg or "") or "403" in (msg or ""):
+        print("hint: API token rejected — refresh with struggletime-helper apikey <st_…>", flush=True)
     return False
 
 def _on_signal(signum, _frame):
@@ -423,9 +500,11 @@ def note_activity(w, now_wall, now_mono):
     if not w["started_mono"]:
         w["started_wall"] = now_wall
         w["started_mono"] = now_mono
+    if not w.get("first_activity_mono"):
+        w["first_activity_mono"] = now_mono
     if not w["counts"]["first_event_ts"]:
         w["counts"]["first_event_ts"] = now_wall
-    w["counts"]["last_event_ts"] = now_wall
+    w["counts"]["last_event_ts"] = max(int(w["counts"].get("last_event_ts") or 0), int(now_wall))
     w["last_activity"] = now_mono
     w["had_activity"] = True
     w["silent_followup"] = 0
@@ -471,8 +550,12 @@ def apply_event_to_watcher(w, e, now_wall, now_mono):
         }
         _acc_label(w, "agents_acc", ag)
         _acc_label(w, "editors_acc", ed)
+        _push_event(w, "agent_turn", now_wall, exit=exit_code)
     if e.get("event_type") in ("tool", "prompt", "start") or (cat == "ai_cli" and e.get("verb")):
         counts["agent_turn_churn"] = max(counts["agent_turn_churn"], counts["prompts"])
+        _push_event(w, "tool_call" if e.get("event_type") == "tool" else "agent_turn", now_wall, exit=exit_code)
+    if cat in ("test_runner", "compiler", "other", "git", "formatter") and e.get("event_type") in ("exec", "tool", ""):
+        _push_event(w, "cmd_exec", now_wall, exit=exit_code)
     if cat == "editor":
         eds = detect_running_editors()
         ed = e.get("editor") or (eds[0] if eds else "unknown")
@@ -521,20 +604,24 @@ def seal_bucket(w, bucket_secs, install_id):
     now_mono = time.monotonic()
     now_wall = int(time.time())
 
-    # Active-span: first→last event; idle is the quiet tail after last event
-    first_ts = int(counts.get("first_event_ts") or 0)
-    last_ts = int(counts.get("last_event_ts") or 0)
-    if first_ts and last_ts and last_ts >= first_ts:
-        span = max(1, last_ts - first_ts)
-        # Include a small dwell after last event only while still "warm" (<60s)
-        warm = max(0, min(60, int(now_mono - w["last_activity"]))) if w.get("had_activity") else 0
-        counts["active_secs"] = min(int(bucket_secs), span + warm)
-    elif w.get("had_activity"):
-        counts["active_secs"] = min(int(bucket_secs), max(1, int(now_mono - started_mono)))
+    # Active-span: prefer monotonic clock (wall ts can collapse same-second events to 0)
+    warm = max(0, min(60, int(now_mono - w["last_activity"]))) if w.get("had_activity") else 0
+    if w.get("had_activity") and w.get("first_activity_mono"):
+        counts["active_secs"] = max(1, min(int(bucket_secs), int(now_mono - w["first_activity_mono"]) + warm))
+    elif w.get("had_activity") and started_mono:
+        counts["active_secs"] = max(1, min(int(bucket_secs), int(now_mono - started_mono)))
     else:
-        counts["active_secs"] = 0
+        first_ts = int(counts.get("first_event_ts") or 0)
+        last_ts = int(counts.get("last_event_ts") or 0)
+        if first_ts and last_ts and last_ts >= first_ts:
+            counts["active_secs"] = max(1, min(int(bucket_secs), (last_ts - first_ts) + warm))
+        else:
+            counts["active_secs"] = 0
     idle_tail = int(max(0, now_mono - w["last_activity"])) if w.get("had_activity") else int(max(0, now_mono - started_mono))
     counts["idle_secs"] = min(int(bucket_secs), idle_tail) if idle_tail > 60 or not w.get("had_activity") else 0
+    # Sequence-derived: cache fail→pass already counted; merge into test_fail_to_pass if needed
+    if counts.get("cache_fail_to_pass", 0) and not counts.get("test_fail_to_pass_transitions"):
+        counts["test_fail_to_pass_transitions"] = int(counts["cache_fail_to_pass"])
     if w.get("saw_pass_after_fail") and counts["exec_failures"] == 0:
         counts["exec_failures"] = max(1, counts["exec_failures"])
     if w.get("saw_pass_after_fail") and counts.get("test_fail_to_pass_transitions", 0) == 0:
@@ -608,7 +695,19 @@ def seal_bucket(w, bucket_secs, install_id):
         "os": os_info["id"], "os_detail": os_info,
         "formula_version": FORMULA, "prev_hash": state["prev_hash"],
     }
+    # Prefer cryptographic install_id from Ed25519 pubkey when keys exist
+    loaded = install_sig.load_or_create_keypair(dcfg.CONFIG_HOME)
+    if loaded:
+        _priv, _pub, pub_raw, iid = loaded
+        bucket["install_id"] = iid
+        bucket["install_pubkey"] = install_sig._b64(pub_raw)
+        bucket["sig_alg"] = install_sig.ALG
     bucket["hash"] = bucket_hash(bucket)
+    if loaded:
+        sig = install_sig.sign_hash(bucket["hash"], loaded[0])
+        bucket["signature"] = sig
+    else:
+        bucket["signature"] = None
     state["prev_hash"] = bucket["hash"]
     state["pending"].append(bucket)
     return bucket
@@ -634,6 +733,8 @@ def reset_window(w, now_wall=None, now_mono=None, keep_alive=False, after_active
     w["touched_once"] = set(carry_files)
     w["editors_acc"] = {}
     w["agents_acc"] = {}
+    w["event_seq"] = []
+    w["first_activity_mono"] = None
     if keep_alive:
         w["started_wall"] = now_wall or int(time.time())
         w["started_mono"] = now_mono or time.monotonic()
@@ -668,11 +769,20 @@ def load_ledger(repo):
         state["salt"] = uuid.uuid4().hex
     return ledger, state
 
+def _baseline_pulses(repo):
+    """Seed git/cache pulse maps so the first poll doesn't fake a struggle storm."""
+    git_pulse = {rel: _stat_pulse(repo / rel) for rel in GIT_PULSE_RELS}
+    cache_pulse = {rel: _stat_pulse(repo / rel) for rel in CACHE_FILE_MARKERS}
+    for rel in CACHE_DIR_MARKERS:
+        cache_pulse["dir:" + rel] = _stat_pulse(repo / rel)
+    return git_pulse, cache_pulse
+
 def make_watcher(path, project_id):
     repo = Path(path).expanduser().resolve()
     project = project_id or repo.name
     ledger, state = load_ledger(repo)
     ensure_gitignore(repo)
+    git_pulse, cache_pulse = _baseline_pulses(repo)
     return {
         "repo": repo,
         "root_s": str(repo),
@@ -695,6 +805,10 @@ def make_watcher(path, project_id):
         "touched_once": set(),
         "editors_acc": {},
         "agents_acc": {},
+        "event_seq": [],
+        "first_activity_mono": None,
+        "git_pulse": git_pulse,
+        "cache_pulse": cache_pulse,
         "started_wall": None,
         "started_mono": None,
         "last_activity": time.monotonic(),
@@ -702,29 +816,52 @@ def make_watcher(path, project_id):
     }
 
 def resolve_watch_list(cli_repos, project_maps, cli_project, rt):
-    """Merge settings projects + CLI --repo/--project-map into concrete watchers."""
-    rows = list(rt.get("projects") or [])
-    for path in cli_repos:
-        pid = project_maps.get(str(Path(path).expanduser())) or project_maps.get(path) or ""
-        rows.append({"id": pid, "path": path})
-    if not rows and rt.get("repo"):
-        rows.append({"id": cli_project or rt.get("project") or "", "path": rt["repo"]})
-    # Remote local_path enrichment (optional, passive)
-    for row in fetch_remote_projects(rt.get("server"), rt.get("token")):
-        rows.append(row)
+    """Merge settings projects + CLI --repo/--project-map into concrete watchers.
+
+    When CLI passes --repo, only those roots are watched (settings/remote fill
+    missing project ids for matching paths — they must not add extra roots that
+    steal seals or break hash chains).
+    """
+    remote = fetch_remote_projects(rt.get("server"), rt.get("token")) if rt.get("server") else []
+    if cli_repos:
+        rows = []
+        for path in cli_repos:
+            pid = project_maps.get(str(Path(path).expanduser())) or project_maps.get(path) or ""
+            rows.append({"id": pid, "path": path})
+        enrich = list(rt.get("projects") or []) + list(remote)
+    else:
+        rows = list(rt.get("projects") or [])
+        if not rows and rt.get("repo"):
+            rows.append({"id": cli_project or rt.get("project") or "", "path": rt["repo"]})
+        enrich = list(remote)
+        rows = rows + list(remote)
+
+    # path → project id from settings + API (longest / last non-empty wins per path)
+    enrich_ids = {}
+    for row in enrich:
+        path = row.get("path") or ""
+        pid = (row.get("id") or "").strip()
+        if not path or not pid:
+            continue
+        try:
+            enrich_ids[str(Path(path).expanduser().resolve())] = pid
+        except Exception:
+            enrich_ids[path] = pid
 
     watchers, seen = [], set()
+    skipped = []
     for row in rows:
         path = row.get("path") or ""
         try:
             repo = Path(path).expanduser().resolve()
         except Exception:
+            skipped.append(path or "?")
             continue
         if not repo.is_dir():
+            skipped.append(str(path))
             continue
         key = str(repo)
         if key in seen:
-            # fill missing project id
             if row.get("id"):
                 for w in watchers:
                     if w["root_s"] == key and (not w["project"] or w["project"] == repo.name):
@@ -734,16 +871,29 @@ def resolve_watch_list(cli_repos, project_maps, cli_project, rt):
         pid = row.get("id") or ""
         if key in project_maps:
             pid = project_maps[key] or pid
-        # path-keyed maps may use unresolved form
         for mk, mv in project_maps.items():
             try:
                 if str(Path(mk).expanduser().resolve()) == key and mv:
                     pid = mv
             except Exception:
                 pass
+        if not pid:
+            pid = enrich_ids.get(key) or ""
         if not pid and cli_project and len(cli_repos) == 1:
-            pid = cli_project
+            try:
+                cli_key = str(Path(cli_repos[0]).expanduser().resolve())
+            except Exception:
+                cli_key = ""
+            if key == cli_key:
+                pid = cli_project
         watchers.append(make_watcher(repo, pid))
+    if skipped:
+        print(
+            f"skipping {len(skipped)} missing project path(s): "
+            + ", ".join(skipped[:5])
+            + ("…" if len(skipped) > 5 else ""),
+            flush=True,
+        )
     return watchers
 
 def drain_shared_logs(watchers, agent_log, exec_log, shared_state):
@@ -787,19 +937,98 @@ def drain_shared_logs(watchers, agent_log, exec_log, shared_state):
     drain_one(agent_log, "agent_offset")
     drain_one(exec_log, "exec_offset")
 
+def poll_tomography(w):
+    """Zero-hook struggle tomography: git plumbing + build/test cache footprints."""
+    now_wall, now_mono = int(time.time()), time.monotonic()
+    repo = w["repo"]
+    counts = w["counts"]
+    changed = False
+
+    git_prev = w.setdefault("git_pulse", {})
+    for rel in GIT_PULSE_RELS:
+        cur = _stat_pulse(repo / rel)
+        old = git_prev.get(rel)
+        if cur is not None and cur != old:
+            if old is not None:
+                counts["git_plumbing_pulses"] += 1
+                changed = True
+                _push_event(w, "git_pulse", now_wall)
+                if rel in (".git/ORIG_HEAD", ".git/logs/HEAD") and old[1] != cur[1]:
+                    # reflog / ORIG_HEAD churn often means revert/checkout thrash
+                    if rel == ".git/ORIG_HEAD":
+                        counts["reflog_reverts"] += 1
+            git_prev[rel] = cur
+        elif cur is None and rel in git_prev:
+            git_prev[rel] = None
+
+    cache_prev = w.setdefault("cache_pulse", {})
+    for rel in CACHE_FILE_MARKERS:
+        cur = _stat_pulse(repo / rel)
+        old = cache_prev.get(rel)
+        if cur is not None and cur != old:
+            if old is not None:
+                counts["build_test_cycles"] += 1
+                changed = True
+                _push_event(w, "cache_pulse", now_wall)
+                # lastfailed: size>0 → fail pressure; collapse to 0 → fail-to-pass
+                if rel.endswith("lastfailed"):
+                    old_sz, new_sz = old[1], cur[1]
+                    if new_sz > 0:
+                        counts["failed_exec_count"] += 1
+                        w["saw_fail"] = True
+                        w["open_fail"] = True
+                    elif old_sz > 0 and new_sz == 0:
+                        counts["cache_fail_to_pass"] += 1
+                        counts["test_fail_to_pass_transitions"] += 1
+                        w["saw_pass_after_fail"] = True
+                        w["saw_fail"] = False
+                        w["open_fail"] = False
+            else:
+                # first appearance of lastfailed with size>0
+                if rel.endswith("lastfailed") and cur[1] > 0:
+                    counts["build_test_cycles"] += 1
+                    counts["failed_exec_count"] += 1
+                    w["saw_fail"] = True
+                    w["open_fail"] = True
+                    changed = True
+            cache_prev[rel] = cur
+        elif cur is None and old is not None:
+            if rel.endswith("lastfailed") and old[1] > 0:
+                counts["cache_fail_to_pass"] += 1
+                counts["test_fail_to_pass_transitions"] += 1
+                w["saw_pass_after_fail"] = True
+                w["saw_fail"] = False
+                w["open_fail"] = False
+                changed = True
+            cache_prev[rel] = None
+
+    for rel in CACHE_DIR_MARKERS:
+        cur = _stat_pulse(repo / rel)
+        old = cache_prev.get("dir:" + rel)
+        if cur is not None and cur != old:
+            if old is not None:
+                counts["build_test_cycles"] += 1
+                changed = True
+                _push_event(w, "cache_dir", now_wall)
+            cache_prev["dir:" + rel] = cur
+
+    if changed:
+        note_activity(w, now_wall, now_mono)
+        # Tomography alone is enough to keep the window alive for struggle scoring
+        if not counts.get("human_edits") and not counts.get("ai_writes") and not counts.get("executions"):
+            # Attribute a minimal human_edits so _has_activity / sealing bill time
+            # Prefer process editor; do not invent edits when only git status ran once
+            if counts.get("build_test_cycles", 0) or counts.get("cache_fail_to_pass", 0):
+                counts["executions"] = max(1, int(counts.get("executions") or 0))
+
 def poll_repo_files(w, bucket_secs):
     now_wall, now_mono = int(time.time()), time.monotonic()
     snap = snapshot(w["repo"])
     ops = diff_ops(w["prev_snap"], snap)
     if ops:
-        if not w["started_mono"]:
-            # Starting a window: early-seal is handled by caller via switch detection
-            pass
         note_activity(w, now_wall, now_mono)
         w["edit_ticks"] += 1
         n_touch = sum(1 for op in ops.values() if op != "deleted")
-        # Approximate lines from current dirty numstat (metadata only).
-        # Untracked creates are invisible to `git diff --numstat` — estimate from touch count.
         lines_hint = 0
         try:
             for line in git(w["repo"], "diff", "--numstat").splitlines():
@@ -818,17 +1047,34 @@ def poll_repo_files(w, bucket_secs):
             recent_cats=w["exec_categories"],
             attr_hint=w["attr_hint"],
         )
-        # Passive fallback: AI IDE/agent (process or env) + re-edits/fails ⇒ AI struggle context
         running_agents = detect_running_agents()
         running_editors = detect_running_editors()
+        # Inode flip (atomic write-rename) is a strong agent-write signal
+        inode_flips = 0
+        for rel, op in ops.items():
+            if op == "deleted":
+                continue
+            old, new = w["prev_snap"].get(rel), snap.get(rel)
+            if (
+                isinstance(old, dict) and isinstance(new, dict)
+                and old.get("ino") and new.get("ino")
+                and old["ino"] != new["ino"]
+            ):
+                inode_flips += 1
+        if inode_flips:
+            w["counts"]["atomic_agent_writes"] += inode_flips
+            _push_event(w, "inode_flip", now_wall, ino_flip=inode_flips)
+            if kind == "human" and (inode_flips >= 2 or running_agents or w.get("open_fail")):
+                kind = "ai"
         if kind == "human" and running_agents and (
-            w["edit_ticks"] > 1 or n_touch >= 3 or w.get("saw_fail")
+            w["edit_ticks"] > 1 or n_touch >= 3 or w.get("saw_fail") or w.get("open_fail")
         ):
             kind = "ai"
         editor, agent, source = default_attr(kind, w["attr_hint"])
         touched = [rel for rel, op in ops.items() if op != "deleted"]
         _track_reedits(w, touched, kind)
         _track_human_recovery(w, n_touch, kind)
+        _push_event(w, "file_change", now_wall)
         if kind == "ai":
             w["counts"]["ai_writes"] += max(n_touch, 1)
             if running_agents or (w["attr_hint"].get("agent") not in (None, "", "human")):
@@ -844,7 +1090,6 @@ def poll_repo_files(w, bucket_secs):
             w["file_meta"][rel] = {
                 "op": op, "editor": editor, "agent": agent, "source": source, "language": lang,
             }
-        # Stash running editor hint for seal attribution when adapters are absent
         if running_editors and not w["attr_hint"].get("editor"):
             w["attr_hint"] = {
                 **w["attr_hint"],
@@ -860,6 +1105,7 @@ def poll_repo_files(w, bucket_secs):
                 "source": w["attr_hint"].get("source") or "layer1",
             }
     w["prev_snap"] = snap
+    poll_tomography(w)
 
 def maybe_seal(w, bucket_secs, install_id, server, user, token, force=False, reason=""):
     if not w["started_mono"]:
@@ -916,9 +1162,11 @@ def main():
     ap.add_argument("--project", default=None, help="project id when a single --repo is given")
     ap.add_argument("--project-map", action="append", default=[],
                     help="map path=project_id (repeatable)")
-    ap.add_argument("--server", default="")
+    ap.add_argument("--server", default=None,
+                    help="API base URL; omit to use settings; pass empty string for offline")
     ap.add_argument("--user", default="")
-    ap.add_argument("--token", default="")
+    ap.add_argument("--token", default=None,
+                    help="API token; omit to use settings; pass empty to ignore saved token")
     ap.add_argument("--bucket-secs", type=int, default=None,
                     help="override AITIME_BUCKET_SECS / gui bucket_mins (default 300)")
     ap.add_argument("--once", action="store_true", help="seal one bucket per active project and exit")
@@ -937,7 +1185,9 @@ def main():
 
     primary_repo = a.repo[0] if a.repo else ""
     rt = dcfg.resolve_runtime(
-        cli_server=a.server, cli_token=a.token, cli_user=a.user,
+        cli_server=a.server,  # None → settings; "" → offline
+        cli_token=a.token,
+        cli_user=a.user,
         cli_repo=primary_repo, cli_project=a.project or "",
     )
     # Merge all CLI repos into runtime projects
@@ -1029,10 +1279,14 @@ def main():
         if paused_now:
             continue
 
-        drain_shared_logs(watchers, agent_log, exec_log, shared_state)
-        for w in watchers:
-            poll_repo_files(w, bucket_secs)
-        handle_project_switch(watchers, bucket_secs, install_id, server, user, token)
+        try:
+            drain_shared_logs(watchers, agent_log, exec_log, shared_state)
+            for w in watchers:
+                poll_repo_files(w, bucket_secs)
+            handle_project_switch(watchers, bucket_secs, install_id, server, user, token)
+        except Exception as e:
+            print(f"poll error (continuing): {e}", flush=True)
+            continue
 
         sealed_any = False
         for w in watchers:

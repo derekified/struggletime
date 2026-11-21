@@ -20,6 +20,7 @@
     <div class="nav-stats" id="nav-stats" hidden>
       <span class="nav-stat" title="streak"><span class="nav-ico" data-glyph="bolt"></span><b class="tabular" id="nav-streak">0d</b></span>
       <span class="nav-stat" title="weighted hours"><span class="nav-ico" data-glyph="timer"></span><b class="tabular" id="nav-hours">0h</b></span>
+      <span class="nav-stat" title="weekly goal"><span class="nav-ico" data-glyph="trophy"></span><b class="tabular" id="nav-goal">0/5h</b></span>
     </div>
     <a class="top-user" id="top-auth" href="/login" title="sign in" aria-label="sign in">
       <span class="top-user-fallback">in</span>
@@ -266,6 +267,9 @@
                 </label>
                 <label class="ui-field" style="grid-column:1/-1">email
                   <input class="ui-input" id="set-email" type="email" placeholder="you@example.com">
+                </label>
+                <label class="ui-field">weekly goal (weighted hours)
+                  <input class="ui-input" id="set-weekly-goal" type="number" min="0" max="168" step="0.5" placeholder="5">
                 </label>
               </div>
               <button type="button" class="ui-btn" id="btn-save-identity"><span class="nav-ico" data-glyph="checkmark"></span>save</button>

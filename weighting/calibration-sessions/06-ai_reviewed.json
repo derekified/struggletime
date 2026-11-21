@@ -1,0 +1,60 @@
+[
+  {
+    "v": 1,
+    "bucket_id": "cal-06",
+    "install_id": "cal",
+    "project_id": "cal",
+    "repo_remote_hash": null,
+    "bucket_start_wall": 1700000000,
+    "bucket_secs": 300,
+    "mono_delta_ms": 300000,
+    "counts": {
+      "human_edits": 1,
+      "ai_writes": 4,
+      "prompts": 0,
+      "executions": 0,
+      "exec_failures": 0,
+      "commits": 0,
+      "dwell_diff_secs": 45,
+      "idle_secs": 0,
+      "active_secs": 300,
+      "same_file_reedit_count": 0,
+      "ai_retry_loops": 0,
+      "failed_exec_count": 0,
+      "test_fail_to_pass_transitions": 0,
+      "agent_turn_churn": 0,
+      "human_recovery_edits": 0,
+      "atomic_agent_writes": 0,
+      "git_plumbing_pulses": 0,
+      "reflog_reverts": 0,
+      "build_test_cycles": 0,
+      "cache_fail_to_pass": 0
+    },
+    "git": {
+      "head_commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "lines_added": 0,
+      "lines_deleted": 0,
+      "dirty_files": 0
+    },
+    "files": [],
+    "exec_categories": {},
+    "editors": {
+      "cursor": 1
+    },
+    "agents": {
+      "human": 1
+    },
+    "languages": {
+      "python": 1
+    },
+    "os": "linux",
+    "os_detail": {
+      "id": "linux",
+      "release": "6",
+      "arch": "x86_64"
+    },
+    "formula_version": "v0.4.0-alpha",
+    "prev_hash": "0000000000000000000000000000000000000000000000000000000000000000",
+    "hash": "837761741367cb8d0e9eb5517cce7a2fac45f5baa14e51522139b420534843c8"
+  }
+]

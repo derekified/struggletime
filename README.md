@@ -35,21 +35,20 @@ Just looking? `make demo` starts a seeded server on :18766.
 | # | Requirement | Implementation |
 |---|---|---|
 | 1 | AGPLv3 | `LICENSE`, SPDX headers |
-| 2 | Accurate struggle hours | Causal state machine, `weighting/rules-v0.1.0.yaml` |
-| 3 | Motivating, not anti-fraud | Live dashboard: weighted h, streaks, weekly goal, public builder profiles |
+| 2 | Accurate struggle hours | Causal state machine in `src/verify.py` (`v0.4.0-alpha`); mirror `weighting/rules-v0.4.0.yaml`; calibration in `weighting/calibration-20.md` |
+| 3 | Motivating, not anti-fraud | Live dashboard: weighted h, streaks, **weekly goal**, public builder profiles |
 | 4 | Passive | Daemon + shell hook; no timers or start/stop |
-| 5 | Central server | Accounts (token auth), public-by-default profiles, projects + git linking, realtime stats + SSE, github linking + signed push webhooks, slack linking + `/struggletime stats` slash command + submission/review notifications (webhook env, queued otherwise) |
-| 6 | Privacy-friendly | metadata-only 5-min buckets (25–50 kb/session, anonymized file ids, line deltas, exit codes); strict schema allowlist rejects raw text/paths with 400; `daemon/tracker_inspect.py` shows byte-for-byte what leaves; logged ≠ submitted |
-| 7 | All models/harnesses | agent-first: layer-1 terminal+fs core (100%, most agent users never open an ide); l2 adapters are optional enrichment, incl. openclaw session log tailing (`adapters/`) |
-| 8 | Win/Mac/Linux, low-spec | Polling daemon, stdlib only, ~46 MB server RSS; hooks for bash/zsh/PowerShell |
-| 9 | Trustworthy | Hash-chain + git anchors + outlier flags + reason-coded review (`server/`) |
+| 5 | Central server | Accounts (token auth), public-by-default profiles, projects + git linking, live stats (15s poll + SSE keepalive), github/slack integrations |
+| 6 | Privacy-friendly | metadata-only buckets; schema allowlist; `daemon/tracker_inspect.py`; logged ≠ submitted |
+| 7 | All models/harnesses | L1 terminal+fs core; L2 adapters in `adapters/` (VS Code, Claude Code, Codex wrap, OpenClaw) |
+| 8 | Win/Mac/Linux, low-spec | Polling daemon, stdlib core; `daemon/install.sh` + `install.ps1`; `scripts/package.sh` tarball |
+| 9 | Trustworthy | Hash-chain + **Ed25519 per-install signatures** + git anchors + outlier flags + reason-coded review |
 | 10 | Auditable | Submission freezes evidence pack; reviewers approve/deflate with reason codes |
-| 11 | ≤$500/mo | Client rollup ≈0.5 writes/s at 109,759 h/mo; single VPS ~$40–60/mo; no LLM hot path |
+| 11 | ≤$500/mo | Client rollup ≈0.5 writes/s; single VPS ~$40–60/mo; no LLM hot path |
 
-Acceptance path: 20-session calibration (`weighting/calibration-20.md`)
-→ 100-project pilot → 1,000 weighted projects in the Unified Projects DB.
-Packaged installers and the Postgres deployment (`schemas/server.sql`)
-are the remaining scale work; every protocol they need is fixed here.
+Acceptance path: 20-session calibration (**95% agreement**, `weighting/calibration-20.md`)
+→ 100-project pilot → 1,000 weighted projects. Postgres schema ready in
+`schemas/server.sql`.
 
 ## Test
 

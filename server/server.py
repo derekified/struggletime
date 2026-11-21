@@ -20,6 +20,7 @@ _load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
 from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS, billable_secs
+import install_sig
 
 
 def oauth_config(provider):
@@ -218,8 +219,13 @@ def db():
         ("timezone", "TEXT"),
         ("show_leaderboards", "INT NOT NULL DEFAULT 1"),
         ("api_key_prefix", "TEXT"),
+        ("weekly_goal_hours", "REAL NOT NULL DEFAULT 5.0"),
     ):
         if col not in ucols: c.execute(f"ALTER TABLE user ADD COLUMN {col} {spec}")
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS install_key(
+      install_id TEXT PRIMARY KEY, pubkey TEXT NOT NULL, user_id TEXT, created_at INT)
+    """)
     pcols = {r[1] for r in c.execute("PRAGMA table_info(project)")}
     for col, spec in (
         ("archived", "INT NOT NULL DEFAULT 0"),
@@ -543,6 +549,7 @@ def profile_payload(c, handle, session=None):
             ),
             "slack_linked": bool(link and link["slack_user_id"]),
             "needs_handle": False,
+            "weekly_goal_hours": float(_urow(u, "weekly_goal_hours", 5.0) or 5.0),
             **stats_for(c, user=handle)}
 
 class H(BaseHTTPRequestHandler):
@@ -1148,9 +1155,17 @@ class H(BaseHTTPRequestHandler):
                 display_name = str(display_name).strip()[:64] or None
             if tz is not None:
                 tz = str(tz).strip()[:64] or None
+            goal = _urow(row, "weekly_goal_hours", 5.0)
+            if "weekly_goal_hours" in d:
+                try:
+                    goal = float(d.get("weekly_goal_hours"))
+                except (TypeError, ValueError):
+                    return self.send_json(400, {"error": "weekly_goal_hours must be a number"})
+                if goal < 0 or goal > 168:
+                    return self.send_json(400, {"error": "weekly_goal_hours must be between 0 and 168"})
             c.execute(
-                "UPDATE user SET display_name=?, email=?, country=?, timezone=?, is_public=?, show_leaderboards=? WHERE handle=?",
-                (display_name, email, country, tz, int(is_public), int(show_lb), who),
+                "UPDATE user SET display_name=?, email=?, country=?, timezone=?, is_public=?, show_leaderboards=?, weekly_goal_hours=? WHERE handle=?",
+                (display_name, email, country, tz, int(is_public), int(show_lb), goal, who),
             )
             c.commit()
             return self.send_json(200, profile_payload(c, who, self.session(c)))
@@ -1386,6 +1401,33 @@ class H(BaseHTTPRequestHandler):
                 if bucket_hash(b) != b["hash"]: return self.send_json(422, {"error": f"bucket {i}: hash mismatch (tampered)"})
                 prev = b["hash"]
             total = 0.0; user = self.auth_handle(c) or d.get("user_id")
+            unsigned = 0
+            for i, b in enumerate(fresh):
+                iid = (b.get("install_id") or "").strip()
+                pub_b64 = (b.get("install_pubkey") or "").strip()
+                sig = b.get("signature")
+                if not sig or not pub_b64 or not iid:
+                    unsigned += 1
+                    continue
+                try:
+                    pub_raw = install_sig._unb64(pub_b64)
+                except Exception:
+                    return self.send_json(422, {"error": f"bucket {i}: invalid install_pubkey"})
+                if len(pub_raw) != 32:
+                    return self.send_json(422, {"error": f"bucket {i}: install_pubkey must be 32 raw bytes"})
+                expect_id = install_sig.install_id_from_pubkey(pub_raw)
+                if iid != expect_id:
+                    return self.send_json(422, {"error": f"bucket {i}: install_id does not match pubkey"})
+                row = c.execute("SELECT pubkey FROM install_key WHERE install_id=?", (iid,)).fetchone()
+                if row and row["pubkey"] != pub_b64:
+                    return self.send_json(422, {"error": f"bucket {i}: install_pubkey mismatch for install_id"})
+                if not row:
+                    c.execute(
+                        "INSERT INTO install_key VALUES (?,?,?,?)",
+                        (iid, pub_b64, user, int(time.time())),
+                    )
+                if not install_sig.verify_signature(b["hash"], sig, pub_raw):
+                    return self.send_json(422, {"error": f"bucket {i}: bad Ed25519 signature"})
             srow = c.execute("SELECT silent_secs FROM silent_streak WHERE project_id=?", (project,)).fetchone()
             seq = weight_sequence(fresh, srow["silent_secs"] if srow else 0)
             from verify import is_silent
@@ -1397,7 +1439,12 @@ class H(BaseHTTPRequestHandler):
                 c.execute("INSERT INTO bucket VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (b["bucket_id"], user, project, b["bucket_start_wall"], b["bucket_secs"], state, w, ws, b["hash"], b["prev_hash"], json.dumps(b)))
             c.execute("INSERT INTO chain_head VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET last_hash=excluded.last_hash", (project, prev)); c.commit()
-            return self.send_json(201, {"accepted": len(fresh), "weighted_secs_added": total, "weighted_hours_added": round(total / 3600, 4)})
+            return self.send_json(201, {
+                "accepted": len(fresh),
+                "weighted_secs_added": total,
+                "weighted_hours_added": round(total / 3600, 4),
+                "unsigned_buckets": unsigned,
+            })
         if p == ["v1", "submissions"]:
             d = self.body()
             if not d.get("ai_declaration"): return self.send_json(400, {"error": "ai_declaration required"})

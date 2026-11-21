@@ -125,6 +125,7 @@ function clearClientSession() {
   if ($("nav-identity")) $("nav-identity").hidden = true;
   if ($("nav-flag")) $("nav-flag").textContent = "";
   if ($("nav-streak")) $("nav-streak").textContent = "0d";
+  if ($("nav-goal")) $("nav-goal").textContent = "0/5h";
   if ($("nav-hours")) $("nav-hours").textContent = "0h";
   if ($("who-name")) { $("who-name").textContent = ""; $("who-name").href = "/login"; }
   if ($("acct-state")) $("acct-state").textContent = "";
@@ -567,6 +568,9 @@ function paintAccount() {
       stats.hidden = false;
       if ($("nav-streak")) $("nav-streak").textContent = `${p.current_streak_days || 0}d`;
       if ($("nav-hours")) $("nav-hours").textContent = fmtH(p.weighted_hours);
+      const goal = Number(p.weekly_goal_hours != null ? p.weekly_goal_hours : 5);
+      const week = Number(p.weighted_week_hours || 0);
+      if ($("nav-goal")) $("nav-goal").textContent = `${week.toFixed(1)}/${goal}h`;
     }
     paintWhoAction("sign out", "/signout", "door-leave");
     if ($("acct-state")) {
@@ -666,6 +670,7 @@ function paintSettingsForm() {
   if ($("set-email")) $("set-email").value = p.email || "";
   if ($("set-lb-opt-out")) $("set-lb-opt-out").checked = !!p.lb_opt_out;
   if ($("set-show-lb")) $("set-show-lb").checked = p.show_leaderboards !== false;
+  if ($("set-weekly-goal")) $("set-weekly-goal").value = p.weekly_goal_hours != null ? p.weekly_goal_hours : 5;
   if ($("delete-confirm")) $("delete-confirm").placeholder = p.handle || "your-handle";
   refreshApiKeyStatus();
 }
@@ -1338,13 +1343,16 @@ function kpiCard(glyph, label, value) {
 
 function renderKpis(a) {
   const box = $("kpi-strip"); if (!box) return;
+  const goal = Number((meProfile && meProfile.weekly_goal_hours != null) ? meProfile.weekly_goal_hours : 5);
+  const week = Number((meProfile && meProfile.weighted_week_hours) || a.week_hours || 0);
+  const pct = goal > 0 ? Math.min(100, Math.round((week / goal) * 100)) : 0;
   box.replaceChildren(
     kpiCard("timer", "Time", fmtH(a.total_hours)),
+    kpiCard("trophy", "Weekly goal", `${week.toFixed(1)}h / ${goal}h (${pct}%)`),
     kpiCard("briefcase", "Project", a.top_project ? a.top_project.label : "none yet"),
     kpiCard("code", "Language", a.top_language ? a.top_language.label : "none yet"),
     kpiCard("laptop", "OS", a.top_os ? a.top_os.label : "none yet"),
     kpiCard("terminal", "Editor", a.top_editor ? a.top_editor.label : "none yet"),
-    kpiCard("sticker", "Category", a.top_category ? a.top_category.label : "none yet"),
   );
 }
 
@@ -1916,6 +1924,7 @@ if ($("btn-save-region")) $("btn-save-region").addEventListener("click", () => s
 if ($("btn-save-identity")) $("btn-save-identity").addEventListener("click", () => saveProfile({
   display_name: $("set-display-name").value.trim() || null,
   email: $("set-email").value.trim() || null,
+  weekly_goal_hours: Number(($("set-weekly-goal") && $("set-weekly-goal").value) || 5),
 }));
 if ($("btn-save-privacy")) $("btn-save-privacy").addEventListener("click", () => saveProfile({
   lb_opt_out: !!$("set-lb-opt-out").checked,

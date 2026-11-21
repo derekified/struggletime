@@ -118,8 +118,8 @@ class TrayCore:
         self.s = st_gui.load_settings()
         self.s.update(self.overrides)
         rt = dcfg.resolve_runtime(
-            cli_server=self.overrides.get("server") or "",
-            cli_token=self.overrides.get("token") or self.s.get("token") or "",
+            cli_server=self.overrides.get("server"),  # None → settings
+            cli_token=self.overrides.get("token") if "token" in self.overrides else None,
             cli_user=self.overrides.get("handle") or "",
             cli_repo=self.overrides.get("repo") or "",
         )

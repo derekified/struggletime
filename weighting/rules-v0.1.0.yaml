@@ -1,3 +1,4 @@
+# DEPRECATED — see rules-v0.4.0.yaml (verify.py is source of truth)
 formula_version: v0.1.0-alpha
 bucket_secs: 300
 idle_pause_secs: 240
