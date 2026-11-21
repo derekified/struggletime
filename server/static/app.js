@@ -150,18 +150,6 @@ function mountDocs(into) {
     sections.forEach((sec) => io.observe(sec));
   }
 
-  root.querySelectorAll("[data-docs-copy]").forEach((btn) => {
-    btn.addEventListener("click", async () => {
-      const text = btn.getAttribute("data-docs-copy") || "";
-      try {
-        await navigator.clipboard.writeText(text);
-        toast("Clone command copied", { kind: "ok" });
-      } catch (_) {
-        toast(text, { kind: "ok" });
-      }
-    });
-  });
-
   // Deep-link on load
   const hash = (location.hash || "").replace(/^#/, "");
   if (hash && root.querySelector("#" + CSS.escape(hash))) {

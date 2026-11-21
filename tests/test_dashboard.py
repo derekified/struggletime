@@ -65,14 +65,17 @@ class TestDashboard(unittest.TestCase):
         self.assertEqual(s, 200)
         docs_l = docs.lower()
         for needle in ("page-docs", "st-docs-template", "settings-layout", "settings-rail", "settings-panels",
-                       "ui-panel", "ui-pill", "ui-pills", "ui-table", "ui-list", "page-head",
+                       "ui-panel", "ui-table", "ui-list",
                        "repository layout", "weighting formula", "contributing", "agpl", "ed25519",
                        "makefile targets", "setup-banner", "kpi-strip", "data-lang"):
             self.assertIn(needle, docs_l)
+        self.assertNotIn("copy clone url", docs_l)
+        self.assertNotIn("open source · agplv3", docs_l)
+        self.assertNotIn("data-docs-copy", docs_l)
         app_js = req(self.port, "GET", "/app.js")[1]
         self.assertIn("mountDocs", app_js)
         self.assertIn("ui-code", app_js)
-        self.assertIn("data-docs-copy", docs_l)
+        self.assertNotIn("data-docs-copy", app_js)
         css = req(self.port, "GET", "/styles.css")[1]
         self.assertIn(".ui-code", css)
         self.assertIn(".ui-table", css)
