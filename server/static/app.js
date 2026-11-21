@@ -89,20 +89,20 @@ function mountDocs(into) {
   if (!root || !tpl) return;
   root.replaceChildren(tpl.content.cloneNode(true));
 
-  // Wrap code blocks with shared label + copy chrome (ui-pill / ui-btn)
+  // Wrap code blocks with shared ui-code chrome (ui-pill + ui-btn)
   root.querySelectorAll("pre.install-code").forEach((pre) => {
-    if (pre.closest(".docs-code")) return;
+    if (pre.closest(".ui-code")) return;
     const lang = (pre.getAttribute("data-lang") || "shell").trim();
     const wrap = document.createElement("div");
-    wrap.className = "docs-code";
+    wrap.className = "ui-code";
     const head = document.createElement("div");
-    head.className = "docs-code-head";
+    head.className = "ui-code-head";
     const pill = document.createElement("span");
     pill.className = "ui-pill";
     pill.textContent = lang;
     const btn = document.createElement("button");
     btn.type = "button";
-    btn.className = "ui-btn ui-btn-ghost docs-code-copy";
+    btn.className = "ui-btn ui-btn-ghost ui-code-copy";
     btn.setAttribute("aria-label", "Copy code");
     btn.append(icon("copy", { size: 14 }), document.createTextNode("copy"));
     btn.addEventListener("click", async () => {

@@ -64,18 +64,21 @@ class TestDashboard(unittest.TestCase):
         s, docs = req(self.port, "GET", "/docs")
         self.assertEqual(s, 200)
         docs_l = docs.lower()
-        for needle in ("page-docs", "st-docs-template", "settings-layout", "settings-rail", "ui-panel",
-                       "ui-pill", "page-head", "repository layout", "weighting formula", "contributing",
-                       "agpl", "ed25519", "makefile targets", "setup-banner", "kpi-strip", "data-lang"):
+        for needle in ("page-docs", "st-docs-template", "settings-layout", "settings-rail", "settings-panels",
+                       "ui-panel", "ui-pill", "ui-pills", "ui-table", "ui-list", "page-head",
+                       "repository layout", "weighting formula", "contributing", "agpl", "ed25519",
+                       "makefile targets", "setup-banner", "kpi-strip", "data-lang"):
             self.assertIn(needle, docs_l)
         app_js = req(self.port, "GET", "/app.js")[1]
         self.assertIn("mountDocs", app_js)
-        self.assertIn("docs-code", app_js)
+        self.assertIn("ui-code", app_js)
         self.assertIn("data-docs-copy", docs_l)
         css = req(self.port, "GET", "/styles.css")[1]
-        self.assertIn(".docs-layout", css)
-        self.assertIn(".docs-code", css)
+        self.assertIn(".ui-code", css)
+        self.assertIn(".ui-table", css)
         self.assertNotIn("docs-hero", css)
+        self.assertNotIn(".docs-code", css)
+        self.assertNotIn(".docs-table", css)
         self.assertNotIn("color-mix", css)
         s, projects = req(self.port, "GET", "/projects")
         self.assertIn("proj-status", projects)

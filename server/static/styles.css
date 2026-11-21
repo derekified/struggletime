@@ -100,7 +100,22 @@ h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}h2{font-s
 .install-steps{margin:12px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:14px}
 .install-steps li{padding-left:4px}
 .install-steps b{display:block;margin-bottom:6px;font-size:13px}
-.install-code{margin:6px 0;padding:10px 12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:auto;font:12.5px/1.45 ui-monospace,Menlo,monospace;color:var(--ink);white-space:pre}
+.install-code{margin:6px 0;padding:10px 12px;background:var(--bg);border:1px solid var(--line);border-radius:8px;overflow:auto;font:12.5px/1.45 ui-monospace,Menlo,monospace;color:var(--ink);white-space:pre;max-width:100%;-webkit-overflow-scrolling:touch}
+.ui-code{margin:8px 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);overflow:hidden;min-width:0}
+.ui-code-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line)}
+.ui-code-copy{padding:5px 10px;font-size:12.5px}
+.ui-code .install-code{margin:0;border:0;border-radius:0}
+.ui-table-wrap{overflow:auto;-webkit-overflow-scrolling:touch;margin:8px 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);max-width:100%}
+.ui-table{width:100%;border-collapse:collapse;font-size:13px}
+.ui-table th,.ui-table td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.ui-table th{background:var(--panel2);color:var(--mut);font-weight:650;font-size:12px}
+.ui-table tr:last-child td{border-bottom:0}
+.ui-table code{font-size:12px;word-break:break-word}
+.ui-list{margin:0 0 12px;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14.5px;line-height:1.5}
+.ui-list li::marker{color:var(--accent)}
+.ui-panel > p{margin:0 0 10px;font-size:14.5px;line-height:1.55}
+.ui-panel > h3{margin:14px 0 8px;font-size:14px;font-weight:650;color:var(--ink)}
+.ui-pills{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
 .ui-empty{color:var(--mut);margin:0;text-align:left;line-height:1.4}
 .ui-pill{display:inline-block;font-size:12px;padding:2px 8px;border-radius:99px;border:1px solid var(--line);margin-right:6px}
 .ui-pill.ok{border-color:var(--accent);color:var(--accent)}.ui-pill.bad{border-color:var(--accent2);color:var(--accent2)}
@@ -314,44 +329,22 @@ h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}h2{font-s
 .settings-panels{display:flex;flex-direction:column;gap:12px;min-width:0}
 .settings-panel{display:none;flex-direction:column;gap:12px}
 .settings-panel.on{display:flex}
-.settings-panel .ui-panel h2{margin:0 0 10px;display:flex;align-items:center;gap:8px;font-size:15px}
-.settings-panel .ui-panel h2 .nav-ico{margin-right:0;color:var(--accent)}
-/* Docs — layout glue only; primitives come from ui-panel / settings-rail / kpi / install-code */
-.docs-mount{min-width:0}
-.docs-project{display:flex;flex-direction:column;gap:14px;min-width:0}
+.ui-panel > h2,.settings-panel .ui-panel h2{margin:0 0 10px;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:650}
+.ui-panel > h2 .nav-ico,.settings-panel .ui-panel h2 .nav-ico{margin-right:0;color:var(--accent)}
+/* Docs page — only layout glue; all chrome is shared UI primitives */
+.docs-mount,.docs-project{min-width:0}
+.docs-project{display:flex;flex-direction:column;gap:14px}
 .docs-lead{max-width:62ch;margin:8px 0 0}
-.docs-pills{display:flex;flex-wrap:wrap;gap:6px;margin:12px 0 4px}
-.docs-code-hint{margin:12px 0 6px}
-.docs-layout{align-items:start}
 .docs-rail{max-height:calc(100vh - 96px);overflow:auto}
-.docs-rail .settings-tab{width:100%;text-decoration:none}
-.docs-rail .settings-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+.docs-rail a.settings-tab{width:100%;text-decoration:none}
+.docs-rail a.settings-tab:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .docs-rail-label{margin:10px 8px 2px;font-size:11px;letter-spacing:.04em;text-transform:uppercase}
 .docs-rail-label:first-child{margin-top:0}
-.docs-panels{display:flex;flex-direction:column;gap:12px;min-width:0}
 .docs-section{scroll-margin-top:84px;min-width:0}
-.docs-section > h2{margin:0 0 10px;display:flex;align-items:center;gap:8px;font-size:15px;font-weight:650}
-.docs-section > h2 .nav-ico{margin-right:0;color:var(--accent)}
-.docs-section > p{margin:0 0 10px;font-size:14.5px;line-height:1.55}
-.docs-h3{margin:14px 0 8px;font-size:14px;font-weight:650;color:var(--ink)}
-.docs-list{margin:0 0 12px;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14.5px;line-height:1.5}
-.docs-list li::marker{color:var(--accent)}
+.docs-section .setup-banner{margin:12px 0}
 .docs-kpi{grid-template-columns:repeat(3,minmax(0,1fr));margin:12px 0 0}
 @media(max-width:800px){.docs-kpi{grid-template-columns:1fr}}
-.docs-kpi .kpi{background:var(--panel2)}
-.docs-kpi .kpi .n{white-space:normal}
-.docs-section .setup-banner{margin:12px 0}
-.docs-code{margin:8px 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--panel2);overflow:hidden;min-width:0}
-.docs-code-head{display:flex;align-items:center;justify-content:space-between;gap:8px;padding:8px 10px;border-bottom:1px solid var(--line)}
-.docs-code-copy{padding:5px 10px;font-size:12.5px}
-.docs-code .install-code{margin:0;border:0;border-radius:0;max-width:100%;overflow:auto;-webkit-overflow-scrolling:touch}
-.docs-table-wrap{overflow:auto;-webkit-overflow-scrolling:touch;margin:8px 0 12px;border:1px solid var(--line);border-radius:12px;background:var(--bg);max-width:100%}
-.docs-table{width:100%;border-collapse:collapse;font-size:13px}
-.docs-table th,.docs-table td{padding:10px 12px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
-.docs-table th{background:var(--panel2);color:var(--mut);font-weight:650;font-size:12px}
-.docs-table tr:last-child td{border-bottom:0}
-.docs-table code{font-size:12px;word-break:break-word}
-#settings-docs .docs-project .page-head{margin-bottom:8px}
+.docs-kpi .kpi .n,.docs-kpi .kpi .l{white-space:normal;overflow:visible;text-overflow:unset}
 #settings-docs .docs-rail{max-height:none}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 @media(max-width:640px){.form-grid{grid-template-columns:1fr}}

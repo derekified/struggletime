@@ -436,7 +436,7 @@ source /path/to/struggletime/daemon/hooks.sh
           <h1>StruggleTime</h1>
         </div>
         <p class="lead docs-lead">AI time tracking that counts productive struggle, not activity. Passive, private, hash-chained — fork it, self-host it, calibrate it.</p>
-        <div class="docs-pills" aria-label="project badges">
+        <div class="ui-pills" aria-label="project badges">
           <span class="ui-pill ok">AGPL-3.0</span>
           <span class="ui-pill">Python 3.10+</span>
           <span class="ui-pill">stdlib core</span>
@@ -454,7 +454,7 @@ cd struggletime &amp;&amp; make check</pre>
       </div>
     </div>
 
-    <div class="settings-layout docs-layout">
+    <div class="settings-layout">
       <aside class="settings-rail docs-rail" aria-label="Documentation">
         <p class="sub docs-rail-label">Project</p>
         <a class="settings-tab" href="#doc-why">Why StruggleTime</a>
@@ -478,7 +478,7 @@ cd struggletime &amp;&amp; make check</pre>
         <a class="settings-tab" href="#doc-license">License</a>
       </aside>
 
-      <div class="docs-panels">
+      <div class="settings-panels">
         <section id="doc-why" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="bolt"></span>Why StruggleTime</h2>
           <p>An hour an AI runs unattended is not an hour a builder learned anything. Trackers that count keystrokes or foreground time break down when agents dump files while you are elsewhere. StruggleTime counts <b>causality</b> instead:</p>
@@ -524,8 +524,8 @@ cd struggletime &amp;&amp; make check</pre>
 
         <section id="doc-stack" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="terminal"></span>Stack &amp; project status</h2>
-          <div class="docs-table-wrap">
-            <table class="docs-table">
+          <div class="ui-table-wrap">
+            <table class="ui-table">
               <thead><tr><th>Layer</th><th>What ships</th></tr></thead>
               <tbody>
                 <tr><td>Runtime</td><td>Python 3.10+, stdlib server &amp; daemon (no pip required for core)</td></tr>
@@ -542,7 +542,7 @@ cd struggletime &amp;&amp; make check</pre>
 
         <section id="doc-install" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="plus"></span>Install &amp; run</h2>
-          <h3 class="docs-h3">Developers (full stack)</h3>
+          <h3>Developers (full stack)</h3>
           <p class="sub docs-lang" hidden>shell</p>
           <pre class="install-code" data-lang="shell">git clone https://origin.cursor.com/derekified/struggletime.git
 cd struggletime
@@ -550,7 +550,7 @@ make check                 # python, git, full test suite
 make server                # dashboard + API on :18765
 # optional demo seed
 make demo                  # :18766 with sample data</pre>
-          <h3 class="docs-h3">Builders (track a project against a server)</h3>
+          <h3>Builders (track a project against a server)</h3>
           <ol class="install-steps">
             <li>
               <b>Get an API key</b>
@@ -606,7 +606,7 @@ make gui                   # native settings dialogs</pre>
 # fill Slack/GitHub OAuth, OAUTH_REDIRECT_BASE, optional webhooks
 # STRUGGLETIME_ADMINS=you:superadmin,reviewer2:reviewer
 PORT=18765 BIND=0.0.0.0 make server</pre>
-          <ul class="docs-list">
+          <ul class="ui-list">
             <li>Register OAuth callbacks at <code>…/v1/auth/slack/callback</code> and <code>…/v1/auth/github/callback</code></li>
             <li>SQLite file via <code>SERVER_DB</code>; no external DB required for a single VPS</li>
             <li>No LLM in the ingest path — client rollup stays ~0.5 writes/s at StruggleTime scale</li>
@@ -618,8 +618,8 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
         <section id="doc-weighting" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="waveform"></span>Weighting formula</h2>
           <p>Shared by daemon and server via <code>src/verify.py</code> (<code>FORMULA_VERSION</code>). Changing numbers requires a new version + calibration notes — never silent retunes.</p>
-          <div class="docs-table-wrap">
-            <table class="docs-table">
+          <div class="ui-table-wrap">
+            <table class="ui-table">
               <thead><tr><th>State</th><th>Weight</th><th>Meaning</th></tr></thead>
               <tbody>
                 <tr><td>AI struggle / fail→fix→pass / closed loop</td><td>1.0×</td><td>Steered, checked, steered again</td></tr>
@@ -644,7 +644,7 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
               </div>
             </div>
           </div>
-          <ul class="docs-list">
+          <ul class="ui-list">
             <li>Paths → <code>sha256(local_salt:path)</code> file ids</li>
             <li>Shell → category, duration, exit code only</li>
             <li>Git → HEAD, dirty count, line totals (not messages or diffs)</li>
@@ -657,7 +657,7 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
 
         <section id="doc-trust" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="badge-check"></span>Provenance &amp; review</h2>
-          <ul class="docs-list">
+          <ul class="ui-list">
             <li><b>Hash chain</b> — <code>SHA256(canonical_bucket ‖ prev_hash)</code> + monotonic clock</li>
             <li><b>Ed25519</b> — per-install key under config dir; server pins first pubkey per <code>install_id</code></li>
             <li><b>Git anchors</b> — claimed hours sit next to HEAD / dirty / diff totals</li>
@@ -672,7 +672,7 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
 
         <section id="doc-troubleshoot" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="important"></span>Troubleshooting</h2>
-          <ul class="docs-list">
+          <ul class="ui-list">
             <li><b>Empty dashboard</b> — wait for first bucket; confirm API key + server URL; <code>struggletime-helper status</code></li>
             <li><b>422 chain broken</b> — ledger/server diverge (reset or two machines, same project id). Use a fresh project id per machine.</li>
             <li><b>422 / 400 allowlist</b> — post-seal edit or non-allowlisted fields; inspect locally</li>
@@ -685,8 +685,8 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
         <section id="doc-api" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="link"></span>HTTP API</h2>
           <p>JSON. Auth: Slack session cookie or <code>Authorization: Bearer &lt;api-key&gt;</code>.</p>
-          <div class="docs-table-wrap">
-            <table class="docs-table">
+          <div class="ui-table-wrap">
+            <table class="ui-table">
               <thead><tr><th>Method / path</th><th>Purpose</th></tr></thead>
               <tbody>
                 <tr><td><code>POST /v1/buckets/batch</code></td><td>Ingest sealed buckets</td></tr>
@@ -704,8 +704,8 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
 
         <section id="doc-makefile" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="terminal"></span>Makefile targets</h2>
-          <div class="docs-table-wrap">
-            <table class="docs-table">
+          <div class="ui-table-wrap">
+            <table class="ui-table">
               <thead><tr><th>Target</th><th>Does</th></tr></thead>
               <tbody>
                 <tr><td><code>make check</code></td><td>Tooling + full test suite</td></tr>
@@ -723,8 +723,8 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
 
         <section id="doc-docs-files" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="docs"></span>In-repo documentation</h2>
-          <div class="docs-table-wrap">
-            <table class="docs-table">
+          <div class="ui-table-wrap">
+            <table class="ui-table">
               <thead><tr><th>Path</th><th>Contents</th></tr></thead>
               <tbody>
                 <tr><td><code>README.md</code></td><td>Project entry + bounty checklist</td></tr>
@@ -762,7 +762,7 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
             <a class="ui-btn" href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener"><span class="nav-ico" data-glyph="github"></span>open the repository</a>
             <a class="ui-btn ui-btn-ghost" href="/builders" data-nav-link><span class="nav-ico" data-glyph="trophy"></span>builders board</a>
           </div>
-          <p class="sub docs-code-hint">Copyright retained by contributors · SPDX-License-Identifier: AGPL-3.0-or-later</p>
+          <p class="sub">Copyright retained by contributors · SPDX-License-Identifier: AGPL-3.0-or-later</p>
         </section>
       </div>
     </div>
