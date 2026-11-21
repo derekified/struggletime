@@ -2,14 +2,15 @@
 # SPDX-License-Identifier: AGPL-3.0-or-later
 """Shared StruggleTime/aitime config paths.
 
-Settings (API key, server, linked repo) live under XDG config:
-  ~/.config/struggletime/settings.json
-Runtime data (logs, events, pause flag) stay under:
-  ~/.aitime/
+Settings (API key, server, linked repo):
+  Linux/macOS: ~/.config/struggletime/settings.json  (XDG)
+  Windows:     %APPDATA%\\struggletime\\settings.json
+Runtime data (logs, events, pause flag):
+  ~/.aitime/  (all platforms; override with STRUGGLETIME_HOME)
 
 Legacy ~/.aitime/gui.json is migrated automatically on first load.
 """
-import json, os, shutil
+import json, os, shutil, sys
 from pathlib import Path
 from urllib.parse import urlparse
 
@@ -31,15 +32,23 @@ _load_dotenv()
 def _xdg_config_home():
     return Path(os.environ.get("XDG_CONFIG_HOME") or (Path.home() / ".config"))
 
+def default_config_home(platform_name=None):
+    """Resolve settings dir for the current (or mocked) OS."""
+    override = os.environ.get("STRUGGLETIME_CONFIG") or os.environ.get("AITIME_CONFIG")
+    if override:
+        return Path(override)
+    plat = (platform_name or sys.platform or "").lower()
+    if plat.startswith("win") or (platform_name is None and os.name == "nt"):
+        base = os.environ.get("APPDATA") or str(Path.home() / "AppData" / "Roaming")
+        # Join as strings so Linux test hosts don't try to construct WindowsPath
+        return Path(os.path.join(str(base), "struggletime"))
+    return _xdg_config_home() / "struggletime"
+
 # Runtime / state dir (logs, agent_events, pause). Overridable for tests.
 HOME = Path(os.environ.get("STRUGGLETIME_HOME") or os.environ.get("AITIME_HOME") or (Path.home() / ".aitime"))
 
-# Persistent settings dir (XDG). STRUGGLETIME_CONFIG / AITIME_CONFIG override.
-CONFIG_HOME = Path(
-    os.environ.get("STRUGGLETIME_CONFIG")
-    or os.environ.get("AITIME_CONFIG")
-    or (_xdg_config_home() / "struggletime")
-)
+# Persistent settings dir. STRUGGLETIME_CONFIG / AITIME_CONFIG override.
+CONFIG_HOME = default_config_home()
 
 GUI_SETTINGS = CONFIG_HOME / "settings.json"
 LEGACY_GUI_SETTINGS = HOME / "gui.json"

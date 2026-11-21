@@ -1,10 +1,11 @@
 PY ?= python3
 PORT ?= 18765
 
-.PHONY: help check test server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs clean
+.PHONY: help check test test-cross server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs clean
 help:
 	@echo "make check    verify python, git and the test suite"
 	@echo "make test     run all tests"
+	@echo "make test-cross  Linux/macOS/Windows path+hook+adapter tests"
 	@echo "make server   start the server + dashboard on :$(PORT)"
 	@echo "make tray     run the menu bar / system tray daemon"
 	@echo "make gui      open the daemon settings window"
@@ -23,6 +24,9 @@ check:
 test:
 	$(PY) -m unittest discover -s tests
 	$(PY) scripts/sync_formula_docs.py
+
+test-cross:
+	PWSH="$(PWSH)" $(PY) -m unittest tests.test_cross_platform -v
 
 server:
 	PORT=$(PORT) $(PY) server/server.py

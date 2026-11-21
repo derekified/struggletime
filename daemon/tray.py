@@ -696,7 +696,8 @@ def main():
     if a.check:
         if pystray is None:
             print(INSTALL_HINT); return 1
-        make_icon(True).save("/tmp/struggletime-tray-check.png")
+        import tempfile
+        make_icon(True).save(str(Path(tempfile.gettempdir()) / "struggletime-tray-check.png"))
         print("tray ok: pystray backend available, icon renders")
         if not has_display():
             print("note: no display server — runtime will use headless fallback")
