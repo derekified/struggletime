@@ -13,7 +13,8 @@
     <a href="/home" data-top="home" data-nav-link data-nav="home" data-auth="required">home</a>
     <a href="/projects" data-top="projects" data-nav-link data-nav="projects" data-auth="required">projects</a>
     <a href="/builders" data-top="builders" data-nav-link data-nav="builders">builders</a>
-    <a href="/review" data-top="review" data-nav-link data-nav="review" data-auth="required">review</a>
+    <a href="/review" data-top="review" data-nav-link data-nav="review" data-auth="staff" hidden>review</a>
+    <a href="/admin" data-top="admin" data-nav-link data-nav="admin" data-auth="staff" hidden>fraud</a>
     <a href="/settings" data-top="settings" data-nav-link data-nav="settings" data-auth="required">settings</a>
   </nav>
   <div class="top-right">
@@ -222,9 +223,34 @@
       <div class="page-head">
         <div>
           <h1>review queue</h1>
+          <p class="sub">Approve, deflate, or reject pending hour claims.</p>
         </div>
       </div>
       <div class="ui-panel" id="review-list"><p class="ui-empty">nothing in the queue yet</p></div>
+    </section>
+
+    <!-- ADMIN / FRAUD SQUAD -->
+    <section class="page page-wide" id="page-admin">
+      <div class="page-head">
+        <div>
+          <h1>fraud squad</h1>
+          <p class="sub" id="admin-role-hint">Trust levels and staff roles.</p>
+        </div>
+      </div>
+      <div class="kpi-strip" id="admin-kpi"></div>
+      <div class="admin-grid">
+        <div class="ui-panel">
+          <div class="page-head-row" style="margin-bottom:10px">
+            <h2 style="margin:0;font-size:15px">builders</h2>
+            <input class="ui-input" id="admin-user-q" placeholder="search handle" style="max-width:180px">
+          </div>
+          <div id="admin-users"><p class="ui-empty">loading…</p></div>
+        </div>
+        <div class="ui-panel">
+          <h2 style="margin:0 0 10px;font-size:15px">trust audit</h2>
+          <div id="admin-audit"><p class="ui-empty">loading…</p></div>
+        </div>
+      </div>
     </section>
 
     <!-- SETTINGS: Profile + Appearance only -->

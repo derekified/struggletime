@@ -35,6 +35,18 @@ a.ui-btn,button.ui-btn{justify-content:center;line-height:1.2;white-space:nowrap
 .shell{max-width:1200px;margin:0 auto}
 .shell.landing-mode .top-nav{display:none}
 .shell.landing-mode .nav-stats,.shell.login-mode .nav-stats{display:none}
+.shell.landing-mode .nav-identity,.shell.login-mode .nav-identity{display:none}
+.shell.guest-mode .nav-stats,.shell.guest-mode .nav-identity{display:none !important}
+
+.admin-grid{display:grid;grid-template-columns:1.4fr 1fr;gap:12px;align-items:start}
+@media(max-width:900px){.admin-grid{grid-template-columns:1fr}}
+.trust-dot{display:inline-block;width:10px;height:10px;border-radius:50%;margin-right:6px;vertical-align:middle}
+.trust-blue{background:#5b9dff}.trust-green{background:#3ecf8e}.trust-yellow{background:#f5c542}.trust-red{background:#ff6b6b}
+.admin-user{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 0;border-bottom:1px solid var(--line)}
+.admin-user:last-child{border-bottom:0}
+.admin-user .meta{min-width:0}
+.admin-user .actions{display:flex;gap:6px;flex-wrap:wrap;align-items:center}
+.admin-user select{font-size:12px;padding:4px 6px}
 
 .nav-stats{display:flex;gap:12px;align-items:center;margin-right:4px}
 .nav-stat{display:inline-flex;align-items:center;gap:5px;color:var(--mut);font-size:13px}

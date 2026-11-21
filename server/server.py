@@ -173,7 +173,44 @@ def upsert_link(c, handle, **fields):
                    slack_name=COALESCE(excluded.slack_name, link.slack_name)""",
               (handle, cur["github_login"], cur["slack_user_id"], cur["github_token"], cur["slack_avatar"], cur["slack_name"]))
 
-REASONS = {"UNATTENDED_AGENT_DUMP","IDLE_INFLATION","NO_TEST_ITERATION","BOILERPLATE_HEAVY","CHAIN_BROKEN","GIT_MISMATCH","NONE"}
+REASONS = {"UNATTENDED_AGENT_DUMP","IDLE_INFLATION","NO_TEST_ITERATION","BOILERPLATE_HEAVY","CHAIN_BROKEN","GIT_MISMATCH","UNSIGNED_INSTALL","NONE"}
+TRUST_LEVELS = ("blue", "green", "yellow", "red")  # unscored, trusted, suspected, convicted
+ADMIN_LEVELS = ("user", "viewer", "reviewer", "admin", "superadmin")
+ADMIN_RANK = {k: i for i, k in enumerate(ADMIN_LEVELS)}
+
+def normalize_admin_level(level):
+    lv = (level or "user").strip().lower()
+    return lv if lv in ADMIN_RANK else "user"
+
+def normalize_trust(level):
+    lv = (level or "blue").strip().lower()
+    return lv if lv in TRUST_LEVELS else "blue"
+
+def apply_admin_env(c):
+    """Bootstrap staff from STRUGGLETIME_ADMINS=handle[:level],handle2:reviewer"""
+    raw = os.environ.get("STRUGGLETIME_ADMINS") or os.environ.get("AITIME_ADMINS") or ""
+    now = int(time.time())
+    for part in raw.split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if ":" in part:
+            handle, level = part.split(":", 1)
+        else:
+            handle, level = part, "admin"
+        handle = handle.strip().lower()
+        level = normalize_admin_level(level)
+        if not handle or level == "user":
+            continue
+        row = c.execute("SELECT handle FROM user WHERE handle=?", (handle,)).fetchone()
+        if row:
+            c.execute("UPDATE user SET admin_level=? WHERE handle=?", (level, handle))
+        else:
+            c.execute(
+                "INSERT INTO user(handle, token_hash, is_public, created_at, admin_level, trust_level) VALUES (?,?,?,?,?,?)",
+                (handle, "", 1, now, level, "green"),
+            )
+    c.commit()
 DB = os.environ.get("SERVER_DB", "server.db")
 STATIC = Path(__file__).parent / "static"
 
@@ -254,11 +291,18 @@ def db():
         ("api_key_prefix", "TEXT"),
         ("api_key", "TEXT"),  # owner-visible plaintext (Slack session only); auth still hashes
         ("weekly_goal_hours", "REAL NOT NULL DEFAULT 5.0"),
+        ("admin_level", "TEXT NOT NULL DEFAULT 'user'"),
+        ("trust_level", "TEXT NOT NULL DEFAULT 'blue'"),
     ):
         if col not in ucols: c.execute(f"ALTER TABLE user ADD COLUMN {col} {spec}")
     c.execute("""
     CREATE TABLE IF NOT EXISTS install_key(
       install_id TEXT PRIMARY KEY, pubkey TEXT NOT NULL, user_id TEXT, created_at INT)
+    """)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS trust_audit(
+      id TEXT PRIMARY KEY, handle TEXT NOT NULL, changed_by TEXT NOT NULL,
+      prev_level TEXT, new_level TEXT, reason TEXT, notes TEXT, created_at INT)
     """)
     pcols = {r[1] for r in c.execute("PRAGMA table_info(project)")}
     for col, spec in (
@@ -268,8 +312,27 @@ def db():
         ("local_path", "TEXT"),
     ):
         if col not in pcols: c.execute(f"ALTER TABLE project ADD COLUMN {col} {spec}")
+    apply_admin_env(c)
     c.commit()
     _CONN = c; return c
+
+def user_admin_level(c, handle):
+    if not handle:
+        return "user"
+    row = c.execute("SELECT admin_level FROM user WHERE handle=?", (handle,)).fetchone()
+    return normalize_admin_level(row["admin_level"] if row and "admin_level" in row.keys() else "user")
+
+def user_trust_level(c, handle):
+    if not handle:
+        return "blue"
+    row = c.execute("SELECT trust_level FROM user WHERE handle=?", (handle,)).fetchone()
+    return normalize_trust(row["trust_level"] if row and "trust_level" in row.keys() else "blue")
+
+def has_min_role(c, handle, min_level):
+    return ADMIN_RANK.get(user_admin_level(c, handle), 0) >= ADMIN_RANK.get(min_level, 99)
+
+def is_staff(c, handle):
+    return has_min_role(c, handle, "viewer")
 
 def notify(c, text):
     eid = str(uuid.uuid4()); delivered = 0
@@ -584,6 +647,11 @@ def profile_payload(c, handle, session=None):
             "slack_linked": bool(link and link["slack_user_id"]),
             "needs_handle": False,
             "weekly_goal_hours": float(_urow(u, "weekly_goal_hours", 5.0) or 5.0),
+            "admin_level": normalize_admin_level(_urow(u, "admin_level", "user")),
+            "trust_level": normalize_trust(_urow(u, "trust_level", "blue")),
+            "is_staff": ADMIN_RANK.get(normalize_admin_level(_urow(u, "admin_level", "user")), 0) >= ADMIN_RANK["viewer"],
+            "can_review": ADMIN_RANK.get(normalize_admin_level(_urow(u, "admin_level", "user")), 0) >= ADMIN_RANK["reviewer"],
+            "can_admin": ADMIN_RANK.get(normalize_admin_level(_urow(u, "admin_level", "user")), 0) >= ADMIN_RANK["admin"],
             **daemon_link_status(c, handle),
             **stats_for(c, user=handle)}
 
@@ -676,11 +744,13 @@ class H(BaseHTTPRequestHandler):
     def _get(self):
         parsed = urlparse(self.path); p = parsed.path.strip("/").split("/") if parsed.path.strip("/") else []
         c = db()
-        pages = ("home", "dashboard", "projects", "builders", "review", "settings", "login", "signout", "logout")
+        pages = ("home", "dashboard", "projects", "builders", "review", "admin", "settings", "login", "signout", "logout")
         if p == ["integrations"]:
             self.send_response(302); self.send_header("Location", "/settings"); self.end_headers(); return
         if p == ["dashboard"]:
             self.send_response(302); self.send_header("Location", "/home"); self.end_headers(); return
+        if p == ["fraud"]:
+            self.send_response(302); self.send_header("Location", "/admin"); self.end_headers(); return
         if p == [] or p == ["index.html"] or (len(p) == 1 and p[0] in pages):
             f = STATIC / "index.html"
             if not f.exists(): return self.send_json(404, {"error": "no dashboard"})
@@ -1084,13 +1154,68 @@ class H(BaseHTTPRequestHandler):
                 "submissions": {r["status"]: r["n"] for r in subs},
                 "pending_reviews": sum(r["n"] for r in subs if r["status"] == "pending")})
         if p == ["v1", "submissions"]:
-            rows = c.execute("SELECT * FROM submission ORDER BY rowid DESC").fetchall()
+            who = self.auth_handle(c)
+            if not who: return self.send_json(401, {"error": "sign in required"})
+            if is_staff(c, who):
+                rows = c.execute("SELECT * FROM submission ORDER BY rowid DESC").fetchall()
+            else:
+                rows = c.execute("SELECT * FROM submission WHERE user_id=? ORDER BY rowid DESC", (who,)).fetchall()
             return self.send_json(200, {"submissions": [{**dict(r), "flags": json.loads(r["flags"]),
                 "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4)} for r in rows]})
         if len(p) == 3 and p[:2] == ["v1", "submissions"]:
+            who = self.auth_handle(c)
+            if not who: return self.send_json(401, {"error": "sign in required"})
             r = c.execute("SELECT * FROM submission WHERE id=?", (p[2],)).fetchone()
             if not r: return self.send_json(404, {"error": "submission not found"})
+            if r["user_id"] != who and not is_staff(c, who):
+                return self.send_json(403, {"error": "staff only"})
             return self.send_json(200, {**dict(r), "flags": json.loads(r["flags"])})
+        if p == ["v1", "admin", "overview"]:
+            who = self.auth_handle(c)
+            if not who or not is_staff(c, who):
+                return self.send_json(403, {"error": "staff only"})
+            st = stats_for(c)
+            subs = c.execute("SELECT status, COUNT(*) n FROM submission GROUP BY status").fetchall()
+            trust_rows = c.execute("SELECT trust_level, COUNT(*) n FROM user GROUP BY trust_level").fetchall()
+            return self.send_json(200, {
+                **st,
+                "users": c.execute("SELECT COUNT(*) FROM user").fetchone()[0],
+                "projects_count": c.execute("SELECT COUNT(*) FROM project WHERE COALESCE(deleted,0)=0").fetchone()[0],
+                "submissions": {r["status"]: r["n"] for r in subs},
+                "pending_reviews": sum(r["n"] for r in subs if r["status"] == "pending"),
+                "trust_counts": {r["trust_level"] or "blue": r["n"] for r in trust_rows},
+                "role": user_admin_level(c, who),
+            })
+        if p == ["v1", "admin", "users"]:
+            who = self.auth_handle(c)
+            if not who or not is_staff(c, who):
+                return self.send_json(403, {"error": "staff only"})
+            q = (parse_qs(parsed.query).get("q") or [""])[0].strip().lower()
+            rows = c.execute("SELECT handle, admin_level, trust_level, is_public, created_at, display_name FROM user ORDER BY created_at DESC").fetchall()
+            out = []
+            for r in rows:
+                h = r["handle"]
+                if q and q not in h and q not in (r["display_name"] or "").lower():
+                    continue
+                st = stats_for(c, user=h)
+                out.append({
+                    "handle": h,
+                    "display_name": r["display_name"],
+                    "admin_level": normalize_admin_level(r["admin_level"] if "admin_level" in r.keys() else "user"),
+                    "trust_level": normalize_trust(r["trust_level"] if "trust_level" in r.keys() else "blue"),
+                    "is_public": bool(r["is_public"]),
+                    "created_at": r["created_at"],
+                    "weighted_hours": st["weighted_hours"],
+                    "buckets": st["buckets"],
+                    "flags": st.get("flags") or [],
+                })
+            return self.send_json(200, {"users": out[:200]})
+        if p == ["v1", "admin", "trust-audit"]:
+            who = self.auth_handle(c)
+            if not who or not is_staff(c, who):
+                return self.send_json(403, {"error": "staff only"})
+            rows = c.execute("SELECT * FROM trust_audit ORDER BY created_at DESC LIMIT 200").fetchall()
+            return self.send_json(200, {"logs": [dict(r) for r in rows]})
         return self.send_json(404, {"error": "not found"})
 
     def do_POST(self):
@@ -1510,6 +1635,9 @@ class H(BaseHTTPRequestHandler):
             ev = len(json.dumps([json.loads(r["payload"]) for r in rows]).encode())
             return self.send_json(201, {"id": sid, "claimed_weighted_secs": claimed, "claimed_weighted_hours": round(claimed / 3600, 4), "status": "pending", "flags": fl, "evidence_bytes": ev, "evidence_kb": round(ev / 1024, 1)})
         if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] == "review":
+            who = self.auth_handle(c)
+            if not who or not has_min_role(c, who, "reviewer"):
+                return self.send_json(403, {"error": "reviewer role required"})
             d = self.body()
             if d.get("reason_code") not in REASONS: return self.send_json(400, {"error": "invalid reason_code", "allowed": sorted(REASONS)})
             r = c.execute("SELECT * FROM submission WHERE id=?", (p[2],)).fetchone()
@@ -1517,10 +1645,57 @@ class H(BaseHTTPRequestHandler):
             approved = float(d["approved_weighted_secs"])
             status = "approved" if approved >= r["claimed_weighted_secs"] else ("rejected" if approved == 0 else "deflated")
             c.execute("UPDATE submission SET status=? WHERE id=?", (status, p[2]))
-            c.execute("INSERT INTO review VALUES (?,?,?,?,?)", (str(uuid.uuid4()), p[2], d.get("reviewer_id"), approved, d["reason_code"]))
+            c.execute("INSERT INTO review VALUES (?,?,?,?,?)", (str(uuid.uuid4()), p[2], who, approved, d["reason_code"]))
             notify(c, f"submission {p[2][:8]} reviewed: {status} · {round(approved/3600, 2)} h approved · reason {d['reason_code']}")
             c.commit()
-            return self.send_json(200, {"id": p[2], "status": status, "approved_weighted_secs": approved})
+            return self.send_json(200, {"id": p[2], "status": status, "approved_weighted_secs": approved, "reviewer_id": who})
+        if p == ["v1", "admin", "trust"]:
+            who = self.auth_handle(c)
+            if not who or not has_min_role(c, who, "admin"):
+                return self.send_json(403, {"error": "admin role required"})
+            d = self.body()
+            handle = (d.get("handle") or "").strip().lower()
+            new_level = normalize_trust(d.get("trust_level"))
+            reason = (d.get("reason") or "").strip() or "manual"
+            notes = (d.get("notes") or "").strip()
+            if not handle:
+                return self.send_json(400, {"error": "handle required"})
+            if new_level not in TRUST_LEVELS:
+                return self.send_json(400, {"error": "invalid trust_level", "allowed": list(TRUST_LEVELS)})
+            row = c.execute("SELECT trust_level FROM user WHERE handle=?", (handle,)).fetchone()
+            if not row:
+                return self.send_json(404, {"error": "user not found"})
+            prev = normalize_trust(row["trust_level"] if "trust_level" in row.keys() else "blue")
+            c.execute("UPDATE user SET trust_level=? WHERE handle=?", (new_level, handle))
+            c.execute(
+                "INSERT INTO trust_audit VALUES (?,?,?,?,?,?,?,?)",
+                (str(uuid.uuid4()), handle, who, prev, new_level, reason, notes, int(time.time())),
+            )
+            c.commit()
+            return self.send_json(200, {"handle": handle, "prev_level": prev, "trust_level": new_level})
+        if p == ["v1", "admin", "role"]:
+            who = self.auth_handle(c)
+            if not who or not has_min_role(c, who, "admin"):
+                return self.send_json(403, {"error": "admin role required"})
+            d = self.body()
+            handle = (d.get("handle") or "").strip().lower()
+            new_level = normalize_admin_level(d.get("admin_level"))
+            if not handle:
+                return self.send_json(400, {"error": "handle required"})
+            if new_level not in ADMIN_RANK:
+                return self.send_json(400, {"error": "invalid admin_level", "allowed": list(ADMIN_LEVELS)})
+            # Only superadmin can grant/revoke admin+; admins can set viewer/reviewer
+            actor = user_admin_level(c, who)
+            if ADMIN_RANK[new_level] >= ADMIN_RANK["admin"] and actor != "superadmin":
+                return self.send_json(403, {"error": "superadmin required to grant admin+"})
+            if handle == who and new_level == "user":
+                return self.send_json(400, {"error": "cannot demote yourself"})
+            row = c.execute("SELECT handle FROM user WHERE handle=?", (handle,)).fetchone()
+            if not row:
+                return self.send_json(404, {"error": "user not found"})
+            c.execute("UPDATE user SET admin_level=? WHERE handle=?", (new_level, handle))
+            c.commit()
+            return self.send_json(200, {"handle": handle, "admin_level": new_level})
         return self.send_json(404, {"error": "not found"})
 
 if __name__ == "__main__":

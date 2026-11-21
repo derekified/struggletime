@@ -79,13 +79,15 @@ const projSearch = {
   status: localStorage.getItem("st_proj_status") || "active",
 };
 const TZ_OFFSET = -new Date().getTimezoneOffset();
-const KNOWN = ["landing", "login", "home", "projects", "builders", "review", "settings"];
-const PROTECTED = new Set(["home", "projects", "review", "settings"]);
+const KNOWN = ["landing", "login", "home", "projects", "builders", "review", "admin", "settings"];
+const PROTECTED = new Set(["home", "projects", "review", "admin", "settings"]);
+const STAFF_PAGES = new Set(["review", "admin"]);
 
 function pathToPage(pathname) {
   const raw = (pathname || "/").replace(/\/$/, "") || "/";
   let page = raw === "/" ? "landing" : raw.slice(1);
   if (page === "dashboard") page = "home";
+  if (page === "fraud") page = "admin";
   if (page === "signout" || page === "logout") return page;
   return KNOWN.includes(page) ? page : "landing";
 }
@@ -97,6 +99,15 @@ function isSignedIn() {
 function hasSession() {
   return !!(meProfile && (meProfile.handle || meProfile.needs_handle));
 }
+function isStaff() {
+  return !!(meProfile && (meProfile.is_staff || meProfile.can_review || meProfile.can_admin));
+}
+function canReview() {
+  return !!(meProfile && meProfile.can_review);
+}
+function canAdmin() {
+  return !!(meProfile && meProfile.can_admin);
+}
 
 function pendingAuthCode() {
   return new URLSearchParams(location.search).has("auth");
@@ -104,7 +115,14 @@ function pendingAuthCode() {
 
 function paintNavAuth() {
   const ok = isSignedIn();
+  const staff = isStaff();
   document.querySelectorAll('#top-nav a[data-auth="required"]').forEach((a) => { a.hidden = !ok; });
+  document.querySelectorAll('#top-nav a[data-auth="staff"]').forEach((a) => {
+    const needAdmin = a.dataset.nav === "admin";
+    a.hidden = needAdmin ? !canAdmin() : !staff;
+  });
+  const shell = $("app-shell");
+  if (shell) shell.classList.toggle("guest-mode", !ok);
 }
 
 function clearClientSession() {
@@ -169,6 +187,10 @@ function showPage(page, { push = false, load = true } = {}) {
   if (PROTECTED.has(page) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
     page = "landing";
     push = true;
+  }
+  if (STAFF_PAGES.has(page) && meLoaded && isSignedIn()) {
+    if (page === "admin" && !canAdmin()) { page = "home"; push = true; }
+    else if (page === "review" && !isStaff()) { page = "home"; push = true; }
   }
   activePage = page;
   const path = page === "landing" ? "/" : "/" + page;
@@ -1182,8 +1204,8 @@ async function renderLeaderboard() {
 
 async function loadReviewQueue() {
   const box = $("review-list"); if (!box) return;
-  if (!isSignedIn()) {
-    box.innerHTML = '<p class="ui-empty">sign in to see the review queue</p>';
+  if (!isStaff()) {
+    box.innerHTML = '<p class="ui-empty">staff only — ask an admin for reviewer access</p>';
     return;
   }
   try {
@@ -1192,14 +1214,104 @@ async function loadReviewQueue() {
       box.innerHTML = `<p class="ui-empty">${esc(sr?.error || "could not load queue")}</p>`;
       return;
     }
-    const subs = sr.submissions || [];
-    box.innerHTML = subs.length
-      ? subs.map((s) => `<div class="event"><b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span>
-          <span class="sub"> ${fmt(s.claimed_weighted_hours)}h · ${esc(s.user_id || "")}</span></div>`).join("")
-      : '<p class="ui-empty">Nothing submitted yet.</p>';
+    const subs = (sr.submissions || []).filter((s) => s.status === "pending");
+    if (!subs.length) {
+      box.innerHTML = '<p class="ui-empty">Nothing pending review.</p>';
+      return;
+    }
+    box.innerHTML = subs.map((s) => {
+      const hours = fmt(s.claimed_weighted_hours);
+      const flags = (s.flags || []).length ? `<span class="tag bad">${esc((s.flags || []).slice(0, 2).join(", "))}</span>` : "";
+      const actions = canReview()
+        ? `<div class="admin-user actions" style="margin-top:8px">
+            <button type="button" class="ui-btn" data-review="${esc(s.id)}" data-hours="${esc(String(s.claimed_weighted_secs || 0))}" data-action="approve">approve</button>
+            <button type="button" class="ui-btn ui-btn-ghost" data-review="${esc(s.id)}" data-hours="${esc(String((s.claimed_weighted_secs || 0) * 0.5))}" data-action="deflate">deflate 50%</button>
+            <button type="button" class="ui-btn ui-btn-danger" data-review="${esc(s.id)}" data-hours="0" data-action="reject">reject</button>
+          </div>`
+        : `<p class="sub">viewer — no review actions</p>`;
+      return `<div class="event" data-sub="${esc(s.id)}">
+        <b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span> ${flags}
+        <span class="sub"> ${hours}h · @${esc(s.user_id || "")}</span>
+        ${actions}
+      </div>`;
+    }).join("");
   } catch (err) {
     console.error("loadReviewQueue failed", err);
     box.innerHTML = '<p class="ui-empty">could not load queue</p>';
+  }
+}
+
+async function submitReview(id, approvedSecs, reason) {
+  const [s, r] = await j(`/v1/submissions/${id}/review`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ approved_weighted_secs: Number(approvedSecs), reason_code: reason }),
+  });
+  if (s !== 200) { toast(r.error || "review failed", { kind: "error" }); return; }
+  toast(`marked ${r.status}`, { kind: "ok" });
+  await loadReviewQueue();
+}
+
+async function loadAdminPage() {
+  const kpi = $("admin-kpi");
+  const usersBox = $("admin-users");
+  const auditBox = $("admin-audit");
+  if (!canAdmin()) {
+    if (usersBox) usersBox.innerHTML = '<p class="ui-empty">admin role required</p>';
+    return;
+  }
+  const q = (($("admin-user-q") && $("admin-user-q").value) || "").trim();
+  const [[os, ov], [us, ur], [as, ar]] = await Promise.all([
+    j("/v1/admin/overview"),
+    j("/v1/admin/users" + (q ? `?q=${encodeURIComponent(q)}` : "")),
+    j("/v1/admin/trust-audit"),
+  ]);
+  if (kpi) {
+    if (os !== 200) kpi.innerHTML = `<div class="kpi"><div class="n">—</div><div class="l">${esc(ov?.error || "error")}</div></div>`;
+    else {
+      const trust = ov.trust_counts || {};
+      kpi.innerHTML = [
+        ["pending", ov.pending_reviews || 0],
+        ["users", ov.users || 0],
+        ["green", trust.green || 0],
+        ["yellow", trust.yellow || 0],
+        ["red", trust.red || 0],
+      ].map(([l, n]) => `<div class="kpi"><div class="n tabular">${esc(String(n))}</div><div class="l">${esc(l)}</div></div>`).join("");
+    }
+  }
+  if (usersBox) {
+    if (us !== 200) usersBox.innerHTML = `<p class="ui-empty">${esc(ur?.error || "could not load")}</p>`;
+    else {
+      const rows = ur.users || [];
+      usersBox.innerHTML = rows.length ? rows.map((u) => {
+        const trustOpts = ["blue", "green", "yellow", "red"].map((t) =>
+          `<option value="${t}" ${u.trust_level === t ? "selected" : ""}>${t}</option>`).join("");
+        const roleOpts = ["user", "viewer", "reviewer", "admin", "superadmin"].map((t) =>
+          `<option value="${t}" ${u.admin_level === t ? "selected" : ""}>${t}</option>`).join("");
+        return `<div class="admin-user" data-handle="${esc(u.handle)}">
+          <div class="meta">
+            <div><span class="trust-dot trust-${esc(u.trust_level || "blue")}"></span><b>@${esc(u.handle)}</b>
+              <span class="sub">${esc(u.display_name || "")}</span></div>
+            <div class="sub">${fmt(u.weighted_hours)}h · ${esc(String(u.buckets || 0))} buckets · ${esc(u.admin_level)}</div>
+          </div>
+          <div class="actions">
+            <select data-trust-for="${esc(u.handle)}" aria-label="trust">${trustOpts}</select>
+            <select data-role-for="${esc(u.handle)}" aria-label="role">${roleOpts}</select>
+          </div>
+        </div>`;
+      }).join("") : '<p class="ui-empty">no users</p>';
+    }
+  }
+  if (auditBox) {
+    if (as !== 200) auditBox.innerHTML = `<p class="ui-empty">${esc(ar?.error || "could not load")}</p>`;
+    else {
+      const logs = ar.logs || [];
+      auditBox.innerHTML = logs.length
+        ? logs.map((l) => `<div class="event"><span class="trust-dot trust-${esc(l.new_level || "blue")}"></span>
+            <b>@${esc(l.handle)}</b> <span class="sub">${esc(l.prev_level)} → ${esc(l.new_level)} by @${esc(l.changed_by)}</span>
+            <div class="sub">${esc(l.reason || "")} ${esc(l.notes || "")}</div></div>`).join("")
+        : '<p class="ui-empty">no trust changes yet</p>';
+    }
   }
 }
 
@@ -1346,6 +1458,8 @@ async function loadActivePageData() {
       await renderLeaderboard();
     } else if (activePage === "review") {
       await loadReviewQueue();
+    } else if (activePage === "admin") {
+      await loadAdminPage();
     }
   } catch (err) {
     console.error("loadActivePageData failed", err);
@@ -2114,6 +2228,51 @@ if ($("btn-api-key-copy")) $("btn-api-key-copy").addEventListener("click", async
     toast("Select the key and copy manually", { kind: "ok" });
   }
 });
+
+document.addEventListener("click", (e) => {
+  const btn = e.target.closest("[data-review]");
+  if (!btn) return;
+  e.preventDefault();
+  const id = btn.getAttribute("data-review");
+  const hours = btn.getAttribute("data-hours");
+  const action = btn.getAttribute("data-action");
+  const reason = action === "approve" ? "NONE"
+    : action === "reject" ? "IDLE_INFLATION"
+    : "NO_TEST_ITERATION";
+  submitReview(id, hours, reason);
+});
+
+document.addEventListener("change", async (e) => {
+  const trustSel = e.target.closest("[data-trust-for]");
+  if (trustSel) {
+    const handle = trustSel.getAttribute("data-trust-for");
+    const [s, r] = await j("/v1/admin/trust", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle, trust_level: trustSel.value, reason: "manual" }),
+    });
+    if (s !== 200) toast(r.error || "trust update failed", { kind: "error" });
+    else { toast(`@${handle} → ${r.trust_level}`, { kind: "ok" }); loadAdminPage(); }
+    return;
+  }
+  const roleSel = e.target.closest("[data-role-for]");
+  if (roleSel) {
+    const handle = roleSel.getAttribute("data-role-for");
+    const [s, r] = await j("/v1/admin/role", {
+      method: "POST", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ handle, admin_level: roleSel.value }),
+    });
+    if (s !== 200) toast(r.error || "role update failed", { kind: "error" });
+    else { toast(`@${handle} → ${r.admin_level}`, { kind: "ok" }); loadAdminPage(); }
+  }
+});
+
+let adminSearchTimer = null;
+if ($("admin-user-q")) {
+  $("admin-user-q").addEventListener("input", () => {
+    clearTimeout(adminSearchTimer);
+    adminSearchTimer = setTimeout(() => { if (activePage === "admin") loadAdminPage(); }, 250);
+  });
+}
 
 (async () => {
   // Exchange OAuth code before any auth-gated redirect can strip ?auth=

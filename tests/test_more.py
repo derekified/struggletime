@@ -29,19 +29,23 @@ class TestMore(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18803; cls.db = f"{cls.tmp}/t.db"
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": ""}
+        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": "",
+               "STRUGGLETIME_ADMINS": "staff:admin"}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
                 if req(cls.port, "GET", "/health")[0] == 200: break
             except Exception: time.sleep(0.1)
         token = secrets.token_urlsafe(16); now = int(time.time())
+        staff_key = "st_test_staff_key_more"
         c = sqlite3.connect(cls.db)
         c.execute("INSERT INTO user(handle, token_hash, is_public, created_at) VALUES (?,?,?,?)", ("owner", "", 1, now))
         c.execute("INSERT INTO link(handle, github_login, slack_user_id, github_token, slack_avatar, slack_name) VALUES (?,?,?,?,?,?)",
                   ("owner", None, "Uowner", None, None, None))
         c.execute("INSERT INTO session VALUES (?,?,?,?,?,?,?)", (hashlib.sha256(token.encode()).hexdigest(), "owner", "Uowner", "", "", now, now + 86400))
-        c.commit(); c.close(); cls.token = token
+        c.execute("UPDATE user SET token_hash=?, admin_level=? WHERE handle=?",
+                  (hashlib.sha256(staff_key.encode()).hexdigest(), "admin", "staff"))
+        c.commit(); c.close(); cls.token = token; cls.staff = staff_key
     @classmethod
     def tearDownClass(cls): cls.proc.terminate()
 
@@ -123,8 +127,9 @@ class TestMore(unittest.TestCase):
         req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u", "buckets": chain("deflate-p", [ACTIVE])})
         b = chain("deflate-p", [ACTIVE])[0]
         s, sub = req(self.port, "POST", "/v1/submissions", {"user_id": "u", "project_id": "deflate-p", "from_bucket": b["bucket_id"], "to_bucket": b["bucket_id"], "ai_declaration": "used ai"})
-        s, r = req(self.port, "POST", f"/v1/submissions/{sub['id']}/review", {"reviewer_id": "rev", "approved_weighted_secs": 10, "reason_code": "NO_TEST_ITERATION"})
-        self.assertEqual(r["status"], "deflated")
+        s, r = req(self.port, "POST", f"/v1/submissions/{sub['id']}/review",
+                   {"approved_weighted_secs": 10, "reason_code": "NO_TEST_ITERATION"}, token=self.staff)
+        self.assertEqual(s, 200); self.assertEqual(r["status"], "deflated")
 
 if __name__ == "__main__":
     unittest.main()

@@ -103,8 +103,8 @@ class TestDashboard(unittest.TestCase):
         for k in ("weighted_hours", "users", "projects_count", "pending_reviews", "by_state", "trust_pct", "loop_pct", "weighted_week_hours"):
             self.assertIn(k, ov)
         s, subs = req(self.port, "GET", "/v1/submissions")
-        self.assertEqual(s, 200)
-        self.assertEqual(subs["submissions"], [])
+        self.assertEqual(s, 401)
+        self.assertIn("error", subs)
 
     def test_overview_reflects_ingest(self):
         buckets = json.loads((ROOT/"examples/session-closed-loop.json").read_text())
