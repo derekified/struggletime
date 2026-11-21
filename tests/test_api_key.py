@@ -50,6 +50,9 @@ class TestApiKey(unittest.TestCase):
         self.assertEqual(s, 200); self.assertEqual(me["handle"], "akeyuser"); self.assertEqual(me.get("auth"), "api_key")
         s, st2 = req(self.port, "GET", "/v1/auth/api-key", token=self.session)
         self.assertTrue(st2["configured"]); self.assertTrue(st2["prefix"])
+        self.assertEqual(st2.get("api_key"), key)  # persists across refresh
+        self.assertTrue(st2.get("has_api_key"))
+        self.assertFalse(st2.get("daemon_linked"))  # no buckets yet
         # create project with API key
         s, p = req(self.port, "POST", "/v1/projects",
                    {"id": "akey-proj", "name": "API Key Proj"}, token=key)
@@ -58,6 +61,8 @@ class TestApiKey(unittest.TestCase):
         s, _ = req(self.port, "POST", "/v1/auth/api-key/revoke", {}, token=self.session)
         self.assertEqual(s, 200)
         self.assertEqual(req(self.port, "GET", "/v1/auth/me", token=key)[0], 401)
+        s, st3 = req(self.port, "GET", "/v1/auth/api-key", token=self.session)
+        self.assertFalse(st3["configured"]); self.assertIsNone(st3.get("api_key"))
 
     def test_settings_page_has_api_key_section(self):
         with urllib.request.urlopen(f"http://127.0.0.1:{self.port}/settings") as x:
@@ -66,6 +71,10 @@ class TestApiKey(unittest.TestCase):
         self.assertIn("api-key-panel", html)
         self.assertIn("StruggleTime API key", html)
         self.assertIn("btn-api-key-regen", html)
+        self.assertIn("settings-daemon", html)
+        self.assertIn("install the daemon", html.lower())
+        self.assertIn("daemon-banner", html)
+        self.assertIn("daemon/install.sh", html)
 
 if __name__ == "__main__":
     unittest.main()

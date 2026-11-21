@@ -108,6 +108,8 @@ function paintNavAuth() {
 }
 
 function clearClientSession() {
+  apiKeyPlain = "";
+  daemonLinkInfo = null;
   setToken("");
   meProfile = null;
   meLoaded = true;
@@ -580,7 +582,7 @@ function paintAccount() {
     if ($("claim-box")) $("claim-box").hidden = true;
     if ($("settings-main")) $("settings-main").hidden = false;
     if ($("signout-form")) $("signout-form").style.display = "flex";
-    if ($("daemon-cmd")) $("daemon-cmd").textContent = `struggletime-helper start --repo ~/my-project --user ${p.handle}`;
+    if ($("daemon-cmd")) $("daemon-cmd").textContent = `struggletime-helper start --repo ~/my-project`;
   } else {
     paintTopUser("", "", "/login", "sign in");
     if (ident) ident.hidden = true;
@@ -591,6 +593,7 @@ function paintAccount() {
     if ($("claim-box")) $("claim-box").hidden = true;
     if ($("settings-main")) $("settings-main").hidden = true;
     if ($("signout-form")) $("signout-form").style.display = "none";
+    daemonLinkInfo = null;
   }
   paintNavAuth();
   if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
@@ -601,6 +604,7 @@ function paintAccount() {
   fillAttachProjects();
   paintLogin();
   paintSettingsForm();
+  paintDaemonBanners();
   paintHeroCta();
   hydrateNavIcons();
 }
@@ -687,12 +691,93 @@ async function saveProfile(patch) {
 }
 
 let apiKeyPlain = "";
+let daemonLinkInfo = null;
+
+function paintDaemonBanners() {
+  const p = meProfile || {};
+  const info = daemonLinkInfo || {
+    has_api_key: !!(p.has_api_key || apiKeyPlain),
+    daemon_linked: !!p.daemon_linked,
+    recent_buckets_7d: p.recent_buckets_7d || 0,
+  };
+  const signed = isSignedIn() && p.handle;
+  const needKey = signed && !info.has_api_key && !apiKeyPlain;
+  const needDaemon = signed && (info.has_api_key || apiKeyPlain) && !info.daemon_linked;
+  const show = needKey || needDaemon;
+  let dismissed = false;
+  try { dismissed = sessionStorage.getItem("st_daemon_banner_dismissed") === "1"; } catch (_) {}
+
+  const title = needKey
+    ? "Generate an API key & install the daemon"
+    : "Install and link the desktop daemon";
+  const msg = needKey
+    ? "Your dashboard stays empty until a machine is linked. Open Settings → Daemon for install steps."
+    : "API key is ready, but nothing has synced yet. Paste the key into the tray and start tracking a project.";
+
+  const global = $("daemon-banner");
+  if (global) {
+    global.hidden = !(show && !dismissed && activePage !== "landing" && activePage !== "login");
+    if (!global.hidden) {
+      if ($("daemon-banner-title")) $("daemon-banner-title").textContent = title;
+      if ($("daemon-banner-text")) $("daemon-banner-text").textContent = msg;
+      const cta = $("daemon-banner-cta");
+      if (cta) {
+        cta.textContent = needKey ? "open settings" : "install steps";
+        cta.setAttribute("href", "/settings");
+      }
+      hydrateNavIcons(global);
+    }
+  }
+  const settingsBanner = $("daemon-banner-settings");
+  if (settingsBanner) {
+    settingsBanner.hidden = !show;
+    if (show) {
+      if ($("daemon-banner-settings-title")) $("daemon-banner-settings-title").textContent = title;
+      if ($("daemon-banner-settings-msg")) $("daemon-banner-settings-msg").textContent = msg;
+      hydrateNavIcons(settingsBanner);
+    }
+  }
+  const st = $("daemon-link-status");
+  if (st) {
+    if (!signed) st.textContent = "Daemon status: sign in first";
+    else if (needKey) st.textContent = "Daemon status: no API key yet";
+    else if (needDaemon) st.textContent = "Daemon status: key ready · waiting for first sync";
+    else st.textContent = `Daemon status: linked · ${info.recent_buckets_7d || 0} buckets in the last 7 days`;
+  }
+  const cmd = $("daemon-cmd");
+  if (cmd && p.handle) {
+    cmd.textContent = `struggletime-helper start --repo ~/my-project`;
+  }
+}
+
+function showApiKey(value, { fresh = false } = {}) {
+  apiKeyPlain = value || "";
+  if (!$("api-key-reveal-row")) return;
+  if (!apiKeyPlain) {
+    $("api-key-reveal-row").hidden = true;
+    if ($("api-key-hint")) $("api-key-hint").hidden = true;
+    return;
+  }
+  $("api-key-value").value = apiKeyPlain;
+  $("api-key-value").type = "password";
+  $("api-key-reveal-row").hidden = false;
+  if ($("api-key-hint")) $("api-key-hint").hidden = false;
+  if ($("btn-api-key-reveal")) $("btn-api-key-reveal").textContent = "show";
+  if ($("api-key-status")) {
+    $("api-key-status").textContent = fresh
+      ? "key ready — copy and paste into the tray"
+      : "your API key (stays here after refresh)";
+  }
+}
+
 async function refreshApiKeyStatus() {
   if (!$("api-key-status")) return;
   if (!isSignedIn()) {
     $("api-key-status").textContent = "sign in to manage your API key";
     if ($("api-key-reveal-row")) $("api-key-reveal-row").hidden = true;
     if ($("api-key-hint")) $("api-key-hint").hidden = true;
+    daemonLinkInfo = null;
+    paintDaemonBanners();
     return;
   }
   const [s, r] = await j("/v1/auth/api-key");
@@ -700,22 +785,32 @@ async function refreshApiKeyStatus() {
     $("api-key-status").textContent = r.error || "could not load API key status";
     return;
   }
-  if (apiKeyPlain) {
-    $("api-key-status").textContent = "new key ready — copy it into the tray now";
-    $("api-key-value").value = apiKeyPlain;
-    $("api-key-value").type = "password";
-    $("api-key-reveal-row").hidden = false;
-    $("api-key-hint").hidden = false;
-    if ($("btn-api-key-reveal")) $("btn-api-key-reveal").textContent = "show";
+  daemonLinkInfo = {
+    has_api_key: !!r.has_api_key || !!r.configured,
+    daemon_linked: !!r.daemon_linked,
+    recent_buckets_7d: r.recent_buckets_7d || 0,
+    last_sync_wall: r.last_sync_wall || null,
+    install_keys: r.install_keys || 0,
+  };
+  if (r.api_key) {
+    showApiKey(r.api_key);
+  } else if (apiKeyPlain) {
+    showApiKey(apiKeyPlain, { fresh: true });
+  } else if (r.configured && r.needs_regenerate) {
+    $("api-key-status").textContent = "key on file (legacy) — regenerate once to keep it visible here";
+    $("api-key-reveal-row").hidden = true;
+    if ($("api-key-hint")) $("api-key-hint").hidden = true;
   } else if (r.configured) {
     $("api-key-status").textContent = "configured · " + (r.prefix || "st_…");
     $("api-key-reveal-row").hidden = true;
-    $("api-key-hint").hidden = true;
+    if ($("api-key-hint")) $("api-key-hint").hidden = true;
   } else {
     $("api-key-status").textContent = "no API key yet — generate one to link the tray";
     $("api-key-reveal-row").hidden = true;
-    $("api-key-hint").hidden = true;
+    if ($("api-key-hint")) $("api-key-hint").hidden = true;
+    apiKeyPlain = "";
   }
+  paintDaemonBanners();
 }
 
 function ghRepoOptions(repos, { includeCurrent } = {}) {
@@ -1904,6 +1999,32 @@ if ($("lb-search-slot")) {
   $("lb-search-slot").appendChild(UI.searchInput({ placeholder: "Find a builder…", onInput: (v) => { lbQuery = v; renderLeaderboard(); } }));
 }
 
+function openDaemonSettingsTab() {
+  if (activePage !== "settings") navigate("/settings");
+  const tab = document.querySelector('[data-settings-tab="daemon"]');
+  if (tab) tab.click();
+  const panel = $("settings-daemon-panel");
+  if (panel) setTimeout(() => panel.scrollIntoView({ behavior: "smooth", block: "start" }), 50);
+}
+if ($("daemon-banner-settings-cta")) {
+  $("daemon-banner-settings-cta").addEventListener("click", (e) => {
+    e.preventDefault();
+    openDaemonSettingsTab();
+  });
+}
+if ($("daemon-banner-cta")) {
+  $("daemon-banner-cta").addEventListener("click", (e) => {
+    e.preventDefault();
+    openDaemonSettingsTab();
+  });
+}
+if ($("daemon-banner-dismiss")) {
+  $("daemon-banner-dismiss").addEventListener("click", () => {
+    try { sessionStorage.setItem("st_daemon_banner_dismissed", "1"); } catch (_) {}
+    if ($("daemon-banner")) $("daemon-banner").hidden = true;
+  });
+}
+
 document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
   tab.addEventListener("click", () => {
     const id = tab.dataset.settingsTab;
@@ -1954,9 +2075,13 @@ if ($("btn-api-key-regen")) $("btn-api-key-regen").addEventListener("click", asy
     body: JSON.stringify({ confirm: true }),
   });
   if (s !== 200) { toast(r.error || "Could not generate key", { kind: "error" }); return; }
-  apiKeyPlain = r.api_key || "";
-  toast("API key generated — copy it now", { kind: "ok" });
-  refreshApiKeyStatus();
+  showApiKey(r.api_key || "", { fresh: true });
+  if (meProfile) {
+    meProfile.has_api_key = true;
+    meProfile.daemon_linked = !!r.daemon_linked;
+  }
+  toast("API key ready — paste it into the tray", { kind: "ok" });
+  await refreshApiKeyStatus();
 });
 if ($("btn-api-key-revoke")) $("btn-api-key-revoke").addEventListener("click", async () => {
   if (!confirm("Revoke the API key? The tray will stop authenticating until you set a new one.")) return;
@@ -1965,8 +2090,12 @@ if ($("btn-api-key-revoke")) $("btn-api-key-revoke").addEventListener("click", a
   });
   if (s !== 200) { toast(r.error || "Could not revoke", { kind: "error" }); return; }
   apiKeyPlain = "";
+  if (meProfile) {
+    meProfile.has_api_key = false;
+    meProfile.daemon_linked = false;
+  }
   toast("API key revoked", { kind: "ok" });
-  refreshApiKeyStatus();
+  await refreshApiKeyStatus();
 });
 if ($("btn-api-key-reveal")) $("btn-api-key-reveal").addEventListener("click", () => {
   const inp = $("api-key-value"); if (!inp) return;

@@ -93,9 +93,42 @@ def hash_token(token):
     return hashlib.sha256(token.encode()).hexdigest()
 
 def mint_api_key():
-    """Return (plaintext, sha256_hex, display_prefix). Plaintext shown once at mint/regenerate."""
+    """Return (plaintext, sha256_hex, display_prefix). Stored for owner re-display in settings."""
     raw = "st_" + secrets.token_urlsafe(32)
     return raw, hash_token(raw), raw[:11] + "…"
+
+def daemon_link_status(c, handle):
+    """Whether the desktop daemon has synced recently with this account's API key."""
+    u = c.execute("SELECT token_hash, api_key, api_key_prefix FROM user WHERE handle=?", (handle,)).fetchone()
+    raw = None
+    th = None
+    if u:
+        try:
+            raw = u["api_key"] if "api_key" in u.keys() else None
+        except Exception:
+            raw = None
+        th = u["token_hash"]
+    has_key = bool(th or raw)
+    cutoff = int(time.time()) - 7 * 86400
+    recent = c.execute(
+        "SELECT COUNT(*) AS n, MAX(bucket_start_wall) AS last FROM bucket WHERE user_id=? AND bucket_start_wall>=?",
+        (handle, cutoff),
+    ).fetchone()
+    recent_n = int(recent["n"] or 0) if recent else 0
+    last_sync = int(recent["last"] or 0) if recent and recent["last"] else None
+    try:
+        installs = c.execute("SELECT COUNT(*) AS n FROM install_key WHERE user_id=?", (handle,)).fetchone()
+        install_n = int(installs["n"] or 0) if installs else 0
+    except Exception:
+        install_n = 0
+    linked = has_key and (recent_n > 0 or install_n > 0)
+    return {
+        "has_api_key": has_key,
+        "daemon_linked": linked,
+        "recent_buckets_7d": recent_n,
+        "last_sync_wall": last_sync,
+        "install_keys": install_n,
+    }
 
 def session_cookie(token="", *, clear=False):
     """Set/clear st_session. Secure only for https public bases (not plain IP:port)."""
@@ -219,6 +252,7 @@ def db():
         ("timezone", "TEXT"),
         ("show_leaderboards", "INT NOT NULL DEFAULT 1"),
         ("api_key_prefix", "TEXT"),
+        ("api_key", "TEXT"),  # owner-visible plaintext (Slack session only); auth still hashes
         ("weekly_goal_hours", "REAL NOT NULL DEFAULT 5.0"),
     ):
         if col not in ucols: c.execute(f"ALTER TABLE user ADD COLUMN {col} {spec}")
@@ -550,6 +584,7 @@ def profile_payload(c, handle, session=None):
             "slack_linked": bool(link and link["slack_user_id"]),
             "needs_handle": False,
             "weekly_goal_hours": float(_urow(u, "weekly_goal_hours", 5.0) or 5.0),
+            **daemon_link_status(c, handle),
             **stats_for(c, user=handle)}
 
 class H(BaseHTTPRequestHandler):
@@ -706,14 +741,22 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json(200, {**profile_payload(c, u["handle"]), "auth": "api_key"})
             return self.send_json(401, {"error": "not signed in"})
         if p == ["v1", "auth", "api-key"]:
-            # status for the signed-in web session (never returns the raw key)
+            # status + full key for the signed-in Slack session (owner only)
             s = self.session(c)
             if not s or not s["handle"]:
                 return self.send_json(401, {"error": "sign in with slack first"})
-            u = c.execute("SELECT token_hash, api_key_prefix FROM user WHERE handle=?", (s["handle"],)).fetchone()
+            u = c.execute("SELECT * FROM user WHERE handle=?", (s["handle"],)).fetchone()
             configured = bool(u and u["token_hash"])
-            prefix = (u["api_key_prefix"] if u and "api_key_prefix" in u.keys() else None) or None
-            return self.send_json(200, {"configured": configured, "prefix": prefix if configured else None})
+            prefix = _urow(u, "api_key_prefix") if u else None
+            raw = _urow(u, "api_key") if u else None
+            link = daemon_link_status(c, s["handle"])
+            return self.send_json(200, {
+                "configured": configured,
+                "prefix": prefix if configured else None,
+                "api_key": raw if configured and raw else None,
+                "needs_regenerate": bool(configured and not raw),
+                **link,
+            })
         if len(p) == 3 and p[:2] == ["v1", "handles"]:
             handle = p[2].lower()
             taken = c.execute("SELECT 1 FROM user WHERE handle=?", (handle,)).fetchone()
@@ -1088,19 +1131,23 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json(400, {"error": "pass confirm:true to mint or regenerate the API key"})
             raw, th, prefix = mint_api_key()
             c.execute(
-                "UPDATE user SET token_hash=?, api_key_prefix=? WHERE handle=?",
-                (th, prefix, s["handle"]),
+                "UPDATE user SET token_hash=?, api_key_prefix=?, api_key=? WHERE handle=?",
+                (th, prefix, raw, s["handle"]),
             )
             c.commit()
             return self.send_json(200, {
                 "api_key": raw, "prefix": prefix, "handle": s["handle"],
-                "hint": "copy now — it will not be shown again. paste into the tray or daemon GUI.",
+                "hint": "paste into the tray (set API key…) or: struggletime-helper apikey <key>",
+                **daemon_link_status(c, s["handle"]),
             })
         if p == ["v1", "auth", "api-key", "revoke"]:
             s = self.session(c)
             if not s or not s["handle"]:
                 return self.send_json(401, {"error": "sign in with slack first"})
-            c.execute("UPDATE user SET token_hash='', api_key_prefix=NULL WHERE handle=?", (s["handle"],))
+            c.execute(
+                "UPDATE user SET token_hash='', api_key_prefix=NULL, api_key=NULL WHERE handle=?",
+                (s["handle"],),
+            )
             c.commit()
             return self.send_json(200, {"ok": True, "configured": False})
         if p == ["v1", "auth", "claim-handle"]:

@@ -36,6 +36,19 @@
 
 <div class="shell no-side" id="app-shell">
   <main>
+    <div class="setup-banner" id="daemon-banner" hidden role="status">
+      <div class="setup-banner-body">
+        <span class="nav-ico" data-glyph="important"></span>
+        <div>
+          <b id="daemon-banner-title">Link the desktop daemon</b>
+          <p class="sub" id="daemon-banner-text">Install StruggleTime on your computer and paste your API key so hours sync here.</p>
+        </div>
+      </div>
+      <div class="setup-banner-actions">
+        <a class="ui-btn" href="/settings" data-nav-link id="daemon-banner-cta">open setup</a>
+        <button type="button" class="ui-btn ui-btn-ghost" id="daemon-banner-dismiss" aria-label="dismiss">dismiss</button>
+      </div>
+    </div>
     <!-- LANDING -->
     <section class="page page-wide" id="page-landing">
       <div class="hero hero-clean">
@@ -240,10 +253,21 @@
       <div class="settings-layout" id="settings-main" hidden>
         <aside class="settings-rail" role="tablist">
           <button type="button" class="settings-tab on" data-settings-tab="profile" role="tab"><span class="nav-ico" data-glyph="profile"></span> Profile</button>
+          <button type="button" class="settings-tab" data-settings-tab="daemon" role="tab"><span class="nav-ico" data-glyph="terminal"></span> Daemon</button>
           <button type="button" class="settings-tab" data-settings-tab="appearance" role="tab"><span class="nav-ico" data-glyph="contrast"></span> Appearance</button>
         </aside>
         <div class="settings-panels">
           <div class="settings-panel on" id="settings-profile">
+            <div class="setup-banner" id="daemon-banner-settings" hidden>
+              <div class="setup-banner-body">
+                <span class="nav-ico" data-glyph="important"></span>
+                <div>
+                  <b id="daemon-banner-settings-title">Daemon not linked yet</b>
+                  <p class="sub" id="daemon-banner-settings-msg">Generate an API key, install the tracker, then paste the key into the tray.</p>
+                </div>
+              </div>
+              <a class="ui-btn ui-btn-ghost" href="#settings-daemon" id="daemon-banner-settings-cta">see install steps</a>
+            </div>
             <div class="ui-panel">
               <h2><span class="nav-ico" data-glyph="map-pin"></span> region & timezone</h2>
               <div class="form-grid">
@@ -290,10 +314,10 @@
             </div>
             <div class="ui-panel" id="api-key-panel">
               <h2><span class="nav-ico" data-glyph="private"></span> StruggleTime API key</h2>
-              <p class="sub">Link the menu-bar tray and desktop GUI without browser sign-in. Copy the key once, then paste it into the tray (<em>set API key…</em>) or settings window.</p>
+              <p class="sub">Paste this into the tray (<em>set API key…</em>) or run <code>struggletime-helper apikey &lt;key&gt;</code>. Your key stays available here after refresh.</p>
               <p class="sub" id="api-key-status">checking…</p>
               <div class="claim-row" id="api-key-reveal-row" hidden>
-                <input class="ui-input" id="api-key-value" readonly type="password" autocomplete="off">
+                <input class="ui-input" id="api-key-value" readonly type="password" autocomplete="off" spellcheck="false">
                 <button type="button" class="ui-btn ui-btn-ghost" id="btn-api-key-reveal" title="show / hide">show</button>
                 <button type="button" class="ui-btn" id="btn-api-key-copy"><span class="nav-ico" data-glyph="copy"></span>copy</button>
               </div>
@@ -301,12 +325,7 @@
                 <button type="button" class="ui-btn" id="btn-api-key-regen"><span class="nav-ico" data-glyph="refresh"></span>generate / regenerate</button>
                 <button type="button" class="ui-btn ui-btn-ghost" id="btn-api-key-revoke">revoke</button>
               </div>
-              <p class="sub" id="api-key-hint" hidden>This is the only time the full key is shown. Store it in the tray now.</p>
-            </div>
-            <div class="ui-panel">
-              <h2><span class="nav-ico" data-glyph="terminal"></span> daemon</h2>
-              <p class="sub">Track a local repo. Buckets sync about every five minutes. Prefer the API key above over passing tokens on the CLI.</p>
-              <p><code id="daemon-cmd">struggletime-helper start --repo ~/my-project --user you</code></p>
+              <p class="sub" id="api-key-hint" hidden>Paste this key into the tray so the daemon can sync.</p>
             </div>
             <div class="ui-panel danger-zone">
               <h2><span class="nav-ico" data-glyph="important"></span> danger zone</h2>
@@ -315,6 +334,42 @@
                 <input class="ui-input" id="delete-confirm" placeholder="your-handle">
                 <button type="button" class="ui-btn ui-btn-danger" id="btn-delete-account"><span class="nav-ico" data-glyph="delete"></span>delete account</button>
               </div>
+            </div>
+          </div>
+          <div class="settings-panel" id="settings-daemon" hidden>
+            <div class="ui-panel" id="settings-daemon-panel">
+              <h2><span class="nav-ico" data-glyph="terminal"></span> install the daemon</h2>
+              <p class="sub">The dashboard only shows hours the desktop tracker sends. Install once per machine, paste your API key, then leave it running.</p>
+              <ol class="install-steps">
+                <li>
+                  <b>Get the code</b>
+                  <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git
+cd struggletime</pre>
+                </li>
+                <li>
+                  <b>Install (Linux / macOS)</b>
+                  <pre class="install-code">sh daemon/install.sh</pre>
+                  <p class="sub">Windows PowerShell: <code>powershell -ExecutionPolicy Bypass -File daemon\install.ps1</code></p>
+                </li>
+                <li>
+                  <b>Link your API key</b>
+                  <p class="sub">Generate a key under Profile, then:</p>
+                  <pre class="install-code">struggletime-helper apikey &lt;paste-key-here&gt;</pre>
+                  <p class="sub">Or open the tray → <em>set API key…</em></p>
+                </li>
+                <li>
+                  <b>Start tracking a project</b>
+                  <pre class="install-code" id="daemon-cmd">struggletime-helper start --repo ~/my-project</pre>
+                  <p class="sub">Check: <code>struggletime-helper status</code> · optional shell hook for tests/builds:</p>
+                  <pre class="install-code"># bash/zsh
+source /path/to/struggletime/daemon/hooks.sh
+
+# PowerShell ($PROFILE)
+. C:\path\to\struggletime\daemon\hooks.ps1</pre>
+                </li>
+              </ol>
+              <p class="sub">Privacy: only metadata leaves your machine (no code, prompts, or screenshots). Inspect anytime with <code>python3 daemon/tracker_inspect.py ~/my-project</code>.</p>
+              <p class="sub" id="daemon-link-status">Daemon status: checking…</p>
             </div>
           </div>
           <div class="settings-panel" id="settings-appearance" hidden>
