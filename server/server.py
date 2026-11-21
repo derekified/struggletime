@@ -700,6 +700,11 @@ def profile_payload(c, handle, session=None):
             **daemon_link_status(c, handle),
             **stats_for(c, user=handle)}
 
+# Metadata budget is ~25–50 KB/hour. Oversized POSTs (multi‑MB ledger dumps) have
+# OOM-killed the process and taken down every dashboard fetch behind Caddy.
+MAX_BODY_BYTES = int(os.environ.get("STRUGGLETIME_MAX_BODY", str(512 * 1024)))
+MAX_BATCH_BUCKETS = int(os.environ.get("STRUGGLETIME_MAX_BATCH", "40"))
+
 class H(BaseHTTPRequestHandler):
     def log_message(self, *a): pass
     def send_json(self, code, obj, set_cookie=None):
@@ -708,7 +713,21 @@ class H(BaseHTTPRequestHandler):
         if set_cookie: self.send_header("Set-Cookie", set_cookie)
         self.send_header("Content-Length", str(len(body))); self.end_headers(); self.wfile.write(body)
     def raw(self):
-        if not hasattr(self, "_raw"): self._raw = self.rfile.read(int(self.headers.get("Content-Length", 0)))
+        if not hasattr(self, "_raw"):
+            try:
+                n = int(self.headers.get("Content-Length", 0) or 0)
+            except ValueError:
+                n = 0
+            if n < 0:
+                n = 0
+            if n > MAX_BODY_BYTES:
+                # Drain a little so clients don't hang, then refuse — never allocate the giant buffer.
+                try:
+                    self.rfile.read(min(n, 65536))
+                except Exception:
+                    pass
+                raise ValueError(f"body too large ({n} > {MAX_BODY_BYTES})")
+            self._raw = self.rfile.read(n) if n else b""
         return self._raw
     def body(self):
         return json.loads(self.raw() or b"{}")
@@ -1316,9 +1335,28 @@ class H(BaseHTTPRequestHandler):
         return self.send_json(404, {"error": "not found"})
 
     def do_POST(self):
+        # Reject oversized bodies before taking the DB lock (prevents OOM + dashboard outages)
+        try:
+            n = int(self.headers.get("Content-Length", 0) or 0)
+        except ValueError:
+            n = 0
+        if n > MAX_BODY_BYTES:
+            try:
+                self.rfile.read(min(n, 65536))
+            except Exception:
+                pass
+            return self.send_json(413, {
+                "error": "request body too large",
+                "max_bytes": MAX_BODY_BYTES,
+                "hint": "flush fewer pending buckets (daemon ledger); metadata budget is ~50KB/hour",
+            })
         with _LOCK:
             try: return self._post()
-            except (ValueError, KeyError, TypeError, AttributeError) as e:
+            except ValueError as e:
+                msg = str(e) or type(e).__name__
+                code = 413 if "too large" in msg else 400
+                return self.send_json(code, {"error": f"malformed request: {msg}"})
+            except (KeyError, TypeError, AttributeError) as e:
                 return self.send_json(400, {"error": f"malformed request: {type(e).__name__}"})
             except (BrokenPipeError, ConnectionResetError): pass
             except Exception as e: return self.send_json(500, {"error": f"internal: {type(e).__name__}"})
@@ -1657,6 +1695,12 @@ class H(BaseHTTPRequestHandler):
         if p == ["v1", "buckets", "batch"]:
             d = self.body(); buckets = d.get("buckets", [])
             if not isinstance(buckets, list) or not buckets: return self.send_json(400, {"error": "buckets required"})
+            if len(buckets) > MAX_BATCH_BUCKETS:
+                return self.send_json(413, {
+                    "error": f"too many buckets in one batch ({len(buckets)} > {MAX_BATCH_BUCKETS})",
+                    "max_buckets": MAX_BATCH_BUCKETS,
+                    "hint": "daemon should flush pending in chunks",
+                })
             for i, b in enumerate(buckets):
                 if not isinstance(b, dict) or not isinstance(b.get("counts"), dict) or not isinstance(b.get("git"), dict) \
                    or not all(k in b for k in ("bucket_id","project_id","prev_hash","hash","bucket_secs","bucket_start_wall","mono_delta_ms")):

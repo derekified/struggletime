@@ -1271,11 +1271,10 @@ async function restoreProject(p) {
   refresh();
 }
 
-async function renderLeaderboard(gen = pageLoadGen) {
+async function renderLeaderboard() {
   const box = $("lb-list"); if (!box) return;
   try {
     const [s, r] = await j("/v1/leaderboard?period=" + encodeURIComponent(lbPeriod));
-    if (gen !== pageLoadGen) return;
     if (s !== 200) {
       const detail = r?.error || (s === 0 ? "network/timeout" : `HTTP ${s}`);
       box.replaceChildren(el("div", { className: "ui-empty" }, [document.createTextNode(detail || "Could not load leaderboard")]));
@@ -1318,16 +1317,20 @@ async function renderLeaderboard(gen = pageLoadGen) {
   }
 }
 
-async function loadReviewQueue(gen = pageLoadGen) {
+async function loadReviewQueue() {
   const box = $("review-list"); if (!box) return;
-  if (!meLoaded) return;
+  if (!meLoaded) {
+    for (let i = 0; i < 8 && !meLoaded; i++) {
+      await sleep(120);
+      if (!meLoaded) await loadMe(true);
+    }
+  }
   if (!isStaff()) {
     box.innerHTML = '<p class="ui-empty">staff only — ask an admin for reviewer access</p>';
     return;
   }
   try {
     const [ss, sr] = await j("/v1/submissions");
-    if (gen !== pageLoadGen) return;
     if (ss !== 200) {
       const detail = sr?.error || (ss === 0 ? "network/timeout" : `HTTP ${ss}`);
       box.innerHTML = `<p class="ui-empty">${esc(detail || "could not load queue")}</p>`;
@@ -1377,22 +1380,26 @@ async function submitReview(id, approvedSecs, reason) {
   await loadReviewQueue();
 }
 
-async function loadAdminPage(gen = pageLoadGen) {
+async function loadAdminPage() {
   const kpi = $("admin-kpi");
   const usersBox = $("admin-users");
   const auditBox = $("admin-audit");
+  if (!meLoaded) {
+    for (let i = 0; i < 8 && !meLoaded; i++) {
+      await sleep(120);
+      if (!meLoaded) await loadMe(true);
+    }
+  }
   if (!canAdmin()) {
     if (usersBox) usersBox.innerHTML = '<p class="ui-empty">admin role required</p>';
     return;
   }
-  if (!meLoaded) return;
   const q = (($("admin-user-q") && $("admin-user-q").value) || "").trim();
   const [[os, ov], [us, ur], [as, ar]] = await Promise.all([
     j("/v1/admin/overview"),
     j("/v1/admin/users" + (q ? `?q=${encodeURIComponent(q)}` : "")),
     j("/v1/admin/trust-audit"),
   ]);
-  if (gen !== pageLoadGen) return;
   if (kpi) {
     if (os !== 200) kpi.innerHTML = `<div class="kpi"><div class="n">—</div><div class="l">${esc(ov?.error || "error")}</div></div>`;
     else {
@@ -1577,26 +1584,27 @@ async function loadActivePageData() {
   booted = true;
   softRefreshQueued = false;
   const page = activePage;
+  const stillHere = () => activePage === page && gen === pageLoadGen;
   try {
     if (page === "home") {
-      await loadAnalytics(gen);
-      if (gen !== pageLoadGen || activePage !== page) return;
+      await loadAnalytics();
+      if (!stillHere()) return;
       if (!fakeStatsMode && isSignedIn()) await drawFriction();
     } else if (page === "projects") {
-      await loadProjectsView(gen);
+      await loadProjectsView();
     } else if (page === "builders") {
-      await renderLeaderboard(gen);
+      await renderLeaderboard();
     } else if (page === "review") {
-      await loadReviewQueue(gen);
+      await loadReviewQueue();
     } else if (page === "admin") {
-      await loadAdminPage(gen);
+      await loadAdminPage();
     } else if (page === "docs") {
       mountDocs("docs-page-mount");
     }
   } catch (err) {
     console.error("loadActivePageData failed", err);
   }
-  if (gen !== pageLoadGen) return;
+  if (!stillHere()) return;
   paintHeroCta();
   paintFakeBadge();
 }
@@ -1889,15 +1897,25 @@ function analyticsHours(a) {
   return Number(a?.total_hours || a?.weighted_hours || 0);
 }
 
-async function loadAnalytics(gen = pageLoadGen) {
+async function loadAnalytics() {
   // fakeStatsMode ON → sample; OFF (default / Konami off) → real API paint
   if (fakeStatsMode && activePage === "home") {
     paintHomeAnalytics(buildFakeAnalytics());
     return;
   }
   if (!meLoaded) {
-    // Auth not ready yet — avoid painting a fake signed-out empty dashboard
-    return;
+    if ($("kpi-strip") && !analytics) {
+      $("kpi-strip").replaceChildren(compactEmpty("loading session…"));
+    }
+    // Wait briefly for auth — never leave the dashboard permanently blank
+    for (let i = 0; i < 8 && !meLoaded; i++) {
+      await sleep(120);
+      if (!meLoaded) await loadMe(true);
+    }
+    if (!meLoaded) {
+      if ($("kpi-strip")) $("kpi-strip").replaceChildren(compactEmpty("could not verify session — retrying…"));
+      return;
+    }
   }
   if (!isSignedIn()) {
     if ($("kpi-strip")) $("kpi-strip").replaceChildren(compactEmpty("sign in to see your hours"));
@@ -1905,21 +1923,21 @@ async function loadAnalytics(gen = pageLoadGen) {
     if ($("rank-projects")) $("rank-projects").replaceChildren(compactEmpty("sign in to see projects"));
     return;
   }
+  if ($("kpi-strip") && !analytics) {
+    $("kpi-strip").replaceChildren(compactEmpty("loading hours…"));
+  }
   let [s, a] = await j("/v1/me/analytics?" + analyticsQS());
-  if (gen !== pageLoadGen) return;
   // Sticky filters can zero analytics while streak still looks fine — recover once.
   let empty = s === 200 && a && analyticsHours(a) === 0;
   if (empty && (profileHasActivity() || !filtersAreDefault())) {
     resetDashboardFilters({ range: filters.range === "today" ? "7d" : (filters.range || "7d") });
     const [s2, a2] = await j("/v1/me/analytics?" + analyticsQS());
-    if (gen !== pageLoadGen) return;
     if (s2 === 200 && a2 && analyticsHours(a2) > 0) {
       s = s2; a = a2;
       toast("Cleared filters that hid your hours", { kind: "info" });
     } else if (s2 === 200 && a2 && analyticsHours(a2) === 0 && filters.range !== "all") {
       resetDashboardFilters({ range: "all" });
       const [s3, a3] = await j("/v1/me/analytics?" + analyticsQS());
-      if (gen !== pageLoadGen) return;
       if (s3 === 200 && a3 && analyticsHours(a3) > 0) {
         s = s3; a = a3;
         toast("Cleared filters that hid your hours", { kind: "info" });
@@ -1932,7 +1950,6 @@ async function loadAnalytics(gen = pageLoadGen) {
       range: "7d", project: "all", language: "all", os: "all", editor: "all", category: "all",
       tz_offset: String(TZ_OFFSET),
     }).toString());
-    if (gen !== pageLoadGen) return;
     if (s2 === 200 && a2 && analyticsHours(a2) > 0) {
       resetDashboardFilters({ range: "7d" });
       s = s2; a = a2;
@@ -2058,16 +2075,27 @@ function renderProjectCards(list, rangeAnalytics) {
   }));
 }
 
-async function loadProjectsView(gen = pageLoadGen) {
+async function loadProjectsView() {
   const grid = $("project-grid");
   try {
-    if (!meLoaded) return;
+    if (!meLoaded) {
+      if (grid && !projectsCache.length) {
+        grid.replaceChildren(el("div", { className: "ui-panel" }, [empty("loading session…")]));
+      }
+      for (let i = 0; i < 8 && !meLoaded; i++) {
+        await sleep(120);
+        if (!meLoaded) await loadMe(true);
+      }
+      if (!meLoaded) {
+        if (grid) grid.replaceChildren(el("div", { className: "ui-panel" }, [empty("could not verify session")]));
+        return;
+      }
+    }
     if (!isSignedIn()) {
       renderProjectCards([], null);
       return;
     }
     const [ps, pr] = await j("/v1/projects");
-    if (gen !== pageLoadGen) return;
     if (ps === 401) {
       console.warn("projects 401 — session missing");
       renderProjectCards([], null);
@@ -2092,7 +2120,6 @@ async function loadProjectsView(gen = pageLoadGen) {
     window._projects = projectsCache;
     let range = projSearch.range || "7d";
     let [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(range)}&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
-    if (gen !== pageLoadGen) return;
     // Same streak-vs-empty trap: today+TZ can zero project hours while cards still exist
     if (as === 200 && ar && Number(ar.total_hours || 0) === 0 && range === "today" && projectsCache.some((p) => Number(p.weighted_hours || p.buckets || 0) > 0)) {
       range = "7d";
@@ -2100,7 +2127,6 @@ async function loadProjectsView(gen = pageLoadGen) {
       try { localStorage.setItem("st_proj_range", "7d"); } catch (_) {}
       if ($("proj-range")) $("proj-range").value = "7d";
       [as, ar] = await j(`/v1/me/analytics?range=7d&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
-      if (gen !== pageLoadGen) return;
     }
     renderProjectCards(projectsCache, as === 200 ? ar : null);
   } catch (err) {
@@ -2199,6 +2225,11 @@ async function refresh({ forceAuth = false } = {}) {
       if (!meLoaded) {
         await sleep(250);
         await loadMe(true);
+      }
+      // Unblock the UI if auth never resolved (show signed-out, not infinite blank)
+      if (!meLoaded) {
+        meLoaded = true;
+        if (!meProfile) meProfile = null;
       }
       paintAccount();
       if (isSignedIn()) await refreshApiKeyStatus();

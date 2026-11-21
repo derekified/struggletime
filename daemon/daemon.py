@@ -365,7 +365,7 @@ def post_buckets(server, user, token, buckets, retries=4):
                 return True, resp.read().decode()
         except urllib.error.HTTPError as e:
             raw = e.read().decode(errors="ignore")
-            if e.code in (400, 401, 403, 409, 422):
+            if e.code in (400, 401, 403, 409, 413, 422):
                 return False, f"http {e.code}: {raw}"
             last_err = f"http {e.code}: {raw}"
         except Exception as e:
@@ -433,7 +433,8 @@ def adopt_chain_head(state, server, token, project, ledger=None):
 def save_ledger(ledger, state):
     ledger.write_text(json.dumps(state, indent=2))
 
-def flush_pending(state, server, user, token, ledger, project=None):
+def flush_pending(state, server, user, token, ledger, project=None, chunk_size=40):
+    """Upload pending buckets in small chunks so the server never OOM-reads a multi‑MB POST."""
     if not state.get("pending"):
         return False
     if not server:
@@ -448,20 +449,27 @@ def flush_pending(state, server, user, token, ledger, project=None):
         )
         save_ledger(ledger, state)
         return False
-    ok, msg = post_buckets(server, user, token, state["pending"])
-    if ok:
-        print(f"synced {len(state['pending'])} bucket(s) for {project or '?'}: {msg}", flush=True)
-        state["pending"] = []
-        save_ledger(ledger, state)
-        return True
-    print(f"sync deferred ({len(state['pending'])} pending) for {project or '?'}: {msg}", flush=True)
-    save_ledger(ledger, state)
-    if "prev_hash mismatch" in (msg or "") and project:
-        if adopt_chain_head(state, server, token, project, ledger):
+    total = 0
+    while state.get("pending"):
+        chunk = state["pending"][:chunk_size]
+        ok, msg = post_buckets(server, user, token, chunk)
+        if not ok:
+            print(f"sync deferred ({len(state['pending'])} pending) for {project or '?'}: {msg}", flush=True)
+            save_ledger(ledger, state)
+            if "prev_hash mismatch" in (msg or "") and project:
+                if adopt_chain_head(state, server, token, project, ledger):
+                    return False
+            if "413" in (msg or "") or "too large" in (msg or "") or "too many buckets" in (msg or ""):
+                if chunk_size > 1:
+                    return flush_pending(state, server, user, token, ledger, project=project, chunk_size=max(1, chunk_size // 2))
+            if "401" in (msg or "") or "403" in (msg or ""):
+                print("hint: API token rejected — refresh with struggletime-helper apikey <st_…>", flush=True)
             return False
-    if "401" in (msg or "") or "403" in (msg or ""):
-        print("hint: API token rejected — refresh with struggletime-helper apikey <st_…>", flush=True)
-    return False
+        state["pending"] = state["pending"][len(chunk):]
+        total += len(chunk)
+        save_ledger(ledger, state)
+    print(f"synced {total} bucket(s) for {project or '?'}", flush=True)
+    return True
 
 def _on_signal(signum, _frame):
     global _STOP
