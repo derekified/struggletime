@@ -98,6 +98,17 @@ function mountDocs(into) {
       target.scrollIntoView({ behavior: "smooth", block: "start" });
     });
   });
+  root.querySelectorAll("[data-docs-copy]").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const text = btn.getAttribute("data-docs-copy") || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        toast("Clone command copied", { kind: "ok" });
+      } catch (_) {
+        toast(text, { kind: "ok" });
+      }
+    });
+  });
 }
 
 function pathToPage(pathname) {

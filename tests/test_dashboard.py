@@ -64,10 +64,12 @@ class TestDashboard(unittest.TestCase):
         s, docs = req(self.port, "GET", "/docs")
         self.assertEqual(s, 200)
         docs_l = docs.lower()
-        for needle in ("page-docs", "st-docs-template", "how hours are weighted", "privacy", "ed25519", "agplv3"):
+        for needle in ("page-docs", "st-docs-template", "docs-hero", "repository layout",
+                       "weighting formula", "contributing", "agpl", "ed25519", "makefile targets"):
             self.assertIn(needle, docs_l)
         app_js = req(self.port, "GET", "/app.js")[1]
         self.assertIn("mountDocs", app_js)
+        self.assertIn("data-docs-copy", docs_l)
         s, projects = req(self.port, "GET", "/projects")
         self.assertIn("proj-status", projects)
         self.assertIn("deleted repos", projects.lower())
