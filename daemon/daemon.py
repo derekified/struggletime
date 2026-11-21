@@ -717,7 +717,17 @@ def seal_bucket(w, bucket_secs, install_id):
     else:
         bucket["signature"] = None
     state["prev_hash"] = bucket["hash"]
-    state["pending"].append(bucket)
+    state.setdefault("pending", []).append(bucket)
+    # Hard cap — unbounded pending (stress tests) produced 30MB+ POSTs that OOM'd the API
+    max_pending = int(os.environ.get("STRUGGLETIME_MAX_PENDING", "80"))
+    if len(state["pending"]) > max_pending:
+        drop = len(state["pending"]) - max_pending
+        state["pending"] = state["pending"][drop:]
+        # Re-link first kept bucket to genesis-or-prev so flush can continue after adopt
+        if state["pending"]:
+            state["pending"][0] = dict(state["pending"][0])
+            # leave prev_hash as-is; server adopt_chain_head recovers on mismatch
+        print(f"pending capped at {max_pending} (dropped {drop} oldest)", flush=True)
     return bucket
 
 def reset_window(w, now_wall=None, now_mono=None, keep_alive=False, after_active=False):

@@ -75,6 +75,8 @@ let softRefreshQueued = false;
 let pageLoadGen = 0;
 let refreshChain = Promise.resolve();
 let refreshRunning = false;
+let apiKeyPlain = "";
+let daemonLinkInfo = null;
 const STALE_FILTER = new Set(["untracked", "local-daemon", "local_daemon", ""]);
 function sanitizeFilter(v, fallback = "all") {
   const s = String(v == null ? "" : v).trim();
@@ -725,7 +727,6 @@ function paintAccount() {
     return;
   }
   paintAuthChecks();
-  fillAttachProjects();
   paintLogin();
   paintSettingsForm();
   paintDaemonBanners();
@@ -813,9 +814,6 @@ async function saveProfile(patch) {
   toast("Saved", { kind: "ok" });
   return r;
 }
-
-let apiKeyPlain = "";
-let daemonLinkInfo = null;
 
 function paintDaemonBanners() {
   const p = meProfile || {};
@@ -2255,7 +2253,6 @@ async function refresh({ forceAuth = false } = {}) {
         console.warn("projects refresh transient", ps, pr?.error);
       }
       const projs = projectsCache;
-      fillAttachProjects();
       const withData = projs.filter((p) => p.buckets > 0);
       if (!selected && withData.length) selected = withData[0].id;
       if ($("proj-sel")) {
