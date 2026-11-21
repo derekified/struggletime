@@ -62,7 +62,12 @@ class TestDashboard(unittest.TestCase):
                        "btn-delete-account", "daemon-banner-dismiss",
                        "data-settings-tab=\"docs\"", "st-docs-template", "settings-docs-mount"):
             self.assertIn(needle, settings.lower())
-        self.assertIn("/v1/me/github/disconnect", req(self.port, "GET", "/app.js")[1])
+        app_js = req(self.port, "GET", "/app.js")[1]
+        self.assertIn("/v1/me/github/disconnect", app_js)
+        self.assertIn("pageLoadGen", app_js)
+        self.assertIn("TRANSIENT_HTTP", app_js)
+        self.assertIn("refreshChain", app_js)
+        self.assertIn("load: false", app_js)
         self.assertNotIn('id="side"', settings)
         self.assertNotIn("attach-project", settings)
         s, docs = req(self.port, "GET", "/docs")
