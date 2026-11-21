@@ -19,7 +19,7 @@ def _load_dotenv():
 _load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS, billable_secs
+from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS, billable_secs, verify_chain
 import install_sig
 
 
@@ -568,6 +568,9 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         eds = payload.get("editors") or {}
         ags = payload.get("agents") or {}
         langs = payload.get("languages") or {}
+        h = (r["hash"] or payload.get("hash") or "")[:10]
+        ph = (r["prev_hash"] or payload.get("prev_hash") or "")[:10]
+        counts = payload.get("counts") or {}
         recent.append({
             "bucket_id": r["bucket_id"],
             "project_id": r["project_id"],
@@ -582,6 +585,14 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
             "editor": next(iter(eds.keys()), "unknown"),
             "agent": next(iter(ags.keys()), "human"),
             "language": next(iter(langs.keys()), "unknown"),
+            "hash_short": h or None,
+            "prev_hash_short": ph or None,
+            "struggle": {
+                "reedits": int(counts.get("same_file_reedit_count") or 0),
+                "fail_to_pass": int(counts.get("test_fail_to_pass_transitions") or counts.get("cache_fail_to_pass") or 0),
+                "git_pulses": int(counts.get("git_plumbing_pulses") or 0),
+                "build_cycles": int(counts.get("build_test_cycles") or 0),
+            },
         })
 
     total_hours = round(total_w / 3600, 4)
@@ -1094,7 +1105,9 @@ class H(BaseHTTPRequestHandler):
                                             "evidence_bytes": len(json.dumps(buckets).encode())})
             tl = friction_timeline(buckets)
             commits = [{"at_bucket": t["bucket_id"], "head_commit": t["head_commit"]} for t in tl if t["commits"]]
+            chain_errs = verify_chain(buckets)
             return self.send_json(200, {"project_id": p[2], "timeline": tl, "commit_anchors": commits,
+                                        "chain_ok": not chain_errs, "chain_errors": chain_errs[:8],
                                         "evidence_bytes": len(json.dumps(buckets).encode()),
                                         "budget": "target 25-50 kb per submitted session, hard cap 50 kb/hour of metadata"})
         if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "stats":
@@ -1160,8 +1173,25 @@ class H(BaseHTTPRequestHandler):
                 rows = c.execute("SELECT * FROM submission ORDER BY rowid DESC").fetchall()
             else:
                 rows = c.execute("SELECT * FROM submission WHERE user_id=? ORDER BY rowid DESC", (who,)).fetchall()
-            return self.send_json(200, {"submissions": [{**dict(r), "flags": json.loads(r["flags"]),
-                "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4)} for r in rows]})
+            out = []
+            for r in rows:
+                item = {**dict(r), "flags": json.loads(r["flags"]),
+                        "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4)}
+                brows = c.execute(
+                    "SELECT payload FROM bucket WHERE project_id=? AND user_id=? ORDER BY bucket_start_wall",
+                    (r["project_id"], r["user_id"]),
+                ).fetchall()
+                buckets = []
+                for br in brows:
+                    try: buckets.append(json.loads(br["payload"]))
+                    except Exception: pass
+                item["bucket_count"] = len(buckets)
+                item["evidence_bytes"] = len(json.dumps(buckets).encode()) if buckets else 0
+                cerrs = verify_chain(buckets) if buckets else []
+                item["chain_ok"] = not cerrs if buckets else None
+                item["chain_errors"] = cerrs[:5]
+                out.append(item)
+            return self.send_json(200, {"submissions": out})
         if len(p) == 3 and p[:2] == ["v1", "submissions"]:
             who = self.auth_handle(c)
             if not who: return self.send_json(401, {"error": "sign in required"})
@@ -1169,7 +1199,22 @@ class H(BaseHTTPRequestHandler):
             if not r: return self.send_json(404, {"error": "submission not found"})
             if r["user_id"] != who and not is_staff(c, who):
                 return self.send_json(403, {"error": "staff only"})
-            return self.send_json(200, {**dict(r), "flags": json.loads(r["flags"])})
+            brows = c.execute(
+                "SELECT payload FROM bucket WHERE project_id=? AND user_id=? ORDER BY bucket_start_wall",
+                (r["project_id"], r["user_id"]),
+            ).fetchall()
+            buckets = []
+            for br in brows:
+                try: buckets.append(json.loads(br["payload"]))
+                except Exception: pass
+            cerrs = verify_chain(buckets) if buckets else []
+            return self.send_json(200, {
+                **dict(r), "flags": json.loads(r["flags"]),
+                "bucket_count": len(buckets),
+                "evidence_bytes": len(json.dumps(buckets).encode()) if buckets else 0,
+                "chain_ok": not cerrs if buckets else None,
+                "chain_errors": cerrs[:8],
+            })
         if p == ["v1", "admin", "overview"]:
             who = self.auth_handle(c)
             if not who or not is_staff(c, who):
@@ -1297,6 +1342,15 @@ class H(BaseHTTPRequestHandler):
             return self.send_json(201, profile_payload(c, handle, s))
         if p == ["v1", "auth", "signin"]:
             return self.send_json(410, {"error": "handle login removed. sign in with slack, then claim a handle"})
+        if p == ["v1", "me", "github", "disconnect"]:
+            who = self.auth_handle(c)
+            if not who: return self.send_json(401, {"error": "sign in with slack first"})
+            row = c.execute("SELECT github_login FROM link WHERE handle=?", (who,)).fetchone()
+            if not row or not row["github_login"]:
+                return self.send_json(404, {"error": "no github link"})
+            c.execute("UPDATE link SET github_login=NULL, github_token=NULL WHERE handle=?", (who,))
+            c.commit()
+            return self.send_json(200, {**profile_payload(c, who, self.session(c)), "github_disconnected": True})
         if p == ["v1", "me", "profile"]:
             who = self.auth_handle(c)
             if not who: return self.send_json(401, {"error": "sign in with slack first"})

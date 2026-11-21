@@ -91,12 +91,13 @@ h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}h2{font-s
 .ui-path-row .ui-input{flex:1;min-width:0}
 .ui-path-btn{flex-shrink:0;padding:8px 12px}
 .ui-panel{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:16px}
-.setup-banner{display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--accent);border-radius:12px;padding:14px 16px;margin:14px 0}
+.setup-banner{position:relative;z-index:5;display:flex;align-items:center;justify-content:space-between;gap:14px;flex-wrap:wrap;background:var(--panel2);border:1px solid var(--accent);border-radius:12px;padding:14px 16px;margin:14px 0;pointer-events:auto}
 .setup-banner-body{display:flex;align-items:flex-start;gap:10px;min-width:0;flex:1}
 .setup-banner-body .nav-ico{color:var(--accent);margin-top:2px;margin-right:0}
 .setup-banner-body b{display:block;font-size:14px;margin-bottom:2px}
 .setup-banner-body .sub{margin:0}
-.setup-banner-actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.setup-banner-actions{position:relative;z-index:6;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:auto}
+.setup-banner-actions .ui-btn{pointer-events:auto;cursor:pointer}
 .install-steps{margin:12px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:14px}
 .install-steps li{padding-left:4px}
 .install-steps b{display:block;margin-bottom:6px;font-size:13px}
@@ -154,9 +155,18 @@ h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}h2{font-s
 .ui-filter-ico{margin:0;color:var(--accent)}
 
 /* Landing — calm single composition */
-.hero-clean{display:grid;grid-template-columns:1.2fr .8fr;gap:40px;align-items:center;min-height:calc(100vh - 140px);padding:32px 0 48px}
+.hero-clean{display:grid;grid-template-columns:1.2fr .8fr;gap:40px;align-items:center;min-height:calc(100vh - 200px);padding:32px 0 28px}
 @media(max-width:860px){.hero-clean{grid-template-columns:1fr;min-height:auto;padding:28px 0}}
 .hero-clean h1{font-size:clamp(28px,4.5vw,40px);line-height:1.12;max-width:14ch}
+.hero-features{margin:8px 0 40px}
+.hero-features .bento-card h2{font-size:15px;margin:0}
+.hero-features .bento-card .sub{margin:8px 0 0;font-size:13px;line-height:1.45}
+.builders-toolbar{display:flex;flex-wrap:wrap;align-items:center;gap:12px;grid-template-columns:none}
+.builders-toolbar #lb-tabs{margin:0}
+.builders-toolbar .builders-search{flex:1;min-width:180px}
+.builders-toolbar .lb-meta{margin:0;margin-left:auto;color:var(--muted);font-size:13px}
+.builders-list{margin:0}
+.builders-list .lb-row:last-child{border-bottom:0}
 .hero-cta{display:flex;gap:10px;flex-wrap:wrap;margin-top:22px}
 .hero-preview{padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:16px;overflow:hidden}
 .hero-shot,.hero-shot-fallback{display:block;width:100%;height:auto;border-radius:10px;border:1px solid var(--line);max-width:100%}

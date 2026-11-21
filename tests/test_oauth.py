@@ -107,6 +107,26 @@ class TestOAuth(unittest.TestCase):
         self.assertEqual(s, 200); self.assertTrue(any(r["private"] for r in repos["repos"]))
         self.assertEqual(repos["github_login"], "octocat")
 
+    def test_github_disconnect_clears_link(self):
+        sess = self.slack_login()
+        token = sess["token"]
+        if sess.get("needs_handle"):
+            self.assertEqual(req(self.port, "POST", "/v1/auth/claim-handle", {"handle": "ghout"}, token=token)[0], 201)
+        s, loc, _ = get(self.port, "/v1/auth/github/start?session=" + token)
+        state = parse_qs(urlparse(loc).query)["state"][0]
+        get(self.port, f"/v1/auth/github/callback?code=testcode&state={state}")
+        s, me = req(self.port, "GET", "/v1/auth/me", token=token)
+        self.assertEqual(s, 200); self.assertTrue(me.get("github_linked"))
+        s, out = req(self.port, "POST", "/v1/me/github/disconnect", token=token)
+        self.assertEqual(s, 200, out)
+        self.assertTrue(out.get("github_disconnected"))
+        self.assertFalse(out.get("github_linked"))
+        self.assertIsNone(out.get("github_login"))
+        s, repos = req(self.port, "GET", "/v1/me/github-repos", token=token)
+        self.assertEqual(s, 400)
+        s, again = req(self.port, "POST", "/v1/me/github/disconnect", token=token)
+        self.assertEqual(s, 404)
+
     def test_github_start_requires_slack_session(self):
         s, loc, _ = get(self.port, "/v1/auth/github/start")
         self.assertIn("sign_in_with_slack_first", loc)

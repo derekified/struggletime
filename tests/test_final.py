@@ -92,8 +92,16 @@ class TestFinal(unittest.TestCase):
         execlog = pathlib.Path(self.tmp) / "exec.jsonl"
         execlog.write_text(json.dumps({"category": "test_runner", "exit_code": 1}) + "\n" + json.dumps({"category": "test_runner", "exit_code": 0}) + "\n")
         env = {**os.environ, "AITIME_EXEC_LOG": str(execlog)}
+        # Isolate daemon config from the host machine; pass the test session token so sync hits this server.
+        env = {
+            **env,
+            "STRUGGLETIME_CONFIG": str(pathlib.Path(self.tmp) / "daemon-cfg.json"),
+            "AITIME_HOME": str(pathlib.Path(self.tmp) / "aitime-home"),
+        }
+        pathlib.Path(env["AITIME_HOME"]).mkdir(parents=True, exist_ok=True)
         r = subprocess.run([sys.executable, str(ROOT/"daemon/daemon.py"), "--repo", str(repo), "--project", "daemondemo",
-                            "--server", f"http://127.0.0.1:{self.port}", "--user", "rowan", "--bucket-secs", "1", "--once"],
+                            "--server", f"http://127.0.0.1:{self.port}", "--user", "rowan",
+                            "--token", self.token, "--bucket-secs", "1", "--once"],
                            capture_output=True, text=True, env=env, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         s, st = req("GET", self.port, "/v1/projects/daemondemo/stats")

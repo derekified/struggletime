@@ -30,9 +30,11 @@ class TestDashboard(unittest.TestCase):
         s, html = req(self.port, "GET", "/")
         self.assertEqual(s, 200)
         low = html.lower()
-        for needle in ("struggletime", "page-landing", "for builders who keep going", "styles.css", "ui.js", "app.js",
-                       "fake-stats-preview", "hero-preview"):
+        for needle in ("struggletime", "page-landing", "count the loops that fixed the code", "styles.css", "ui.js", "app.js",
+                       "fake-stats-preview", "hero-preview", "hero-features", "struggle scoring", "tamper-evident ledger"):
             self.assertIn(needle, low)
+        self.assertNotIn("bounty", low)
+        self.assertNotIn("hack club's ai", low)
         self.assertNotIn("site-foot", html)
         s, home = req(self.port, "GET", "/home")
         self.assertEqual(s, 200)
@@ -56,9 +58,11 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("continue with slack", login.lower())
         s, settings = req(self.port, "GET", "/settings")
         self.assertEqual(s, 200)
-        for needle in ("sign in with slack", "connect github", "settings-rail", "set-country", "btn-delete-account",
+        for needle in ("sign in with slack", "connect github", "btn-github-disconnect", "settings-rail", "set-country",
+                       "btn-delete-account", "daemon-banner-dismiss",
                        "data-settings-tab=\"docs\"", "st-docs-template", "settings-docs-mount"):
             self.assertIn(needle, settings.lower())
+        self.assertIn("/v1/me/github/disconnect", req(self.port, "GET", "/app.js")[1])
         self.assertNotIn('id="side"', settings)
         self.assertNotIn("attach-project", settings)
         s, docs = req(self.port, "GET", "/docs")

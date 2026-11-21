@@ -282,6 +282,8 @@ function showPage(page, { push = false, load = true } = {}) {
   paintLogin();
   if (page === "settings") paintSettingsForm();
   if (page === "docs") mountDocs("docs-page-mount");
+  if (isSignedIn()) refreshApiKeyStatus();
+  else paintDaemonBanners();
   if (load) loadActivePageData();
 }
 
@@ -1043,7 +1045,7 @@ function openProjectModal(existing) {
     id: dirId,
     glyph: "docs",
     value: existing?.local_path || "",
-    placeholder: "/home/you/code/my-project",
+    placeholder: "~/code/my-project or C:\\Users\\you\\code\\my-project",
   });
   const kids = [
     field({ label: "Name", id: nameId, value: existing?.name || "", placeholder: "my project", required: true }),
@@ -1163,7 +1165,7 @@ function openLinkProjectModal() {
     id: "m-link-dir",
     glyph: "docs",
     value: "",
-    placeholder: "/home/you/code/my-project",
+    placeholder: "~/code/my-project or C:\\Users\\you\\code\\my-project",
   });
   projCombo.addEventListener?.("change", () => {});
   // Sync defaults when project changes
@@ -1245,7 +1247,7 @@ async function renderLeaderboard() {
   try {
     const [s, r] = await j("/v1/leaderboard?period=" + encodeURIComponent(lbPeriod));
     if (s !== 200) {
-      box.replaceChildren(empty(r?.error || "Could not load leaderboard"));
+      box.replaceChildren(el("div", { className: "ui-empty" }, [document.createTextNode(r?.error || "Could not load leaderboard")]));
       if ($("lb-meta")) $("lb-meta").textContent = "";
       return;
     }
@@ -1253,9 +1255,13 @@ async function renderLeaderboard() {
     let entries = r.entries || [];
     const q = lbQuery.trim().toLowerCase();
     if (q) entries = entries.filter((e) => [e.handle, e.github_login, e.active_project, e.slack_name].filter(Boolean).join(" ").toLowerCase().includes(q));
-    if (!entries.length) { box.replaceChildren(empty("No activity in this period.")); return; }
+    if (!entries.length) {
+      box.replaceChildren(el("div", { className: "ui-empty" }, [document.createTextNode("No activity in this period.")]));
+      return;
+    }
     const max = entries[0].weighted_hours || 1;
-    box.replaceChildren(...entries.map((e) => {
+    const list = el("div", { className: "rank-list builders-list" });
+    list.append(...entries.map((e) => {
       const flag = flagEmoji(e.country);
       const nameKids = [];
       if (flag) nameKids.push(el("span", { className: "lb-flag", text: flag, title: e.country || "" }));
@@ -1274,9 +1280,10 @@ async function renderLeaderboard() {
         el("div", { className: "lb-hours", text: fmt(e.weighted_hours) + "h" }),
       ]);
     }));
+    box.replaceChildren(list);
   } catch (err) {
     console.error("renderLeaderboard failed", err);
-    box.replaceChildren(empty("Could not load leaderboard"));
+    box.replaceChildren(el("div", { className: "ui-empty" }, [document.createTextNode("Could not load leaderboard")]));
   }
 }
 
@@ -1299,7 +1306,12 @@ async function loadReviewQueue() {
     }
     box.innerHTML = subs.map((s) => {
       const hours = fmt(s.claimed_weighted_hours);
-      const flags = (s.flags || []).length ? `<span class="tag bad">${esc((s.flags || []).slice(0, 2).join(", "))}</span>` : "";
+      const flags = (s.flags || []).length ? `<span class="tag bad">${esc((s.flags || []).slice(0, 3).join(", "))}</span>` : "";
+      const evidence = [
+        s.bucket_count ? `${s.bucket_count} buckets` : null,
+        s.chain_ok === false ? "chain broken" : (s.chain_ok ? "chain ok" : null),
+        s.evidence_bytes ? `${Math.round(s.evidence_bytes / 1024)} KB meta` : null,
+      ].filter(Boolean).join(" · ");
       const actions = canReview()
         ? `<div class="admin-user actions" style="margin-top:8px">
             <button type="button" class="ui-btn" data-review="${esc(s.id)}" data-hours="${esc(String(s.claimed_weighted_secs || 0))}" data-action="approve">approve</button>
@@ -1309,7 +1321,8 @@ async function loadReviewQueue() {
         : `<p class="sub">viewer — no review actions</p>`;
       return `<div class="event" data-sub="${esc(s.id)}">
         <b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span> ${flags}
-        <span class="sub"> ${hours}h · @${esc(s.user_id || "")}</span>
+        <span class="sub"> ${hours}h · @${esc(s.user_id || "")}${evidence ? " · " + esc(evidence) : ""}</span>
+        <p class="sub">Impartial audit: structural flags + hash chain only — no code, paths, or prompts.</p>
         ${actions}
       </div>`;
     }).join("");
@@ -1761,14 +1774,25 @@ function renderRecentBuckets(a) {
     box.replaceChildren(compactEmpty("no logged buckets in this range"));
     return;
   }
-  box.replaceChildren(...rows.slice(0, 24).map((b) => el("div", { className: "rank-row" }, [
-    el("div", { className: "idx", text: (b.day || "").slice(5) || "—" }),
-    el("div", { className: "rank-main" }, [
-      el("b", { text: b.project_label || b.project_id || "project" }),
-      el("div", { className: "sub", text: [b.state_label || b.state, b.editor, b.language, b.os].filter(Boolean).join(" · ") }),
-    ]),
-    el("b", { className: "rank-h", text: fmtH(b.weighted_hours) }),
-  ])));
+  box.replaceChildren(...rows.slice(0, 24).map((b) => {
+    const sg = b.struggle || {};
+    const struggleBits = [
+      sg.reedits ? `${sg.reedits} re-edits` : null,
+      sg.fail_to_pass ? `${sg.fail_to_pass} fail→pass` : null,
+      sg.git_pulses ? `${sg.git_pulses} git pulses` : null,
+      sg.build_cycles ? `${sg.build_cycles} build cycles` : null,
+    ].filter(Boolean);
+    const chain = b.hash_short ? `∑ ${b.hash_short}` : null;
+    return el("div", { className: "rank-row" }, [
+      el("div", { className: "idx", text: (b.day || "").slice(5) || "—" }),
+      el("div", { className: "rank-main" }, [
+        el("b", { text: b.project_label || b.project_id || "project" }),
+        el("div", { className: "sub", text: [b.state_label || b.state, b.editor, b.language, b.os, chain].filter(Boolean).join(" · ") }),
+        struggleBits.length ? el("div", { className: "sub", text: struggleBits.join(" · ") }) : null,
+      ]),
+      el("b", { className: "rank-h", text: fmtH(b.weighted_hours) }),
+    ]);
+  }));
 }
 
 function paintHomeAnalytics(a) {
@@ -2020,19 +2044,43 @@ async function loadProjectsView() {
 
 async function drawFriction() {
   if (!$("fr-chart")) return;
-  if (!selected) { $("fr-chart").innerHTML = '<p class="ui-empty compact">nothing here yet</p>'; return; }
+  const statesBox = $("fr-states");
+  if (!selected) {
+    $("fr-chart").innerHTML = '<p class="ui-empty compact">nothing here yet</p>';
+    if (statesBox) statesBox.replaceChildren();
+    return;
+  }
   const [s, fr] = await j("/v1/projects/" + encodeURIComponent(selected) + "/friction");
   if (s !== 200 || !fr || !Array.isArray(fr.timeline) || !fr.timeline.length) {
     $("fr-chart").innerHTML = '<p class="ui-empty compact">nothing here yet</p>';
+    if (statesBox) statesBox.replaceChildren();
     return;
   }
   const w = Math.max(560, fr.timeline.length * 52), h = 120, bw = 32;
   const accent = getComputedStyle(document.documentElement).getPropertyValue("--bar").trim() || "#d7ff6a";
   const dump = getComputedStyle(document.documentElement).getPropertyValue("--dump").trim() || "#57534c";
-  $("fr-chart").innerHTML = `<svg width="100%" viewBox="0 0 ${w} ${h + 20}">` + fr.timeline.map((t, i) => {
+  const mute = getComputedStyle(document.documentElement).getPropertyValue("--muted").trim() || "#78716c";
+  $("fr-chart").innerHTML = `<svg width="100%" viewBox="0 0 ${w} ${h + 20}" role="img" aria-label="friction timeline">` + fr.timeline.map((t, i) => {
     const bh = Math.max(3, (Number(t.friction) || 0) * 95);
-    return `<rect x="${i * 52 + 8}" y="${h - bh}" width="${bw}" height="${bh}" rx="4" fill="${t.state === "OPEN_LOOP_AGENT_DUMP" ? dump : accent}"></rect>`;
+    const fill = t.state === "OPEN_LOOP_AGENT_DUMP" ? dump : (t.state === "SILENT_DEBUG" ? mute : accent);
+    const tip = `${t.state || "?"} · friction ${Number(t.friction || 0).toFixed(2)} · w ${Number(t.weight || 0).toFixed(2)}`;
+    return `<rect x="${i * 52 + 8}" y="${h - bh}" width="${bw}" height="${bh}" rx="4" fill="${fill}"><title>${esc(tip)}</title></rect>`;
   }).join("") + "</svg>";
+  if (statesBox) {
+    const counts = {};
+    for (const t of fr.timeline) counts[t.state || "unknown"] = (counts[t.state || "unknown"] || 0) + 1;
+    const kids = Object.entries(counts).map(([st, n]) =>
+      el("span", { className: "tag", text: `${(st || "").replace(/_/g, " ").toLowerCase()} · ${n}` }));
+    if (fr.chain_ok === false) kids.unshift(el("span", { className: "tag bad", text: "chain broken" }));
+    else if (fr.chain_ok === true) kids.unshift(el("span", { className: "tag ok", text: "chain ok" }));
+    if ((fr.commit_anchors || []).length) kids.push(el("span", { className: "tag", text: `${fr.commit_anchors.length} commit anchors` }));
+    statesBox.replaceChildren(...kids);
+  }
+  if ($("fr-legend")) {
+    $("fr-legend").textContent = fr.chain_ok === false
+      ? "Hash chain errors detected — structural audit only; private paths stay local."
+      : "Structural recovery vs dumps — bars use commit-anchored friction, not screenshots.";
+  }
 }
 
 async function softRefresh() {
@@ -2069,6 +2117,9 @@ async function refresh({ forceAuth = false } = {}) {
   await loadAuthStatus(forceAuth);
   await loadMe(forceAuth);
   paintAccount();
+  // Always re-fetch daemon link status (never paint banner from stale cache alone)
+  if (isSignedIn()) await refreshApiKeyStatus();
+  else { daemonLinkInfo = null; paintDaemonBanners(); }
 
   booted = true;
   if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
@@ -2207,9 +2258,21 @@ if ($("daemon-banner-cta")) {
   });
 }
 if ($("daemon-banner-dismiss")) {
-  $("daemon-banner-dismiss").addEventListener("click", () => {
+  $("daemon-banner-dismiss").addEventListener("click", (e) => {
+    e.preventDefault();
+    e.stopPropagation();
     try { sessionStorage.setItem("st_daemon_banner_dismissed", "1"); } catch (_) {}
     if ($("daemon-banner")) $("daemon-banner").hidden = true;
+  });
+}
+if ($("btn-github-disconnect")) {
+  $("btn-github-disconnect").addEventListener("click", async () => {
+    if (!confirm("Disconnect GitHub from this account? Project repo links stay; you can reconnect anytime.")) return;
+    const [s, r] = await j("/v1/me/github/disconnect", { method: "POST" });
+    if (s !== 200) { toast(r.error || "Could not disconnect GitHub", { kind: "error" }); return; }
+    meProfile = r; meLoaded = true;
+    paintAccount();
+    toast("GitHub disconnected", { kind: "ok" });
   });
 }
 
