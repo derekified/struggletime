@@ -31,8 +31,17 @@ def main():
     print(f"buckets: {len(buckets)}  payload: {len(raw)} bytes ({len(raw)/1024:.1f} kb)  budget: 25-50 kb/session, <=50 kb/hour")
     print(f"chain: {'ok' if not verify_chain(buckets) else verify_chain(buckets)}")
     print(f"allowlist: {'ok — metadata only, no raw text/pixels can be represented' if not errs else errs}")
+    STRUGGLE_KEYS = (
+        "same_file_reedit_count", "ai_retry_loops", "failed_exec_count",
+        "test_fail_to_pass_transitions", "agent_turn_churn", "human_recovery_edits",
+        "exec_failures", "ai_writes", "human_edits", "active_secs", "idle_secs",
+    )
     for b, (w, state) in zip(buckets, weight_sequence(buckets)):
         print(f"  {b['bucket_id'][:8]} {state:<22} w={w:<5} friction={friction(b):<5} files={[f['file_id'] for f in b.get('files', [])]} head={(b['git'].get('head_commit') or '')[:8]}")
+        c = b.get("counts") or {}
+        struggle = {k: c.get(k, 0) for k in STRUGGLE_KEYS if c.get(k)}
+        if struggle:
+            print(f"           struggle={struggle}")
         if b.get("editors") or b.get("agents") or b.get("os") or b.get("languages"):
             print(
                 f"           editors={b.get('editors')} agents={b.get('agents')} "

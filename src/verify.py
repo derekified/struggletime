@@ -178,7 +178,7 @@ def _idle_decay_factor(idle_secs):
     return round((SILENT_ZERO_SECS - idle) / (SILENT_ZERO_SECS - SILENT_FULL_SECS), 4)
 
 def is_ai_struggle(c):
-    """Iterative AI recovery across any IDE/agent — not a single-pass dump."""
+    """Iterative AI/human recovery across any IDE/agent — not a single-pass dump."""
     reedit = int(c.get("same_file_reedit_count") or 0)
     retries = int(c.get("ai_retry_loops") or 0)
     fail_pass = int(c.get("test_fail_to_pass_transitions") or 0)
@@ -187,16 +187,27 @@ def is_ai_struggle(c):
     failed = int(c.get("failed_exec_count") or 0) or int(c.get("exec_failures") or 0)
     ai = int(c.get("ai_writes") or 0)
     prompts = int(c.get("prompts") or 0)
+    human = int(c.get("human_edits") or 0)
 
-    if fail_pass > 0 and (reedit > 0 or recovery > 0 or retries > 0 or ai > 0 or prompts > 0):
+    # Canonical: any fail→pass transition is iterative recovery (edits may be prior bucket)
+    if fail_pass > 0:
         return True
-    if failed > 0 and reedit > 0 and (ai > 0 or churn > 0 or prompts > 0):
+    # Failures + same-file re-edits (pass may land in the next bucket)
+    if failed > 0 and reedit > 0 and (ai > 0 or churn > 0 or prompts > 0 or human > 0 or recovery > 0):
+        return True
+    # Open failure pressure with re-edits even before the passing run is sealed
+    if failed > 0 and (retries > 0 or recovery > 0) and (reedit > 0 or human > 0 or ai > 0):
         return True
     if retries >= 2 and (failed > 0 or recovery > 0 or fail_pass > 0):
         return True
-    if churn >= 3 and failed > 0 and (reedit > 0 or recovery > 0 or int(c.get("human_edits") or 0) > 0):
+    if churn >= 3 and failed > 0 and (reedit > 0 or recovery > 0 or human > 0):
         return True
     if recovery > 0 and (ai > 0 or failed > 0) and (reedit > 0 or fail_pass > 0 or retries > 0):
+        return True
+    # Passive same-file iteration (zero hooks): repeated re-edits are structural struggle
+    if reedit >= 2 and (retries >= 1 or recovery >= 1 or ai > 0 or human >= 2):
+        return True
+    if reedit >= 3 and (ai > 0 or prompts > 0 or churn > 0 or failed > 0):
         return True
     return False
 

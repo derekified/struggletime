@@ -26,7 +26,7 @@ import editors as edreg
 IGNORE = {".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".aitime"}
 _STOP = False
 SWITCH_QUIET_SECS = 30  # early-seal prior project after this quiet when another is active
-FORMULA = "v0.3.0-alpha"
+FORMULA = "v0.3.1-alpha"
 
 # Shell hook categories (name only — never arguments)
 EXEC_CATS = {
@@ -205,7 +205,12 @@ def _track_reedits(w, touched_rels, kind):
     if reedits:
         w["counts"]["same_file_reedit_count"] += reedits
     # Retry loop: same files touched again after a prior tick, especially under AI/fail pressure
-    if (prev & cur) and (kind == "ai" or w["counts"].get("ai_writes", 0) > 0 or w.get("saw_fail")):
+    if (prev & cur) and (
+        kind == "ai"
+        or w["counts"].get("ai_writes", 0) > 0
+        or w.get("saw_fail")
+        or w.get("open_fail")
+    ):
         w["counts"]["ai_retry_loops"] += 1
     w["tick_files"] = cur
 
@@ -215,7 +220,12 @@ def _track_human_recovery(w, n_touch, kind):
         return
     if n_touch < 1 or n_touch > 2:
         return
-    if w["counts"].get("ai_writes", 0) > 0 or w.get("saw_fail") or w["counts"].get("failed_exec_count", 0) > 0:
+    if (
+        w["counts"].get("ai_writes", 0) > 0
+        or w.get("saw_fail")
+        or w.get("open_fail")
+        or w["counts"].get("failed_exec_count", 0) > 0
+    ):
         w["counts"]["human_recovery_edits"] += 1
 
 def classify_edit_batch(n_touch, *, edit_ticks, lines_hint, dt_sec, recent_cats, attr_hint):
@@ -435,15 +445,20 @@ def apply_event_to_watcher(w, e, now_wall, now_mono):
     cat = e.get("category") or "other"
     exec_categories[cat] = exec_categories.get(cat, 0) + 1
     exit_code = int(e.get("exit_code") or 0)
+    # Any non-zero exit opens a struggle window (hooks often omit name → category=other)
     if exit_code:
         counts["exec_failures"] += 1
         counts["failed_exec_count"] += 1
-        if cat in ("test_runner", "compiler", "ai_cli", "other"):
-            w["saw_fail"] = True
-    elif cat in ("test_runner", "compiler") and w.get("saw_fail"):
+        w["saw_fail"] = True
+        w["open_fail"] = True  # survives bucket seal until a matching pass
+    elif (w.get("saw_fail") or w.get("open_fail")) and cat in (
+        "test_runner", "compiler", "other", "ai_cli",
+    ):
+        # Fail→pass recovery — include category=other (common when hook omits command name)
         w["saw_pass_after_fail"] = True
         counts["test_fail_to_pass_transitions"] += 1
-        w["saw_fail"] = False  # allow another fail→pass cycle in the same window
+        w["saw_fail"] = False
+        w["open_fail"] = False
     if cat == "ai_cli":
         counts["prompts"] += 1
         counts["agent_turn_churn"] += 1
@@ -482,13 +497,19 @@ def apply_event_to_watcher(w, e, now_wall, now_mono):
                 "agent": e.get("agent") or agents[0],
                 "source": w["attr_hint"].get("source") or "adapter",
             }
-    # Adapter re-edit signal without paths: treat multi-touch as retry churn
-    if n > 0 and cat in ("editor", "ai_cli") and (w.get("saw_fail") or counts.get("ai_writes", 0) > 0):
-        if n <= 2 and (e.get("agent") or "human") == "human":
+    # Adapter re-edit / recovery under failure or AI pressure (paths never stored)
+    under_pressure = bool(w.get("saw_fail") or w.get("open_fail") or counts.get("ai_writes", 0) > 0)
+    if n > 0 and cat in ("editor", "ai_cli") and under_pressure:
+        agent = (e.get("agent") or "human")
+        if n <= 2 and agent == "human":
             counts["human_recovery_edits"] += 1
-        elif counts.get("ai_writes", 0) > 0 or cat == "ai_cli":
+            counts["same_file_reedit_count"] += 1
+        else:
+            # AI IDE agent re-touch after fail (was previously dropped when ai_writes==0)
             counts["ai_retry_loops"] += 1
             counts["same_file_reedit_count"] += max(1, min(n, 5))
+            if agent not in ("human", "unknown", "") and counts.get("ai_writes", 0) == 0:
+                counts["ai_writes"] += 1
     note_activity(w, now_wall, now_mono)
 
 def seal_bucket(w, bucket_secs, install_id):
@@ -594,18 +615,23 @@ def seal_bucket(w, bucket_secs, install_id):
 
 def reset_window(w, now_wall=None, now_mono=None, keep_alive=False, after_active=False):
     prior_silent = int(w.get("silent_followup") or 0)
+    # Cross-bucket struggle continuity: open fail + recent files survive the seal
+    carry_fail = bool(w.get("open_fail") or (w.get("saw_fail") and not w.get("saw_pass_after_fail")))
+    carry_files = set(w.get("touched_once") or set()) if (carry_fail or after_active) else set()
+    carry_hint = dict(w.get("attr_hint") or {}) if carry_fail else {}
     w["bursts"] = {}
     w["counts"] = empty()
     w["file_meta"] = {}
     w["exec_categories"] = {}
     w["rel_langs"] = {}
-    w["attr_hint"] = {}
+    w["attr_hint"] = carry_hint
     w["edit_ticks"] = 0
-    w["saw_fail"] = False
+    w["saw_fail"] = carry_fail
+    w["open_fail"] = carry_fail
     w["saw_pass_after_fail"] = False
     w["had_activity"] = False
-    w["tick_files"] = set()
-    w["touched_once"] = set()
+    w["tick_files"] = set(carry_files)
+    w["touched_once"] = set(carry_files)
     w["editors_acc"] = {}
     w["agents_acc"] = {}
     if keep_alive:
@@ -619,6 +645,11 @@ def reset_window(w, now_wall=None, now_mono=None, keep_alive=False, after_active
         w["started_mono"] = None
         w["last_activity"] = time.monotonic()
         w["silent_followup"] = 0
+        if not carry_fail:
+            w["tick_files"] = set()
+            w["touched_once"] = set()
+            w["saw_fail"] = False
+            w["open_fail"] = False
 
 def ensure_gitignore(repo):
     gi = repo / ".gitignore"
@@ -657,6 +688,7 @@ def make_watcher(path, project_id):
         "attr_hint": {},
         "edit_ticks": 0,
         "saw_fail": False,
+        "open_fail": False,
         "saw_pass_after_fail": False,
         "had_activity": False,
         "tick_files": set(),
