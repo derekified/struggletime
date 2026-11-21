@@ -56,10 +56,18 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("continue with slack", login.lower())
         s, settings = req(self.port, "GET", "/settings")
         self.assertEqual(s, 200)
-        for needle in ("sign in with slack", "connect github", "settings-rail", "set-country", "btn-delete-account"):
+        for needle in ("sign in with slack", "connect github", "settings-rail", "set-country", "btn-delete-account",
+                       "data-settings-tab=\"docs\"", "st-docs-template", "settings-docs-mount"):
             self.assertIn(needle, settings.lower())
         self.assertNotIn('id="side"', settings)
         self.assertNotIn("attach-project", settings)
+        s, docs = req(self.port, "GET", "/docs")
+        self.assertEqual(s, 200)
+        docs_l = docs.lower()
+        for needle in ("page-docs", "st-docs-template", "how hours are weighted", "privacy", "ed25519", "agplv3"):
+            self.assertIn(needle, docs_l)
+        app_js = req(self.port, "GET", "/app.js")[1]
+        self.assertIn("mountDocs", app_js)
         s, projects = req(self.port, "GET", "/projects")
         self.assertIn("proj-status", projects)
         self.assertIn("deleted repos", projects.lower())

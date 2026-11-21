@@ -13,6 +13,7 @@
     <a href="/home" data-top="home" data-nav-link data-nav="home" data-auth="required">home</a>
     <a href="/projects" data-top="projects" data-nav-link data-nav="projects" data-auth="required">projects</a>
     <a href="/builders" data-top="builders" data-nav-link data-nav="builders">builders</a>
+    <a href="/docs" data-top="docs" data-nav-link data-nav="docs">docs</a>
     <a href="/review" data-top="review" data-nav-link data-nav="review" data-auth="staff" hidden>review</a>
     <a href="/admin" data-top="admin" data-nav-link data-nav="admin" data-auth="staff" hidden>fraud</a>
     <a href="/settings" data-top="settings" data-nav-link data-nav="settings" data-auth="required">settings</a>
@@ -59,7 +60,7 @@
           <p class="lead">Quiet, private tracking across your projects. No screenshots, no keystrokes, just the loops that counted.</p>
           <div class="hero-cta">
             <a class="ui-btn" id="hero-primary" href="/login" data-nav-link><span class="nav-ico" data-glyph="slack"></span>continue with slack</a>
-            <a class="ui-btn ui-btn-ghost" id="hero-secondary" href="/builders" data-nav-link><span class="nav-ico" data-glyph="trophy"></span>see the builders board</a>
+            <a class="ui-btn ui-btn-ghost" id="hero-secondary" href="/docs" data-nav-link><span class="nav-ico" data-glyph="docs"></span>read the docs</a>
           </div>
         </div>
         <div class="hero-preview" aria-hidden="true" id="hero-preview">
@@ -280,6 +281,7 @@
         <aside class="settings-rail" role="tablist">
           <button type="button" class="settings-tab on" data-settings-tab="profile" role="tab"><span class="nav-ico" data-glyph="profile"></span> Profile</button>
           <button type="button" class="settings-tab" data-settings-tab="daemon" role="tab"><span class="nav-ico" data-glyph="terminal"></span> Daemon</button>
+          <button type="button" class="settings-tab" data-settings-tab="docs" role="tab"><span class="nav-ico" data-glyph="docs"></span> Docs</button>
           <button type="button" class="settings-tab" data-settings-tab="appearance" role="tab"><span class="nav-ico" data-glyph="contrast"></span> Appearance</button>
         </aside>
         <div class="settings-panels">
@@ -398,6 +400,9 @@ source /path/to/struggletime/daemon/hooks.sh
               <p class="sub" id="daemon-link-status">Daemon status: checking…</p>
             </div>
           </div>
+          <div class="settings-panel" id="settings-docs" hidden>
+            <div id="settings-docs-mount" class="docs-mount"></div>
+          </div>
           <div class="settings-panel" id="settings-appearance" hidden>
             <div class="ui-panel">
               <h2><span class="nav-ico" data-glyph="contrast"></span> theme</h2>
@@ -413,8 +418,234 @@ source /path/to/struggletime/daemon/hooks.sh
         </div>
       </div>
     </section>
+
+    <!-- DOCS (public) -->
+    <section class="page page-wide" id="page-docs">
+      <div class="page-head">
+        <div>
+          <h1>docs</h1>
+          <p class="sub">Everything you need to run, trust, and contribute to StruggleTime.</p>
+        </div>
+      </div>
+      <div id="docs-page-mount" class="docs-mount"></div>
+    </section>
   </main>
 </div>
+
+<template id="st-docs-template">
+  <div class="docs-shell">
+    <nav class="docs-toc" aria-label="Documentation sections">
+      <a href="#doc-overview">Overview</a>
+      <a href="#doc-quickstart">Quick start</a>
+      <a href="#doc-weighting">How hours weight</a>
+      <a href="#doc-privacy">Privacy</a>
+      <a href="#doc-daemon">Desktop daemon</a>
+      <a href="#doc-accounts">Accounts &amp; dashboard</a>
+      <a href="#doc-trust">Trust &amp; review</a>
+      <a href="#doc-api">API</a>
+      <a href="#doc-selfhost">Self-host</a>
+      <a href="#doc-contribute">Contribute</a>
+      <a href="#doc-troubleshoot">Troubleshooting</a>
+      <a href="#doc-license">License &amp; links</a>
+    </nav>
+    <article class="docs-article">
+      <section id="doc-overview" class="docs-section">
+        <h2>Overview</h2>
+        <p>StruggleTime is open-source AI time tracking that counts <b>productive struggle</b>, not idle activity. An hour an unattended agent runs is not an hour you learned anything. We detect the causal loop of real work:</p>
+        <pre class="install-code">(prompt | edit) → (test | build | run) → (follow-up edit | commit)</pre>
+        <p>Close that loop and the minute counts in full. Dump unread agent output and it counts at a fraction. Walk away and it fades to zero.</p>
+        <ul class="docs-list">
+          <li><b>Passive</b> — no timers; a desktop daemon watches git + shell metadata.</li>
+          <li><b>Private</b> — only counts leave your machine (no code, prompts, paths, or screenshots).</li>
+          <li><b>Trustworthy</b> — hash-chained buckets, optional Ed25519 install signatures, git anchors, reason-coded review.</li>
+          <li><b>AGPLv3</b> — fork it, self-host it, contribute formula calibrations and adapters.</li>
+        </ul>
+        <p class="sub">Repo: <a href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener">origin.cursor.com/derekified/struggletime</a> · Python 3.10+, stdlib core, Win/Mac/Linux.</p>
+      </section>
+
+      <section id="doc-quickstart" class="docs-section">
+        <h2>Quick start</h2>
+        <ol class="install-steps">
+          <li>
+            <b>Sign in</b>
+            <p class="sub">Use Slack on this site, claim a public handle, then generate an API key under Settings → Profile.</p>
+          </li>
+          <li>
+            <b>Clone &amp; install the daemon</b>
+            <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git
+cd struggletime
+sh daemon/install.sh          # Linux / macOS
+# Windows: powershell -ExecutionPolicy Bypass -File daemon\install.ps1</pre>
+          </li>
+          <li>
+            <b>Link your key &amp; track a repo</b>
+            <pre class="install-code">struggletime-helper apikey &lt;paste-key-here&gt;
+struggletime-helper start --repo ~/my-project
+struggletime-helper status</pre>
+            <p class="sub">Or use the tray: <em>set API key…</em> then start tracking. First bucket seals after ~5 minutes.</p>
+          </li>
+          <li>
+            <b>Optional shell hook</b> (tests/builds/AI CLIs with exit codes)
+            <pre class="install-code"># bash/zsh — add to ~/.bashrc or ~/.zshrc
+source /path/to/struggletime/daemon/hooks.sh
+
+# PowerShell — add to $PROFILE
+. C:\path\to\struggletime\daemon\hooks.ps1</pre>
+          </li>
+        </ol>
+        <p class="sub">Local full stack: <code>make check && make server</code> → http://127.0.0.1:18765</p>
+      </section>
+
+      <section id="doc-weighting" class="docs-section">
+        <h2>How hours are weighted</h2>
+        <p>Daemon and server share <code>src/verify.py</code> (<code>FORMULA_VERSION</code>). YAML under <code>weighting/</code> is a human-readable mirror — the Python engine is source of truth.</p>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>State</th><th>Weight</th><th>Meaning</th></tr></thead>
+            <tbody>
+              <tr><td>AI struggle / fail→fix→pass / closed loop</td><td>1.0×</td><td>You steered, checked, and steered again</td></tr>
+              <tr><td>AI writes + dwell + follow-up</td><td>0.85×</td><td>Agent wrote; you stayed and continued</td></tr>
+              <tr><td>Human edits, never executed</td><td>0.70×</td><td>Edits without a run/test</td></tr>
+              <tr><td>AI dump / stare, no follow-up</td><td>0.20×</td><td>Unread dump or idle stare</td></tr>
+              <tr><td>Silent follow-up</td><td>0.70 → 0</td><td>Decays over ~5–12 minutes without activity</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p>Billing uses active spans when known: <code>billable_secs = min(bucket_secs, active_secs)</code> for non-silent buckets. Every sealed bucket carries <code>formula_version</code>. Changing weights means a new version + calibration notes — never silent edits under the same version.</p>
+        <p class="sub">See <code>weighting/calibration-20.md</code> for labelled session agreement.</p>
+      </section>
+
+      <section id="doc-privacy" class="docs-section">
+        <h2>Privacy</h2>
+        <p>Classification happens on-device. The wire payload matches an allowlist (<code>schemas/heartbeat.schema.json</code>). Anything outside it — prompt text, commands, code, absolute paths — is rejected before chain verification.</p>
+        <ul class="docs-list">
+          <li>File paths become anonymized ids: <code>sha256(local_salt:path)</code></li>
+          <li>Shell hook records category, duration, and exit code — never arguments</li>
+          <li>Git: HEAD, dirty count, line totals — not commit messages or diffs</li>
+          <li><b>Logged ≠ submitted</b> — inspect the local ledger anytime before sync</li>
+        </ul>
+        <pre class="install-code">python3 daemon/tracker_inspect.py ~/my-project</pre>
+        <p class="sub">Do this once so you trust what leaves the machine.</p>
+      </section>
+
+      <section id="doc-daemon" class="docs-section">
+        <h2>Desktop daemon</h2>
+        <p>Layer-1 is a stdlib polling watcher (<code>daemon/daemon.py</code>) plus optional tray/helper. Same code on a 10-year-old Windows laptop and a new Mac.</p>
+        <ul class="docs-list">
+          <li><b>Files</b> — burst shape separates human edits from agent/formatter dumps</li>
+          <li><b>Shell</b> — via hooks; command <em>name</em> classified locally</li>
+          <li><b>Git</b> — HEAD + dirty + line totals every bucket</li>
+          <li><b>Seal</b> — every 5 min (<code>AITIME_BUCKET_SECS</code>): counts + <code>prev_hash</code> + optional Ed25519 signature → ledger → sync</li>
+        </ul>
+        <p>Config: <code>~/.config/struggletime/settings.json</code> (Windows: under APPDATA). Runtime events: <code>~/.aitime/</code>.</p>
+        <pre class="install-code">struggletime-helper start --repo ~/my-project
+struggletime-helper logs
+struggletime-helper sync
+make tray    # menu bar / system tray UI</pre>
+        <p>Layer-2 adapters in <code>adapters/</code> (VS Code, Claude Code, Codex wrap, OpenClaw) only enrich counts. If an adapter breaks, L1 still tracks.</p>
+        <p class="sub">More install detail: Settings → Daemon.</p>
+      </section>
+
+      <section id="doc-accounts" class="docs-section">
+        <h2>Accounts &amp; dashboard</h2>
+        <ul class="docs-list">
+          <li><b>Sign-in</b> — Slack OAuth; claim a handle; optional GitHub for private repos</li>
+          <li><b>Home</b> — weighted hours, streaks, weekly goal, friction timeline, filters</li>
+          <li><b>Projects</b> — create/link repos, see per-project stats and flags</li>
+          <li><b>Builders</b> — public leaderboard (opt out anytime under Profile privacy)</li>
+          <li><b>API key</b> — paste into tray or <code>struggletime-helper apikey</code>; regenerate/revoke in Profile</li>
+        </ul>
+        <p>Profiles are public by default. Weekly goal (weighted hours) is set under identity. Sample dashboard data: Konami code on Home toggles demo mode.</p>
+      </section>
+
+      <section id="doc-trust" class="docs-section">
+        <h2>Trust &amp; review</h2>
+        <p>Provenance is structural, not vibes:</p>
+        <ul class="docs-list">
+          <li><b>Hash chain</b> — <code>hash = SHA256(canonical_bucket ‖ prev_hash)</code>; rewrite breaks review</li>
+          <li><b>Ed25519 install keys</b> — per-machine pubkey registered on first sync; bad signatures rejected</li>
+          <li><b>Git anchors</b> — claimed hours sit next to HEAD/dirty/diff totals</li>
+          <li><b>Flags</b> — AI:human ratio, hours/KLOC-style outliers, chain/git mismatches</li>
+        </ul>
+        <p>Builders submit an evidence pack with an AI declaration. Staff review with reason codes:</p>
+        <pre class="install-code">NONE · UNATTENDED_AGENT_DUMP · IDLE_INFLATION · NO_TEST_ITERATION
+BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
+        <p>Trust colors: <span class="trust-dot trust-blue"></span>blue (unscored) · <span class="trust-dot trust-green"></span>green · <span class="trust-dot trust-yellow"></span>yellow · <span class="trust-dot trust-red"></span>red. Staff roles: viewer → reviewer → admin → superadmin. Fraud squad UI lives under <b>fraud</b> in the nav when you have admin.</p>
+      </section>
+
+      <section id="doc-api" class="docs-section">
+        <h2>API (essentials)</h2>
+        <p>JSON over HTTP. Session cookie or <code>Authorization: Bearer &lt;api-key&gt;</code>.</p>
+        <div class="docs-table-wrap">
+          <table class="docs-table">
+            <thead><tr><th>Route</th><th>Purpose</th></tr></thead>
+            <tbody>
+              <tr><td><code>POST /v1/buckets/batch</code></td><td>Ingest sealed buckets (daemon)</td></tr>
+              <tr><td><code>GET /v1/me/analytics</code></td><td>Dashboard series &amp; breakdowns</td></tr>
+              <tr><td><code>GET|POST /v1/projects</code></td><td>List / create projects</td></tr>
+              <tr><td><code>POST /v1/submissions</code></td><td>Freeze evidence pack (+ AI declaration)</td></tr>
+              <tr><td><code>POST /v1/submissions/:id/review</code></td><td>Staff approve / deflate / reject</td></tr>
+              <tr><td><code>GET /v1/admin/*</code></td><td>Staff overview, users, trust audit</td></tr>
+              <tr><td><code>POST /v1/admin/trust</code> · <code>/role</code></td><td>Set trust level / staff role</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="sub">Full route table and error codes: repo <code>docs/api.md</code>. Schema allowlist: <code>schemas/heartbeat.schema.json</code>.</p>
+      </section>
+
+      <section id="doc-selfhost" class="docs-section">
+        <h2>Self-host</h2>
+        <pre class="install-code">cp .env.example .env   # OAuth, webhook secrets, STRUGGLETIME_ADMINS=you:superadmin
+make server            # PORT=18765 BIND=0.0.0.0 for public
+# set OAUTH_REDIRECT_BASE to your public URL; register Slack/GitHub callbacks
+#   …/v1/auth/slack/callback  and  …/v1/auth/github/callback</pre>
+        <ul class="docs-list">
+          <li>SQLite by default (<code>SERVER_DB</code>); Postgres sketch in <code>schemas/server.sql</code></li>
+          <li>No LLM in the hot path — single VPS is enough at StruggleTime-scale write rates</li>
+          <li>Optional Slack webhook + GitHub push webhooks — see <code>docs/integrations.md</code></li>
+          <li>Bootstrap staff: <code>STRUGGLETIME_ADMINS=handle:admin,other:reviewer</code></li>
+        </ul>
+        <p class="sub">Deployment notes: <code>docs/deployment.md</code> · env template: <code>.env.example</code></p>
+      </section>
+
+      <section id="doc-contribute" class="docs-section">
+        <h2>Contribute</h2>
+        <pre class="install-code">make check    # before anything, and before you open a PR</pre>
+        <ol class="install-steps">
+          <li><b>Privacy is the product</b> — raw text, paths, prompts, commands, or pixels reaching the server are rejected on sight.</li>
+          <li><b>Weights are versioned</b> — new <code>formula_version</code> + calibration, never silent number changes.</li>
+          <li><b>Tests first for trust paths</b> — chain, allowlist, weighting, signatures.</li>
+          <li><b>Stdlib only</b> in <code>server/</code>, <code>daemon/</code>, <code>src/</code> unless a dependency earns its keep on old hardware.</li>
+        </ol>
+        <p>Good first work: harness adapters under <code>adapters/</code>, calibration sessions, trying to fake hours against your own server and reporting how.</p>
+      </section>
+
+      <section id="doc-troubleshoot" class="docs-section">
+        <h2>Troubleshooting</h2>
+        <ul class="docs-list">
+          <li><b>Empty dashboard</b> — wait for first 5‑min bucket; confirm API key + same server URL; <code>struggletime-helper status</code> / <code>tracker_inspect.py</code></li>
+          <li><b>422 chain broken</b> — ledger vs server disagree (DB reset or two machines, same project id). Fresh project id per machine, or reset both sides. This is tamper evidence working.</li>
+          <li><b>422 tampered / 400 allowlist</b> — bucket edited after seal, or non-allowlisted fields. Inspect locally.</li>
+          <li><b>Silent time fades</b> — intended decay; run or edit to reset. Undercounts are calibration data — report with an inspect dump.</li>
+          <li><b>Windows hook idle</b> — dot-source <code>hooks.ps1</code> in every session; filesystem tracking still works without it.</li>
+          <li><b>Port in use</b> — <code>PORT=18766 make server</code> and point the daemon at the same host.</li>
+        </ul>
+      </section>
+
+      <section id="doc-license" class="docs-section">
+        <h2>License &amp; links</h2>
+        <p>StruggleTime is <b>AGPLv3</b>. SPDX headers live on source files; see <code>LICENSE</code>.</p>
+        <ul class="docs-list">
+          <li><a href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener">Source repository</a></li>
+          <li>In-repo: <code>README.md</code> · <code>PITCH.md</code> · <code>CONTRIBUTING.md</code> · <code>docs/*.md</code></li>
+          <li>Architecture deep-dive: <code>docs/architecture.md</code></li>
+          <li>Formula mirror: <code>weighting/rules-v0.4.0.yaml</code></li>
+        </ul>
+        <p class="sub">Questions or breaks: open an issue on the repo, or bring an inspect dump when reporting undercounts.</p>
+      </section>
+    </article>
+  </div>
+</template>
 <script src="/ui.js"></script>
 <script src="/app.js"></script>
 </body></html>

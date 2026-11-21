@@ -315,6 +315,27 @@ h1{font-size:26px;margin:0 0 4px;letter-spacing:-.02em;font-weight:700}h2{font-s
 .settings-panel.on{display:flex}
 .settings-panel .ui-panel h2{margin:0 0 10px;display:flex;align-items:center;gap:8px;font-size:15px}
 .settings-panel .ui-panel h2 .nav-ico{margin-right:0;color:var(--accent)}
+.docs-mount{min-width:0}
+.docs-shell{display:grid;grid-template-columns:170px minmax(0,1fr);gap:18px;align-items:start}
+@media(max-width:860px){.docs-shell{grid-template-columns:1fr}}
+.docs-toc{position:sticky;top:72px;display:flex;flex-direction:column;gap:2px;padding:10px;background:var(--panel);border:1px solid var(--line);border-radius:12px}
+@media(max-width:860px){.docs-toc{position:static;flex-direction:row;flex-wrap:wrap;gap:6px}}
+.docs-toc a{color:var(--mut);font-size:12.5px;padding:6px 8px;border-radius:7px}
+.docs-toc a:hover{color:var(--ink);background:var(--panel2)}
+.docs-article{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px 20px;min-width:0}
+.docs-section{padding:6px 0 22px;border-bottom:1px solid var(--line);scroll-margin-top:84px}
+.docs-section:last-child{border-bottom:0;padding-bottom:4px}
+.docs-section h2{margin:0 0 10px;font-size:18px;letter-spacing:-.02em}
+.docs-section p{margin:0 0 10px;color:var(--ink);font-size:14.5px;line-height:1.55}
+.docs-section .sub{color:var(--mut)}
+.docs-list{margin:0 0 12px;padding-left:18px;display:flex;flex-direction:column;gap:6px;font-size:14.5px;line-height:1.5}
+.docs-list li::marker{color:var(--accent)}
+.docs-table-wrap{overflow:auto;margin:8px 0 12px;border:1px solid var(--line);border-radius:10px}
+.docs-table{width:100%;border-collapse:collapse;font-size:13px}
+.docs-table th,.docs-table td{padding:9px 11px;text-align:left;border-bottom:1px solid var(--line);vertical-align:top}
+.docs-table th{background:var(--panel2);color:var(--mut);font-weight:650;font-size:12px}
+.docs-table tr:last-child td{border-bottom:0}
+.docs-table code{font-size:12px}
 .form-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px}
 @media(max-width:640px){.form-grid{grid-template-columns:1fr}}
 .toggle-row{display:flex;gap:10px;align-items:flex-start;margin:8px 0;font-size:14px;color:var(--ink)}

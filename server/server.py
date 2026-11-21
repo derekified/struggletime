@@ -744,7 +744,7 @@ class H(BaseHTTPRequestHandler):
     def _get(self):
         parsed = urlparse(self.path); p = parsed.path.strip("/").split("/") if parsed.path.strip("/") else []
         c = db()
-        pages = ("home", "dashboard", "projects", "builders", "review", "admin", "settings", "login", "signout", "logout")
+        pages = ("home", "dashboard", "projects", "builders", "review", "admin", "settings", "docs", "login", "signout", "logout")
         if p == ["integrations"]:
             self.send_response(302); self.send_header("Location", "/settings"); self.end_headers(); return
         if p == ["dashboard"]:

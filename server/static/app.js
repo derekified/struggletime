@@ -79,9 +79,26 @@ const projSearch = {
   status: localStorage.getItem("st_proj_status") || "active",
 };
 const TZ_OFFSET = -new Date().getTimezoneOffset();
-const KNOWN = ["landing", "login", "home", "projects", "builders", "review", "admin", "settings"];
+const KNOWN = ["landing", "login", "home", "projects", "builders", "docs", "review", "admin", "settings"];
 const PROTECTED = new Set(["home", "projects", "review", "admin", "settings"]);
 const STAFF_PAGES = new Set(["review", "admin"]);
+
+function mountDocs(into) {
+  const root = typeof into === "string" ? $(into) : into;
+  const tpl = $("st-docs-template");
+  if (!root || !tpl) return;
+  root.replaceChildren(tpl.content.cloneNode(true));
+  hydrateNavIcons(root);
+  root.querySelectorAll(".docs-toc a[href^='#']").forEach((a) => {
+    a.addEventListener("click", (e) => {
+      const id = a.getAttribute("href").slice(1);
+      const target = root.querySelector("#" + CSS.escape(id)) || document.getElementById(id);
+      if (!target) return;
+      e.preventDefault();
+      target.scrollIntoView({ behavior: "smooth", block: "start" });
+    });
+  });
+}
 
 function pathToPage(pathname) {
   const raw = (pathname || "/").replace(/\/$/, "") || "/";
@@ -204,6 +221,7 @@ function showPage(page, { push = false, load = true } = {}) {
   paintNavAuth();
   paintLogin();
   if (page === "settings") paintSettingsForm();
+  if (page === "docs") mountDocs("docs-page-mount");
   if (load) loadActivePageData();
 }
 
@@ -1460,6 +1478,8 @@ async function loadActivePageData() {
       await loadReviewQueue();
     } else if (activePage === "admin") {
       await loadAdminPage();
+    } else if (activePage === "docs") {
+      mountDocs("docs-page-mount");
     }
   } catch (err) {
     console.error("loadActivePageData failed", err);
@@ -1979,15 +1999,9 @@ function paintHeroCta() {
     }
   }
   if (secondary) {
-    if (meProfile?.handle) {
-      secondary.href = "/projects";
-      secondary.innerHTML = "";
-      secondary.append(icon("briefcase", { size: 16 }), document.createTextNode("your projects"));
-    } else {
-      secondary.href = "/builders";
-      secondary.innerHTML = "";
-      secondary.append(icon("trophy", { size: 16 }), document.createTextNode("see the builders board"));
-    }
+    secondary.href = "/docs";
+    secondary.innerHTML = "";
+    secondary.append(icon("docs", { size: 16 }), document.createTextNode("read the docs"));
   }
 }
 
@@ -2148,6 +2162,7 @@ document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
       p.classList.toggle("on", on);
       p.hidden = !on;
     });
+    if (id === "docs") mountDocs("settings-docs-mount");
     hydrateNavIcons($("settings-main") || document);
   });
 });
