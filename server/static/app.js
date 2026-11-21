@@ -10,33 +10,51 @@ const fmtH = (h) => {
 const token = () => localStorage.getItem("st_token") || "";
 const setToken = (t) => { if (t) localStorage.setItem("st_token", t); else localStorage.removeItem("st_token"); };
 const authHdr = () => (token() ? { Authorization: "Bearer " + token() } : {});
+const TRANSIENT_HTTP = new Set([0, 408, 425, 429, 500, 502, 503, 504]);
+function sleep(ms) { return new Promise((r) => setTimeout(r, ms)); }
+
 async function j(u, o = {}) {
-  const { cookieOnly, noCookieRetry, timeout = 12000, ...fetchOpts } = o;
-  const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), timeout);
-  try {
-    const headers = { ...(fetchOpts.headers || {}) };
-    if (!cookieOnly) Object.assign(headers, authHdr());
-    else delete headers.Authorization;
-    const r = await fetch(u, {
-      credentials: "same-origin",
-      ...fetchOpts,
-      headers,
-      signal: fetchOpts.signal || ctrl.signal,
-    });
-    let status = r.status;
-    let body = await r.json().catch(() => ({}));
-    // Stale localStorage bearer must not blank projects/analytics when the Slack cookie is valid
-    if (status === 401 && token() && !cookieOnly && !noCookieRetry) {
-      setToken("");
-      return j(u, { ...o, cookieOnly: true, noCookieRetry: true });
+  const { cookieOnly, noCookieRetry, timeout = 15000, retries = 2, ...fetchOpts } = o;
+  let last = [0, { error: "network error" }];
+  for (let attempt = 0; attempt <= retries; attempt++) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeout);
+    try {
+      const headers = { ...(fetchOpts.headers || {}) };
+      if (!cookieOnly) Object.assign(headers, authHdr());
+      else delete headers.Authorization;
+      const r = await fetch(u, {
+        credentials: "same-origin",
+        ...fetchOpts,
+        headers,
+        signal: fetchOpts.signal || ctrl.signal,
+      });
+      let status = r.status;
+      let body = await r.json().catch(() => ({}));
+      // Stale localStorage bearer must not blank projects/analytics when the Slack cookie is valid
+      if (status === 401 && token() && !cookieOnly && !noCookieRetry) {
+        setToken("");
+        return j(u, { ...o, cookieOnly: true, noCookieRetry: true, retries: 0 });
+      }
+      if (TRANSIENT_HTTP.has(status) && attempt < retries && fetchOpts.method !== "POST") {
+        last = [status, body?.error ? body : { error: `HTTP ${status}` }];
+        await sleep(180 * (attempt + 1) + Math.floor(Math.random() * 120));
+        continue;
+      }
+      return [status, body];
+    } catch (err) {
+      const timedOut = err && (err.name === "AbortError" || err.code === 20);
+      last = [0, { error: timedOut ? "request timed out" : "network error" }];
+      if (attempt < retries && fetchOpts.method !== "POST") {
+        await sleep(220 * (attempt + 1) + Math.floor(Math.random() * 150));
+        continue;
+      }
+      return last;
+    } finally {
+      clearTimeout(timer);
     }
-    return [status, body];
-  } catch (_) {
-    return [0, { error: "network error" }];
-  } finally {
-    clearTimeout(timer);
   }
+  return last;
 }
 
 function hydrateNavIcons(root = document) {
@@ -54,6 +72,9 @@ let lbPeriod = "week", lbQuery = "";
 let analytics = null, projectsCache = [];
 let meLoaded = false, authStatusLoaded = false, booted = false;
 let softRefreshQueued = false;
+let pageLoadGen = 0;
+let refreshChain = Promise.resolve();
+let refreshRunning = false;
 const STALE_FILTER = new Set(["untracked", "local-daemon", "local_daemon", ""]);
 function sanitizeFilter(v, fallback = "all") {
   const s = String(v == null ? "" : v).trim();
@@ -316,7 +337,8 @@ document.addEventListener("click", (e) => {
 });
 window.addEventListener("popstate", () => showPage(pathToPage(location.pathname), { push: false }));
 
-showPage(activePage, { push: false });
+// Paint shell immediately; defer data until auth resolves (avoids empty-race before /v1/auth/me).
+showPage(activePage, { push: false, load: false });
 hydrateNavIcons();
 
 const theme = localStorage.getItem("st_theme") || "lime";
@@ -992,9 +1014,16 @@ async function loadMe(force = false) {
     if ($("nav-flag")) $("nav-flag").textContent = "";
     return;
   }
-  if (s === 200) meProfile = r;
-  else if (!meProfile) meProfile = null;
-  meLoaded = true;
+  if (s === 200) {
+    meProfile = r;
+    meLoaded = true;
+    return;
+  }
+  // Transient failure — keep prior session; do not flip guests into a sticky signed-out state
+  console.warn("loadMe transient", s, r?.error || r);
+  if (!meLoaded && !meProfile) {
+    // First paint failed: leave meLoaded false so boot retries; avoid blanking protected routes
+  }
 }
 
 async function loadAuthStatus(force = false) {
@@ -1242,12 +1271,14 @@ async function restoreProject(p) {
   refresh();
 }
 
-async function renderLeaderboard() {
+async function renderLeaderboard(gen = pageLoadGen) {
   const box = $("lb-list"); if (!box) return;
   try {
     const [s, r] = await j("/v1/leaderboard?period=" + encodeURIComponent(lbPeriod));
+    if (gen !== pageLoadGen) return;
     if (s !== 200) {
-      box.replaceChildren(el("div", { className: "ui-empty" }, [document.createTextNode(r?.error || "Could not load leaderboard")]));
+      const detail = r?.error || (s === 0 ? "network/timeout" : `HTTP ${s}`);
+      box.replaceChildren(el("div", { className: "ui-empty" }, [document.createTextNode(detail || "Could not load leaderboard")]));
       if ($("lb-meta")) $("lb-meta").textContent = "";
       return;
     }
@@ -1287,16 +1318,19 @@ async function renderLeaderboard() {
   }
 }
 
-async function loadReviewQueue() {
+async function loadReviewQueue(gen = pageLoadGen) {
   const box = $("review-list"); if (!box) return;
+  if (!meLoaded) return;
   if (!isStaff()) {
     box.innerHTML = '<p class="ui-empty">staff only — ask an admin for reviewer access</p>';
     return;
   }
   try {
     const [ss, sr] = await j("/v1/submissions");
+    if (gen !== pageLoadGen) return;
     if (ss !== 200) {
-      box.innerHTML = `<p class="ui-empty">${esc(sr?.error || "could not load queue")}</p>`;
+      const detail = sr?.error || (ss === 0 ? "network/timeout" : `HTTP ${ss}`);
+      box.innerHTML = `<p class="ui-empty">${esc(detail || "could not load queue")}</p>`;
       return;
     }
     const subs = (sr.submissions || []).filter((s) => s.status === "pending");
@@ -1308,7 +1342,7 @@ async function loadReviewQueue() {
       const hours = fmt(s.claimed_weighted_hours);
       const flags = (s.flags || []).length ? `<span class="tag bad">${esc((s.flags || []).slice(0, 3).join(", "))}</span>` : "";
       const evidence = [
-        s.bucket_count ? `${s.bucket_count} buckets` : null,
+        s.bucket_count != null ? `${s.bucket_count} buckets` : null,
         s.chain_ok === false ? "chain broken" : (s.chain_ok ? "chain ok" : null),
         s.evidence_bytes ? `${Math.round(s.evidence_bytes / 1024)} KB meta` : null,
       ].filter(Boolean).join(" · ");
@@ -1343,7 +1377,7 @@ async function submitReview(id, approvedSecs, reason) {
   await loadReviewQueue();
 }
 
-async function loadAdminPage() {
+async function loadAdminPage(gen = pageLoadGen) {
   const kpi = $("admin-kpi");
   const usersBox = $("admin-users");
   const auditBox = $("admin-audit");
@@ -1351,12 +1385,14 @@ async function loadAdminPage() {
     if (usersBox) usersBox.innerHTML = '<p class="ui-empty">admin role required</p>';
     return;
   }
+  if (!meLoaded) return;
   const q = (($("admin-user-q") && $("admin-user-q").value) || "").trim();
   const [[os, ov], [us, ur], [as, ar]] = await Promise.all([
     j("/v1/admin/overview"),
     j("/v1/admin/users" + (q ? `?q=${encodeURIComponent(q)}` : "")),
     j("/v1/admin/trust-audit"),
   ]);
+  if (gen !== pageLoadGen) return;
   if (kpi) {
     if (os !== 200) kpi.innerHTML = `<div class="kpi"><div class="n">—</div><div class="l">${esc(ov?.error || "error")}</div></div>`;
     else {
@@ -1537,26 +1573,30 @@ function paintFakeBadge() {
  * Boot and every navigation must use this same function.
  */
 async function loadActivePageData() {
+  const gen = ++pageLoadGen;
   booted = true;
   softRefreshQueued = false;
+  const page = activePage;
   try {
-    if (activePage === "home") {
-      await loadAnalytics();
+    if (page === "home") {
+      await loadAnalytics(gen);
+      if (gen !== pageLoadGen || activePage !== page) return;
       if (!fakeStatsMode && isSignedIn()) await drawFriction();
-    } else if (activePage === "projects") {
-      await loadProjectsView();
-    } else if (activePage === "builders") {
-      await renderLeaderboard();
-    } else if (activePage === "review") {
-      await loadReviewQueue();
-    } else if (activePage === "admin") {
-      await loadAdminPage();
-    } else if (activePage === "docs") {
+    } else if (page === "projects") {
+      await loadProjectsView(gen);
+    } else if (page === "builders") {
+      await renderLeaderboard(gen);
+    } else if (page === "review") {
+      await loadReviewQueue(gen);
+    } else if (page === "admin") {
+      await loadAdminPage(gen);
+    } else if (page === "docs") {
       mountDocs("docs-page-mount");
     }
   } catch (err) {
     console.error("loadActivePageData failed", err);
   }
+  if (gen !== pageLoadGen) return;
   paintHeroCta();
   paintFakeBadge();
 }
@@ -1849,27 +1889,37 @@ function analyticsHours(a) {
   return Number(a?.total_hours || a?.weighted_hours || 0);
 }
 
-async function loadAnalytics() {
+async function loadAnalytics(gen = pageLoadGen) {
   // fakeStatsMode ON → sample; OFF (default / Konami off) → real API paint
   if (fakeStatsMode && activePage === "home") {
     paintHomeAnalytics(buildFakeAnalytics());
     return;
   }
+  if (!meLoaded) {
+    // Auth not ready yet — avoid painting a fake signed-out empty dashboard
+    return;
+  }
+  if (!isSignedIn()) {
+    if ($("kpi-strip")) $("kpi-strip").replaceChildren(compactEmpty("sign in to see your hours"));
+    if ($("recent-buckets")) $("recent-buckets").replaceChildren(compactEmpty("sign in to see buckets"));
+    if ($("rank-projects")) $("rank-projects").replaceChildren(compactEmpty("sign in to see projects"));
+    return;
+  }
   let [s, a] = await j("/v1/me/analytics?" + analyticsQS());
+  if (gen !== pageLoadGen) return;
   // Sticky filters can zero analytics while streak still looks fine — recover once.
   let empty = s === 200 && a && analyticsHours(a) === 0;
   if (empty && (profileHasActivity() || !filtersAreDefault())) {
     resetDashboardFilters({ range: filters.range === "today" ? "7d" : (filters.range || "7d") });
-    if (filtersAreDefault() && filters.range !== "all" && analyticsHours(a) === 0) {
-      // still empty on defaults — try all-time once
-    }
     const [s2, a2] = await j("/v1/me/analytics?" + analyticsQS());
+    if (gen !== pageLoadGen) return;
     if (s2 === 200 && a2 && analyticsHours(a2) > 0) {
       s = s2; a = a2;
       toast("Cleared filters that hid your hours", { kind: "info" });
     } else if (s2 === 200 && a2 && analyticsHours(a2) === 0 && filters.range !== "all") {
       resetDashboardFilters({ range: "all" });
       const [s3, a3] = await j("/v1/me/analytics?" + analyticsQS());
+      if (gen !== pageLoadGen) return;
       if (s3 === 200 && a3 && analyticsHours(a3) > 0) {
         s = s3; a = a3;
         toast("Cleared filters that hid your hours", { kind: "info" });
@@ -1882,6 +1932,7 @@ async function loadAnalytics() {
       range: "7d", project: "all", language: "all", os: "all", editor: "all", category: "all",
       tz_offset: String(TZ_OFFSET),
     }).toString());
+    if (gen !== pageLoadGen) return;
     if (s2 === 200 && a2 && analyticsHours(a2) > 0) {
       resetDashboardFilters({ range: "7d" });
       s = s2; a = a2;
@@ -1889,14 +1940,20 @@ async function loadAnalytics() {
     }
   }
   if (s !== 200 || !a || typeof a !== "object") {
+    const detail = (a && a.error) || (s === 0 ? "network/timeout" : `HTTP ${s}`);
+    console.warn("loadAnalytics failed", s, a);
+    // Keep last good paint on transient blips — don't blank the dashboard
+    if (analytics && TRANSIENT_HTTP.has(s) && s !== 401) {
+      toast(`Dashboard refresh failed (${detail})`, { kind: "error" });
+      return;
+    }
     if ($("kpi-strip")) {
       $("kpi-strip").replaceChildren(compactEmpty(
-        s === 0 ? "could not reach server" : s === 401 ? "sign in to see your hours" : "could not load analytics"
+        s === 0 ? `could not reach server (${detail})` : s === 401 ? "sign in to see your hours" : `could not load analytics (${detail})`
       ));
     }
     if ($("recent-buckets")) $("recent-buckets").replaceChildren(compactEmpty("could not load buckets"));
     if ($("rank-projects")) $("rank-projects").replaceChildren(compactEmpty(s === 401 ? "sign in to see projects" : "could not load projects"));
-    console.warn("loadAnalytics failed", s, a);
     return;
   }
   paintHomeAnalytics(a);
@@ -2001,20 +2058,32 @@ function renderProjectCards(list, rangeAnalytics) {
   }));
 }
 
-async function loadProjectsView() {
+async function loadProjectsView(gen = pageLoadGen) {
   const grid = $("project-grid");
   try {
+    if (!meLoaded) return;
+    if (!isSignedIn()) {
+      renderProjectCards([], null);
+      return;
+    }
     const [ps, pr] = await j("/v1/projects");
+    if (gen !== pageLoadGen) return;
     if (ps === 401) {
       console.warn("projects 401 — session missing");
       renderProjectCards([], null);
       return;
     }
     if (ps !== 200) {
+      const detail = (pr && pr.error) || `HTTP ${ps}`;
       console.warn("projects failed", ps, pr);
+      if (projectsCache.length && TRANSIENT_HTTP.has(ps)) {
+        toast(`Projects refresh failed (${detail})`, { kind: "error" });
+        renderProjectCards(projectsCache, analytics);
+        return;
+      }
       if (grid) {
         grid.replaceChildren(el("div", { className: "ui-panel" }, [
-          empty(pr.error || "Could not load projects"),
+          empty(detail || "Could not load projects"),
         ]));
       }
       return;
@@ -2023,6 +2092,7 @@ async function loadProjectsView() {
     window._projects = projectsCache;
     let range = projSearch.range || "7d";
     let [as, ar] = await j(`/v1/me/analytics?range=${encodeURIComponent(range)}&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
+    if (gen !== pageLoadGen) return;
     // Same streak-vs-empty trap: today+TZ can zero project hours while cards still exist
     if (as === 200 && ar && Number(ar.total_hours || 0) === 0 && range === "today" && projectsCache.some((p) => Number(p.weighted_hours || p.buckets || 0) > 0)) {
       range = "7d";
@@ -2030,10 +2100,16 @@ async function loadProjectsView() {
       try { localStorage.setItem("st_proj_range", "7d"); } catch (_) {}
       if ($("proj-range")) $("proj-range").value = "7d";
       [as, ar] = await j(`/v1/me/analytics?range=7d&project=all&language=all&os=all&editor=all&category=all&tz_offset=${TZ_OFFSET}`);
+      if (gen !== pageLoadGen) return;
     }
     renderProjectCards(projectsCache, as === 200 ? ar : null);
   } catch (err) {
     console.error("loadProjectsView failed", err);
+    if (projectsCache.length) {
+      toast("Projects refresh failed", { kind: "error" });
+      renderProjectCards(projectsCache, analytics);
+      return;
+    }
     if (grid) {
       grid.replaceChildren(el("div", { className: "ui-panel" }, [
         empty("Could not load projects"),
@@ -2114,42 +2190,57 @@ function paintHeroCta() {
 }
 
 async function refresh({ forceAuth = false } = {}) {
-  await loadAuthStatus(forceAuth);
-  await loadMe(forceAuth);
-  paintAccount();
-  // Always re-fetch daemon link status (never paint banner from stale cache alone)
-  if (isSignedIn()) await refreshApiKeyStatus();
-  else { daemonLinkInfo = null; paintDaemonBanners(); }
+  // Serialize overlapping refresh/interval/navigation so a slow response can't blank a newer paint
+  const run = async () => {
+    refreshRunning = true;
+    try {
+      await loadAuthStatus(forceAuth);
+      await loadMe(forceAuth);
+      if (!meLoaded) {
+        await sleep(250);
+        await loadMe(true);
+      }
+      paintAccount();
+      if (isSignedIn()) await refreshApiKeyStatus();
+      else { daemonLinkInfo = null; paintDaemonBanners(); }
 
-  booted = true;
-  if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
-    showPage("landing", { push: true, load: false });
-  }
+      booted = true;
+      if (PROTECTED.has(activePage) && meLoaded && !isSignedIn() && !pendingAuthCode()) {
+        showPage("landing", { push: true, load: false });
+      }
 
-  const [os] = await j("/v1/overview");
-  const [ps, pr] = await j("/v1/projects");
-  if ($("live-txt")) {
-    if (os !== 200) { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--danger)"; }
-    else { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--accent)"; }
-  }
+      const [os] = await j("/v1/overview");
+      const [ps, pr] = await j("/v1/projects");
+      if ($("live-txt")) {
+        if (os !== 200) { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--danger)"; }
+        else { $("live-txt").textContent = "●"; $("live-txt").style.color = "var(--accent)"; }
+      }
 
-  // Never wipe a good cache with an auth failure (looks like projects were deleted)
-  if (ps === 200) {
-    projectsCache = pr.projects || [];
-    window._projects = projectsCache;
-  }
-  const projs = projectsCache;
-  fillAttachProjects();
-  const withData = projs.filter((p) => p.buckets > 0);
-  if (!selected && withData.length) selected = withData[0].id;
-  if ($("proj-sel")) {
-    $("proj-sel").innerHTML = withData.length
-      ? withData.map((p) => `<option value="${esc(p.id)}" ${p.id === selected ? "selected" : ""}>${esc(p.name || p.id)}</option>`).join("")
-      : '<option value="">no projects yet</option>';
-  }
+      // Never wipe a good cache with an auth failure (looks like projects were deleted)
+      if (ps === 200) {
+        projectsCache = pr.projects || [];
+        window._projects = projectsCache;
+      } else if (TRANSIENT_HTTP.has(ps) && projectsCache.length) {
+        console.warn("projects refresh transient", ps, pr?.error);
+      }
+      const projs = projectsCache;
+      fillAttachProjects();
+      const withData = projs.filter((p) => p.buckets > 0);
+      if (!selected && withData.length) selected = withData[0].id;
+      if ($("proj-sel")) {
+        $("proj-sel").innerHTML = withData.length
+          ? withData.map((p) => `<option value="${esc(p.id)}" ${p.id === selected ? "selected" : ""}>${esc(p.name || p.id)}</option>`).join("")
+          : '<option value="">no projects yet</option>';
+      }
 
-  // Real data for the active page — same function Konami OFF uses
-  await loadActivePageData();
+      await loadActivePageData();
+    } finally {
+      refreshRunning = false;
+    }
+  };
+  const queued = refreshChain.then(run, run);
+  refreshChain = queued.catch(() => {});
+  return queued;
 }
 
 /* wire controls */
@@ -2423,9 +2514,13 @@ if ($("admin-user-q")) {
     await loadActivePageData();
   } else if (PROTECTED.has(activePage) && meLoaded && !isSignedIn()) {
     showPage("landing", { push: true, load: false });
-  } else {
-    // Ensure real data once more after auth (Konami-OFF path) even if refresh raced
-    await loadActivePageData();
   }
-  setInterval(() => refresh({ forceAuth: false }), 15000);
+  // Skip a redundant third loadActivePageData — refresh already hydrated the active route.
+  setInterval(() => {
+    if (refreshRunning || document.hidden) return;
+    refresh({ forceAuth: false });
+  }, 15000);
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) refresh({ forceAuth: false });
+  });
 })();

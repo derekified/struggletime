@@ -246,10 +246,43 @@ class _HeadSink:
     def __getattr__(self, name):
         return getattr(self._real, name)
 
+def _configure_sqlite(c):
+    """WAL + busy timeout so concurrent reads don't stall the whole app."""
+    try:
+        c.execute("PRAGMA journal_mode=WAL")
+        c.execute("PRAGMA synchronous=NORMAL")
+        c.execute("PRAGMA busy_timeout=8000")
+        c.execute("PRAGMA temp_store=MEMORY")
+    except sqlite3.Error:
+        pass
+
+def _ensure_indexes(c):
+    c.executescript("""
+    CREATE INDEX IF NOT EXISTS idx_bucket_user_wall ON bucket(user_id, bucket_start_wall);
+    CREATE INDEX IF NOT EXISTS idx_bucket_project_wall ON bucket(project_id, bucket_start_wall);
+    CREATE INDEX IF NOT EXISTS idx_bucket_project_user ON bucket(project_id, user_id);
+    CREATE INDEX IF NOT EXISTS idx_session_expires ON session(expires_at);
+    CREATE INDEX IF NOT EXISTS idx_submission_user ON submission(user_id);
+    CREATE INDEX IF NOT EXISTS idx_submission_status ON submission(status);
+    CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner);
+    """)
+
+def chain_link_errors(rows):
+    """Fast chain check from (hash, prev_hash) rows — no payload parse."""
+    errors, prev = [], GENESIS
+    for i, row in enumerate(rows):
+        h = row["hash"] if isinstance(row, sqlite3.Row) else row[0]
+        ph = row["prev_hash"] if isinstance(row, sqlite3.Row) else row[1]
+        if ph != prev:
+            errors.append(f"bucket {i}: prev_hash mismatch (chain broken)")
+        prev = h
+    return errors
+
 def db():
     global _CONN
     if _CONN is not None: return _CONN
     c = sqlite3.connect(DB, timeout=10, check_same_thread=False); c.row_factory = sqlite3.Row
+    _configure_sqlite(c)
     c.executescript("""
     CREATE TABLE IF NOT EXISTS bucket(
       bucket_id TEXT PRIMARY KEY, user_id TEXT, project_id TEXT, bucket_start_wall INT,
@@ -313,6 +346,7 @@ def db():
     ):
         if col not in pcols: c.execute(f"ALTER TABLE project ADD COLUMN {col} {spec}")
     apply_admin_env(c)
+    _ensure_indexes(c)
     c.commit()
     _CONN = c; return c
 
@@ -959,31 +993,48 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json(401, {"error": "reconnect github to grant repo access", "reconnect": True})
             known = {r["repo_url"] for r in c.execute("SELECT repo_url FROM project WHERE repo_url IS NOT NULL")}
             known_ids = {r["id"] for r in c.execute("SELECT id FROM project")}
+            gh_login = link["github_login"]
+            had_user_token = bool(link and "github_token" in link.keys() and link["github_token"])
+            api = oauth_config("github")["api"]
+            hdrs = {"Accept": "application/vnd.github+json", "User-Agent": "struggletime",
+                    "Authorization": f"Bearer {token}"}
+            # Release the global DB lock during outbound GitHub I/O so dashboard/auth
+            # fetches are not blocked for the full multi-page repos crawl.
+            _LOCK.release()
+            repos, fetch_err, http_code = [], None, None
             try:
-                api = oauth_config("github")["api"]
-                hdrs = {"Accept": "application/vnd.github+json", "User-Agent": "struggletime",
-                        "Authorization": f"Bearer {token}"}
-                repos, page = [], 1
+                page = 1
                 while page <= 10:
                     chunk = http_json(f"{api}/user/repos?per_page=100&page={page}&sort=updated&affiliation=owner,collaborator,organization_member", headers=hdrs)
                     if not isinstance(chunk, list) or not chunk: break
                     repos.extend(chunk); page += 1
                     if len(chunk) < 100: break
             except urllib.error.HTTPError as e:
-                # Expired / revoked OAuth token — clear it so Settings shows reconnect
-                if e.code in (401, 403) and link and "github_token" in link.keys() and link["github_token"]:
+                http_code = e.code
+                fetch_err = e
+            except Exception as e:
+                fetch_err = e
+            finally:
+                _LOCK.acquire()
+            if fetch_err is not None:
+                if http_code in (401, 403) and had_user_token:
                     try:
                         c.execute("UPDATE link SET github_token=NULL WHERE handle=?", (handle,))
                         c.commit()
                     except Exception:
                         pass
-                return self.send_json(401 if e.code in (401, 403) else 502, {
-                    "error": "github access expired — reconnect github in settings",
-                    "reconnect": True,
-                    "status": e.code,
-                })
-            except Exception as e:
-                return self.send_json(502, {"error": f"github repos fetch failed: {type(e).__name__}: {e}"})
+                    return self.send_json(401, {
+                        "error": "github access expired — reconnect github in settings",
+                        "reconnect": True,
+                        "status": http_code,
+                    })
+                if http_code:
+                    return self.send_json(502, {
+                        "error": "github access expired — reconnect github in settings",
+                        "reconnect": True,
+                        "status": http_code,
+                    })
+                return self.send_json(502, {"error": f"github repos fetch failed: {type(fetch_err).__name__}: {fetch_err}"})
             out = []
             for r in repos:
                 url = r.get("html_url") or f"https://github.com/{r.get('full_name')}"
@@ -991,7 +1042,7 @@ class H(BaseHTTPRequestHandler):
                 out.append({"id": pid, "name": r.get("name") or pid, "full_name": r.get("full_name"),
                             "repo_url": url, "private": bool(r.get("private")), "description": r.get("description") or "",
                             "updated_at": r.get("updated_at"), "already_added": url in known or pid in known_ids})
-            return self.send_json(200, {"github_login": link["github_login"], "repos": out})
+            return self.send_json(200, {"github_login": gh_login, "repos": out})
         if p == ["v1", "users"]:
             out = []
             for u in c.execute("SELECT handle,is_public FROM user WHERE is_public=1"):
@@ -1170,26 +1221,27 @@ class H(BaseHTTPRequestHandler):
             who = self.auth_handle(c)
             if not who: return self.send_json(401, {"error": "sign in required"})
             if is_staff(c, who):
-                rows = c.execute("SELECT * FROM submission ORDER BY rowid DESC").fetchall()
+                rows = c.execute("SELECT * FROM submission ORDER BY rowid DESC LIMIT 200").fetchall()
             else:
-                rows = c.execute("SELECT * FROM submission WHERE user_id=? ORDER BY rowid DESC", (who,)).fetchall()
+                rows = c.execute("SELECT * FROM submission WHERE user_id=? ORDER BY rowid DESC LIMIT 100", (who,)).fetchall()
             out = []
             for r in rows:
                 item = {**dict(r), "flags": json.loads(r["flags"]),
                         "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4)}
-                brows = c.execute(
-                    "SELECT payload FROM bucket WHERE project_id=? AND user_id=? ORDER BY bucket_start_wall",
+                # Cheap audit fields — COUNT + hash-link check (no full payload scan under the global lock)
+                n = c.execute(
+                    "SELECT COUNT(*) AS n FROM bucket WHERE project_id=? AND user_id=?",
+                    (r["project_id"], r["user_id"]),
+                ).fetchone()["n"]
+                item["bucket_count"] = int(n or 0)
+                hrefs = c.execute(
+                    "SELECT hash, prev_hash FROM bucket WHERE project_id=? AND user_id=? ORDER BY bucket_start_wall",
                     (r["project_id"], r["user_id"]),
                 ).fetchall()
-                buckets = []
-                for br in brows:
-                    try: buckets.append(json.loads(br["payload"]))
-                    except Exception: pass
-                item["bucket_count"] = len(buckets)
-                item["evidence_bytes"] = len(json.dumps(buckets).encode()) if buckets else 0
-                cerrs = verify_chain(buckets) if buckets else []
-                item["chain_ok"] = not cerrs if buckets else None
+                cerrs = chain_link_errors(hrefs) if hrefs else []
+                item["chain_ok"] = (not cerrs) if hrefs else None
                 item["chain_errors"] = cerrs[:5]
+                item["evidence_bytes"] = None  # full size on detail GET only
                 out.append(item)
             return self.send_json(200, {"submissions": out})
         if len(p) == 3 and p[:2] == ["v1", "submissions"]:
