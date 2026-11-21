@@ -420,7 +420,7 @@ source /path/to/struggletime/daemon/hooks.sh
     </section>
 
     <!-- DOCS (public OSS project docs) -->
-    <section class="page page-wide" id="page-docs">
+    <section class="page" id="page-docs">
       <div id="docs-page-mount" class="docs-mount"></div>
     </section>
   </main>
@@ -428,71 +428,73 @@ source /path/to/struggletime/daemon/hooks.sh
 
 <template id="st-docs-template">
   <div class="docs-project">
-    <header class="docs-hero">
-      <div class="docs-hero-brand">
-        <span class="docs-hero-mark" aria-hidden="true">s</span>
-        <div>
-          <p class="docs-kicker">open source · AGPLv3</p>
-          <h1 class="docs-title">StruggleTime</h1>
-          <p class="docs-tagline">AI time tracking that counts productive struggle, not activity. Passive, private, hash-chained — fork it, self-host it, calibrate it.</p>
+    <div class="page-head">
+      <div>
+        <p class="eyebrow"><span class="nav-ico" data-glyph="docs"></span> open source · AGPLv3</p>
+        <div class="page-head-row">
+          <span class="mark" aria-hidden="true">s</span>
+          <h1>StruggleTime</h1>
         </div>
-      </div>
-      <div class="docs-badges" aria-label="project badges">
-        <span class="docs-badge">AGPL-3.0</span>
-        <span class="docs-badge">Python 3.10+</span>
-        <span class="docs-badge">stdlib core</span>
-        <span class="docs-badge">Win · Mac · Linux</span>
-        <span class="docs-badge">no LLM hot path</span>
-      </div>
-      <div class="docs-hero-actions">
-        <a class="ui-btn" href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener">view repository</a>
-        <button type="button" class="ui-btn ui-btn-ghost" data-docs-copy="git clone https://origin.cursor.com/derekified/struggletime.git">copy clone URL</button>
-        <a class="ui-btn ui-btn-ghost" href="/login" data-nav-link>try the hosted app</a>
-      </div>
-      <pre class="install-code docs-clone">git clone https://origin.cursor.com/derekified/struggletime.git
+        <p class="lead docs-lead">AI time tracking that counts productive struggle, not activity. Passive, private, hash-chained — fork it, self-host it, calibrate it.</p>
+        <div class="docs-pills" aria-label="project badges">
+          <span class="ui-pill ok">AGPL-3.0</span>
+          <span class="ui-pill">Python 3.10+</span>
+          <span class="ui-pill">stdlib core</span>
+          <span class="ui-pill">Win · Mac · Linux</span>
+          <span class="ui-pill">no LLM hot path</span>
+        </div>
+        <div class="hero-cta">
+          <a class="ui-btn" href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener"><span class="nav-ico" data-glyph="github"></span>view repository</a>
+          <button type="button" class="ui-btn ui-btn-ghost" data-docs-copy="git clone https://origin.cursor.com/derekified/struggletime.git"><span class="nav-ico" data-glyph="copy"></span>copy clone URL</button>
+          <a class="ui-btn ui-btn-ghost" href="/login" data-nav-link><span class="nav-ico" data-glyph="slack"></span>try the hosted app</a>
+        </div>
+        <p class="sub" style="margin:12px 0 6px">clone &amp; verify</p>
+        <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git
 cd struggletime &amp;&amp; make check</pre>
-    </header>
+      </div>
+    </div>
 
-    <div class="docs-shell">
-      <nav class="docs-toc" aria-label="Documentation">
-        <p class="docs-toc-label">Project</p>
-        <a href="#doc-why">Why StruggleTime</a>
-        <a href="#doc-repo">Repository layout</a>
-        <a href="#doc-stack">Stack &amp; status</a>
-        <p class="docs-toc-label">Get started</p>
-        <a href="#doc-install">Install &amp; run</a>
-        <a href="#doc-daemon">Daemon &amp; adapters</a>
-        <a href="#doc-selfhost">Self-host</a>
-        <p class="docs-toc-label">Guides</p>
-        <a href="#doc-weighting">Weighting formula</a>
-        <a href="#doc-privacy">Privacy model</a>
-        <a href="#doc-trust">Provenance &amp; review</a>
-        <a href="#doc-troubleshoot">Troubleshooting</a>
-        <p class="docs-toc-label">Reference</p>
-        <a href="#doc-api">HTTP API</a>
-        <a href="#doc-makefile">Makefile targets</a>
-        <a href="#doc-docs-files">In-repo docs</a>
-        <p class="docs-toc-label">Community</p>
-        <a href="#doc-contribute">Contributing</a>
-        <a href="#doc-license">License</a>
-      </nav>
+    <div class="settings-layout docs-layout">
+      <aside class="settings-rail docs-rail" aria-label="Documentation">
+        <p class="sub docs-rail-label">Project</p>
+        <a class="settings-tab" href="#doc-why">Why StruggleTime</a>
+        <a class="settings-tab" href="#doc-repo">Repository layout</a>
+        <a class="settings-tab" href="#doc-stack">Stack &amp; status</a>
+        <p class="sub docs-rail-label">Get started</p>
+        <a class="settings-tab" href="#doc-install">Install &amp; run</a>
+        <a class="settings-tab" href="#doc-daemon">Daemon &amp; adapters</a>
+        <a class="settings-tab" href="#doc-selfhost">Self-host</a>
+        <p class="sub docs-rail-label">Guides</p>
+        <a class="settings-tab" href="#doc-weighting">Weighting formula</a>
+        <a class="settings-tab" href="#doc-privacy">Privacy model</a>
+        <a class="settings-tab" href="#doc-trust">Provenance &amp; review</a>
+        <a class="settings-tab" href="#doc-troubleshoot">Troubleshooting</a>
+        <p class="sub docs-rail-label">Reference</p>
+        <a class="settings-tab" href="#doc-api">HTTP API</a>
+        <a class="settings-tab" href="#doc-makefile">Makefile targets</a>
+        <a class="settings-tab" href="#doc-docs-files">In-repo docs</a>
+        <p class="sub docs-rail-label">Community</p>
+        <a class="settings-tab" href="#doc-contribute">Contributing</a>
+        <a class="settings-tab" href="#doc-license">License</a>
+      </aside>
 
-      <article class="docs-article">
-        <section id="doc-why" class="docs-section">
-          <h2>Why StruggleTime</h2>
+      <div class="docs-panels">
+        <section id="doc-why" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="bolt"></span>Why StruggleTime</h2>
           <p>An hour an AI runs unattended is not an hour a builder learned anything. Trackers that count keystrokes or foreground time break down when agents dump files while you are elsewhere. StruggleTime counts <b>causality</b> instead:</p>
           <pre class="install-code">(prompt | edit) → (test | build | run) → (follow-up edit | commit)</pre>
           <p>Close the loop → full weight. Unread agent dump → discounted. Walk away → silent decay to zero. Built for Hack Club's AI time-tracking bounty; designed to stay auditable after the bounty.</p>
-          <div class="docs-callouts">
-            <div class="docs-callout"><b>Passive</b><span>No start/stop timers. Polling daemon + shell hooks.</span></div>
-            <div class="docs-callout"><b>Private</b><span>Metadata only. Code, prompts, paths never leave the machine.</span></div>
-            <div class="docs-callout"><b>Provable</b><span>Hash chain, Ed25519 install sigs, git anchors, reason-coded review.</span></div>
+          <div class="kpi-strip docs-kpi">
+            <div class="kpi"><div class="l">Passive</div><div class="n" style="font-size:13px;white-space:normal">No start/stop timers. Polling daemon + shell hooks.</div></div>
+            <div class="kpi"><div class="l">Private</div><div class="n" style="font-size:13px;white-space:normal">Metadata only. Code, prompts, paths never leave the machine.</div></div>
+            <div class="kpi"><div class="l">Provable</div><div class="n" style="font-size:13px;white-space:normal">Hash chain, Ed25519 install sigs, git anchors, reason-coded review.</div></div>
           </div>
         </section>
 
-        <section id="doc-repo" class="docs-section">
-          <h2>Repository layout</h2>
-          <pre class="install-code docs-tree">struggletime/
+        <section id="doc-repo" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="apps"></span>Repository layout</h2>
+          <p class="sub">shell · tree</p>
+          <pre class="install-code">struggletime/
 ├── server/          # HTTP API + static dashboard (stdlib)
 ├── daemon/          # Layer-1 tracker, hooks, tray, installers
 ├── src/             # verify.py weighting engine, install_sig.py
@@ -508,8 +510,8 @@ cd struggletime &amp;&amp; make check</pre>
           <p class="sub">Python engine in <code>src/verify.py</code> is the source of truth for weights. <code>weighting/rules-*.yaml</code> is the human-readable mirror kept in sync by <code>make sync-docs</code>.</p>
         </section>
 
-        <section id="doc-stack" class="docs-section">
-          <h2>Stack &amp; project status</h2>
+        <section id="doc-stack" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="terminal"></span>Stack &amp; project status</h2>
           <div class="docs-table-wrap">
             <table class="docs-table">
               <thead><tr><th>Layer</th><th>What ships</th></tr></thead>
@@ -526,16 +528,17 @@ cd struggletime &amp;&amp; make check</pre>
           <p>Acceptance path documented in-repo: 20-session calibration → pilot → scale. Calibration evidence lives in <code>weighting/calibration-20.md</code>.</p>
         </section>
 
-        <section id="doc-install" class="docs-section">
-          <h2>Install &amp; run</h2>
-          <h3>Developers (full stack)</h3>
+        <section id="doc-install" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="plus"></span>Install &amp; run</h2>
+          <h3 class="docs-h3">Developers (full stack)</h3>
+          <p class="sub">shell</p>
           <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git
 cd struggletime
 make check                 # python, git, full test suite
 make server                # dashboard + API on :18765
 # optional demo seed
 make demo                  # :18766 with sample data</pre>
-          <h3>Builders (track a project against a server)</h3>
+          <h3 class="docs-h3">Builders (track a project against a server)</h3>
           <ol class="install-steps">
             <li>
               <b>Get an API key</b>
@@ -561,12 +564,21 @@ source /path/to/struggletime/daemon/hooks.sh
 . C:\path\to\struggletime\daemon\hooks.ps1</pre>
             </li>
           </ol>
-          <p class="sub">First bucket seals after ~5 minutes (<code>AITIME_BUCKET_SECS</code>). Inspect before trusting sync: <code>python3 daemon/tracker_inspect.py ~/my-project</code>.</p>
+          <div class="setup-banner" role="note">
+            <div class="setup-banner-body">
+              <span class="nav-ico" data-glyph="important"></span>
+              <div>
+                <b>First sync takes ~5 minutes</b>
+                <p class="sub">Buckets seal on <code>AITIME_BUCKET_SECS</code> (default 300). Inspect before trusting sync: <code>python3 daemon/tracker_inspect.py ~/my-project</code>.</p>
+              </div>
+            </div>
+          </div>
         </section>
 
-        <section id="doc-daemon" class="docs-section">
-          <h2>Daemon &amp; adapters</h2>
+        <section id="doc-daemon" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="terminal"></span>Daemon &amp; adapters</h2>
           <p><b>Layer 1</b> (<code>daemon/daemon.py</code>) polls the git worktree, classifies file-burst shape, reads shell-hook JSONL, seals 5‑minute buckets with <code>prev_hash</code> (+ optional Ed25519), and posts to the server. Config: <code>~/.config/struggletime/settings.json</code> (Windows: APPDATA). Runtime: <code>~/.aitime/</code>.</p>
+          <p class="sub">shell</p>
           <pre class="install-code">struggletime-helper start --repo ~/my-project
 struggletime-helper logs
 struggletime-helper sync
@@ -575,8 +587,9 @@ make gui                   # native settings dialogs</pre>
           <p><b>Layer 2</b> adapters under <code>adapters/</code> only enrich counts (VS Code/Cursor, Claude Code hooks, Codex/Aider wrap, OpenClaw). Contract: append counts to the local exec log; throw content away. If an adapter breaks, L1 still tracks.</p>
         </section>
 
-        <section id="doc-selfhost" class="docs-section">
-          <h2>Self-host</h2>
+        <section id="doc-selfhost" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="laptop"></span>Self-host</h2>
+          <p class="sub">shell · env</p>
           <pre class="install-code">cp .env.example .env
 # fill Slack/GitHub OAuth, OAUTH_REDIRECT_BASE, optional webhooks
 # STRUGGLETIME_ADMINS=you:superadmin,reviewer2:reviewer
@@ -590,8 +603,8 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
           <p class="sub">Ops notes: <code>docs/deployment.md</code> · secrets never committed (<code>.env</code> is gitignored).</p>
         </section>
 
-        <section id="doc-weighting" class="docs-section">
-          <h2>Weighting formula</h2>
+        <section id="doc-weighting" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="waveform"></span>Weighting formula</h2>
           <p>Shared by daemon and server via <code>src/verify.py</code> (<code>FORMULA_VERSION</code>). Changing numbers requires a new version + calibration notes — never silent retunes.</p>
           <div class="docs-table-wrap">
             <table class="docs-table">
@@ -608,21 +621,30 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
           <p>Active-span billing: <code>billable_secs = min(bucket_secs, active_secs)</code> when not silent. Every bucket carries <code>formula_version</code>.</p>
         </section>
 
-        <section id="doc-privacy" class="docs-section">
-          <h2>Privacy model</h2>
-          <p>Classification is on-device. The wire format is an allowlist (<code>schemas/heartbeat.schema.json</code>). Prompt text, commands, source, absolute paths, and screenshots are rejected before chain verification.</p>
+        <section id="doc-privacy" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="private"></span>Privacy model</h2>
+          <div class="setup-banner" role="note">
+            <div class="setup-banner-body">
+              <span class="nav-ico" data-glyph="private"></span>
+              <div>
+                <b>Privacy is the product</b>
+                <p class="sub">Classification is on-device. The wire format is an allowlist (<code>schemas/heartbeat.schema.json</code>). Prompt text, commands, source, absolute paths, and screenshots are rejected before chain verification.</p>
+              </div>
+            </div>
+          </div>
           <ul class="docs-list">
             <li>Paths → <code>sha256(local_salt:path)</code> file ids</li>
             <li>Shell → category, duration, exit code only</li>
             <li>Git → HEAD, dirty count, line totals (not messages or diffs)</li>
             <li><b>Logged ≠ submitted</b> — local ledger is inspectable anytime</li>
           </ul>
+          <p class="sub">shell</p>
           <pre class="install-code">python3 daemon/tracker_inspect.py ~/my-project
 # or: make inspect REPO=~/my-project</pre>
         </section>
 
-        <section id="doc-trust" class="docs-section">
-          <h2>Provenance &amp; review</h2>
+        <section id="doc-trust" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="badge-check"></span>Provenance &amp; review</h2>
           <ul class="docs-list">
             <li><b>Hash chain</b> — <code>SHA256(canonical_bucket ‖ prev_hash)</code> + monotonic clock</li>
             <li><b>Ed25519</b> — per-install key under config dir; server pins first pubkey per <code>install_id</code></li>
@@ -630,13 +652,14 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
             <li><b>Submissions</b> — freeze an evidence pack with a required AI declaration</li>
             <li><b>Review</b> — staff approve / deflate / reject with reason codes</li>
           </ul>
+          <p class="sub">reason codes</p>
           <pre class="install-code">NONE · UNATTENDED_AGENT_DUMP · IDLE_INFLATION · NO_TEST_ITERATION
 BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
-          <p>Trust levels: blue → green → yellow → red. Staff roles: user → viewer → reviewer → admin → superadmin (<code>STRUGGLETIME_ADMINS</code> bootstrap).</p>
+          <p>Trust levels: <span class="trust-dot trust-blue"></span>blue → <span class="trust-dot trust-green"></span>green → <span class="trust-dot trust-yellow"></span>yellow → <span class="trust-dot trust-red"></span>red. Staff roles: user → viewer → reviewer → admin → superadmin (<code>STRUGGLETIME_ADMINS</code> bootstrap).</p>
         </section>
 
-        <section id="doc-troubleshoot" class="docs-section">
-          <h2>Troubleshooting</h2>
+        <section id="doc-troubleshoot" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="important"></span>Troubleshooting</h2>
           <ul class="docs-list">
             <li><b>Empty dashboard</b> — wait for first bucket; confirm API key + server URL; <code>struggletime-helper status</code></li>
             <li><b>422 chain broken</b> — ledger/server diverge (reset or two machines, same project id). Use a fresh project id per machine.</li>
@@ -647,8 +670,8 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
           </ul>
         </section>
 
-        <section id="doc-api" class="docs-section">
-          <h2>HTTP API</h2>
+        <section id="doc-api" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="link"></span>HTTP API</h2>
           <p>JSON. Auth: Slack session cookie or <code>Authorization: Bearer &lt;api-key&gt;</code>.</p>
           <div class="docs-table-wrap">
             <table class="docs-table">
@@ -667,8 +690,8 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
           <p class="sub">Errors: <code>{ "error": "…" }</code> with 400 allowlist, 401 auth, 403 private/staff, 409 duplicate, 422 chain/tamper. Full table: <code>docs/api.md</code>.</p>
         </section>
 
-        <section id="doc-makefile" class="docs-section">
-          <h2>Makefile targets</h2>
+        <section id="doc-makefile" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="terminal"></span>Makefile targets</h2>
           <div class="docs-table-wrap">
             <table class="docs-table">
               <thead><tr><th>Target</th><th>Does</th></tr></thead>
@@ -686,8 +709,8 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
           </div>
         </section>
 
-        <section id="doc-docs-files" class="docs-section">
-          <h2>In-repo documentation</h2>
+        <section id="doc-docs-files" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="docs"></span>In-repo documentation</h2>
           <div class="docs-table-wrap">
             <table class="docs-table">
               <thead><tr><th>Path</th><th>Contents</th></tr></thead>
@@ -707,8 +730,9 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
           </div>
         </section>
 
-        <section id="doc-contribute" class="docs-section">
-          <h2>Contributing</h2>
+        <section id="doc-contribute" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="person"></span>Contributing</h2>
+          <p class="sub">shell</p>
           <pre class="install-code">make check    # before anything, and before you open a PR</pre>
           <ol class="install-steps">
             <li><b>Privacy is the product</b> — raw text, paths, prompts, commands, or pixels reaching the server are rejected on sight (including tests and logs).</li>
@@ -719,16 +743,16 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
           <p>Good first issues: new harness adapters under <code>adapters/</code>, calibration sessions per <code>weighting/calibration-20.md</code>, and adversarial “fake hours” reports against your own self-hosted server.</p>
         </section>
 
-        <section id="doc-license" class="docs-section">
-          <h2>License</h2>
+        <section id="doc-license" class="ui-panel docs-section">
+          <h2><span class="nav-ico" data-glyph="sticker"></span>License</h2>
           <p>StruggleTime is licensed under the <b>GNU Affero General Public License v3.0 or later</b>. See <code>LICENSE</code>. Network use of a modified server requires offering corresponding source under AGPL.</p>
-          <div class="docs-hero-actions" style="margin-top:12px">
-            <a class="ui-btn" href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener">open the repository</a>
-            <a class="ui-btn ui-btn-ghost" href="/builders" data-nav-link>builders board</a>
+          <div class="hero-cta">
+            <a class="ui-btn" href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener"><span class="nav-ico" data-glyph="github"></span>open the repository</a>
+            <a class="ui-btn ui-btn-ghost" href="/builders" data-nav-link><span class="nav-ico" data-glyph="trophy"></span>builders board</a>
           </div>
-          <p class="sub docs-foot">Copyright retained by contributors · SPDX-License-Identifier: AGPL-3.0-or-later</p>
+          <p class="sub" style="margin-top:12px">Copyright retained by contributors · SPDX-License-Identifier: AGPL-3.0-or-later</p>
         </section>
-      </article>
+      </div>
     </div>
   </div>
 </template>

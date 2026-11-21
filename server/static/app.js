@@ -89,13 +89,20 @@ function mountDocs(into) {
   if (!root || !tpl) return;
   root.replaceChildren(tpl.content.cloneNode(true));
   hydrateNavIcons(root);
-  root.querySelectorAll(".docs-toc a[href^='#']").forEach((a) => {
+  const tabs = [...root.querySelectorAll(".docs-rail a.settings-tab[href^='#']")];
+  const setActive = (id) => {
+    tabs.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + id));
+  };
+  if (tabs[0]) setActive(tabs[0].getAttribute("href").slice(1));
+  tabs.forEach((a) => {
     a.addEventListener("click", (e) => {
       const id = a.getAttribute("href").slice(1);
-      const target = root.querySelector("#" + CSS.escape(id)) || document.getElementById(id);
+      const target = root.querySelector("#" + CSS.escape(id));
       if (!target) return;
       e.preventDefault();
+      setActive(id);
       target.scrollIntoView({ behavior: "smooth", block: "start" });
+      try { history.replaceState(null, "", "#" + id); } catch (_) {}
     });
   });
   root.querySelectorAll("[data-docs-copy]").forEach((btn) => {
