@@ -66,13 +66,15 @@ class TestDashboard(unittest.TestCase):
         docs_l = docs.lower()
         for needle in ("page-docs", "st-docs-template", "settings-layout", "settings-rail", "ui-panel",
                        "ui-pill", "page-head", "repository layout", "weighting formula", "contributing",
-                       "agpl", "ed25519", "makefile targets", "setup-banner", "kpi-strip"):
+                       "agpl", "ed25519", "makefile targets", "setup-banner", "kpi-strip", "data-lang"):
             self.assertIn(needle, docs_l)
         app_js = req(self.port, "GET", "/app.js")[1]
         self.assertIn("mountDocs", app_js)
+        self.assertIn("docs-code", app_js)
         self.assertIn("data-docs-copy", docs_l)
         css = req(self.port, "GET", "/styles.css")[1]
         self.assertIn(".docs-layout", css)
+        self.assertIn(".docs-code", css)
         self.assertNotIn("docs-hero", css)
         self.assertNotIn("color-mix", css)
         s, projects = req(self.port, "GET", "/projects")

@@ -448,8 +448,8 @@ source /path/to/struggletime/daemon/hooks.sh
           <button type="button" class="ui-btn ui-btn-ghost" data-docs-copy="git clone https://origin.cursor.com/derekified/struggletime.git"><span class="nav-ico" data-glyph="copy"></span>copy clone URL</button>
           <a class="ui-btn ui-btn-ghost" href="/login" data-nav-link><span class="nav-ico" data-glyph="slack"></span>try the hosted app</a>
         </div>
-        <p class="sub" style="margin:12px 0 6px">clone &amp; verify</p>
-        <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git
+        <p class="sub docs-lang" hidden>clone &amp; verify</p>
+        <pre class="install-code" data-lang="clone &amp; verify">git clone https://origin.cursor.com/derekified/struggletime.git
 cd struggletime &amp;&amp; make check</pre>
       </div>
     </div>
@@ -485,16 +485,28 @@ cd struggletime &amp;&amp; make check</pre>
           <pre class="install-code">(prompt | edit) → (test | build | run) → (follow-up edit | commit)</pre>
           <p>Close the loop → full weight. Unread agent dump → discounted. Walk away → silent decay to zero. Built for Hack Club's AI time-tracking bounty; designed to stay auditable after the bounty.</p>
           <div class="kpi-strip docs-kpi">
-            <div class="kpi"><div class="l">Passive</div><div class="n" style="font-size:13px;white-space:normal">No start/stop timers. Polling daemon + shell hooks.</div></div>
-            <div class="kpi"><div class="l">Private</div><div class="n" style="font-size:13px;white-space:normal">Metadata only. Code, prompts, paths never leave the machine.</div></div>
-            <div class="kpi"><div class="l">Provable</div><div class="n" style="font-size:13px;white-space:normal">Hash chain, Ed25519 install sigs, git anchors, reason-coded review.</div></div>
+            <div class="kpi">
+              <span class="nav-ico kpi-ico" data-glyph="bolt"></span>
+              <div class="n">Passive</div>
+              <div class="l wrap">No start/stop timers. Polling daemon + shell hooks.</div>
+            </div>
+            <div class="kpi">
+              <span class="nav-ico kpi-ico" data-glyph="private"></span>
+              <div class="n">Private</div>
+              <div class="l wrap">Metadata only. Code, prompts, paths never leave the machine.</div>
+            </div>
+            <div class="kpi">
+              <span class="nav-ico kpi-ico" data-glyph="badge-check"></span>
+              <div class="n">Provable</div>
+              <div class="l wrap">Hash chain, Ed25519 install sigs, git anchors, reason-coded review.</div>
+            </div>
           </div>
         </section>
 
         <section id="doc-repo" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="apps"></span>Repository layout</h2>
-          <p class="sub">shell · tree</p>
-          <pre class="install-code">struggletime/
+          <p class="sub docs-lang" hidden>shell · tree</p>
+          <pre class="install-code" data-lang="shell · tree">struggletime/
 ├── server/          # HTTP API + static dashboard (stdlib)
 ├── daemon/          # Layer-1 tracker, hooks, tray, installers
 ├── src/             # verify.py weighting engine, install_sig.py
@@ -531,8 +543,8 @@ cd struggletime &amp;&amp; make check</pre>
         <section id="doc-install" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="plus"></span>Install &amp; run</h2>
           <h3 class="docs-h3">Developers (full stack)</h3>
-          <p class="sub">shell</p>
-          <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git
+          <p class="sub docs-lang" hidden>shell</p>
+          <pre class="install-code" data-lang="shell">git clone https://origin.cursor.com/derekified/struggletime.git
 cd struggletime
 make check                 # python, git, full test suite
 make server                # dashboard + API on :18765
@@ -578,8 +590,8 @@ source /path/to/struggletime/daemon/hooks.sh
         <section id="doc-daemon" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="terminal"></span>Daemon &amp; adapters</h2>
           <p><b>Layer 1</b> (<code>daemon/daemon.py</code>) polls the git worktree, classifies file-burst shape, reads shell-hook JSONL, seals 5‑minute buckets with <code>prev_hash</code> (+ optional Ed25519), and posts to the server. Config: <code>~/.config/struggletime/settings.json</code> (Windows: APPDATA). Runtime: <code>~/.aitime/</code>.</p>
-          <p class="sub">shell</p>
-          <pre class="install-code">struggletime-helper start --repo ~/my-project
+          <p class="sub docs-lang" hidden>shell</p>
+          <pre class="install-code" data-lang="shell">struggletime-helper start --repo ~/my-project
 struggletime-helper logs
 struggletime-helper sync
 make tray                  # menu bar / system tray
@@ -589,8 +601,8 @@ make gui                   # native settings dialogs</pre>
 
         <section id="doc-selfhost" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="laptop"></span>Self-host</h2>
-          <p class="sub">shell · env</p>
-          <pre class="install-code">cp .env.example .env
+          <p class="sub docs-lang" hidden>shell · env</p>
+          <pre class="install-code" data-lang="shell · env">cp .env.example .env
 # fill Slack/GitHub OAuth, OAUTH_REDIRECT_BASE, optional webhooks
 # STRUGGLETIME_ADMINS=you:superadmin,reviewer2:reviewer
 PORT=18765 BIND=0.0.0.0 make server</pre>
@@ -638,8 +650,8 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
             <li>Git → HEAD, dirty count, line totals (not messages or diffs)</li>
             <li><b>Logged ≠ submitted</b> — local ledger is inspectable anytime</li>
           </ul>
-          <p class="sub">shell</p>
-          <pre class="install-code">python3 daemon/tracker_inspect.py ~/my-project
+          <p class="sub docs-lang" hidden>shell</p>
+          <pre class="install-code" data-lang="shell">python3 daemon/tracker_inspect.py ~/my-project
 # or: make inspect REPO=~/my-project</pre>
         </section>
 
@@ -652,8 +664,8 @@ PORT=18765 BIND=0.0.0.0 make server</pre>
             <li><b>Submissions</b> — freeze an evidence pack with a required AI declaration</li>
             <li><b>Review</b> — staff approve / deflate / reject with reason codes</li>
           </ul>
-          <p class="sub">reason codes</p>
-          <pre class="install-code">NONE · UNATTENDED_AGENT_DUMP · IDLE_INFLATION · NO_TEST_ITERATION
+          <p class="sub docs-lang" hidden>reason codes</p>
+          <pre class="install-code" data-lang="reason codes">NONE · UNATTENDED_AGENT_DUMP · IDLE_INFLATION · NO_TEST_ITERATION
 BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
           <p>Trust levels: <span class="trust-dot trust-blue"></span>blue → <span class="trust-dot trust-green"></span>green → <span class="trust-dot trust-yellow"></span>yellow → <span class="trust-dot trust-red"></span>red. Staff roles: user → viewer → reviewer → admin → superadmin (<code>STRUGGLETIME_ADMINS</code> bootstrap).</p>
         </section>
@@ -732,8 +744,8 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
 
         <section id="doc-contribute" class="ui-panel docs-section">
           <h2><span class="nav-ico" data-glyph="person"></span>Contributing</h2>
-          <p class="sub">shell</p>
-          <pre class="install-code">make check    # before anything, and before you open a PR</pre>
+          <p class="sub docs-lang" hidden>shell</p>
+          <pre class="install-code" data-lang="shell">make check    # before anything, and before you open a PR</pre>
           <ol class="install-steps">
             <li><b>Privacy is the product</b> — raw text, paths, prompts, commands, or pixels reaching the server are rejected on sight (including tests and logs).</li>
             <li><b>Weights are versioned</b> — new <code>formula_version</code> + calibration notes; no silent number changes.</li>
@@ -750,7 +762,7 @@ BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
             <a class="ui-btn" href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener"><span class="nav-ico" data-glyph="github"></span>open the repository</a>
             <a class="ui-btn ui-btn-ghost" href="/builders" data-nav-link><span class="nav-ico" data-glyph="trophy"></span>builders board</a>
           </div>
-          <p class="sub" style="margin-top:12px">Copyright retained by contributors · SPDX-License-Identifier: AGPL-3.0-or-later</p>
+          <p class="sub docs-code-hint">Copyright retained by contributors · SPDX-License-Identifier: AGPL-3.0-or-later</p>
         </section>
       </div>
     </div>

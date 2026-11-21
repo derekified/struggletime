@@ -88,8 +88,43 @@ function mountDocs(into) {
   const tpl = $("st-docs-template");
   if (!root || !tpl) return;
   root.replaceChildren(tpl.content.cloneNode(true));
+
+  // Wrap code blocks with shared label + copy chrome (ui-pill / ui-btn)
+  root.querySelectorAll("pre.install-code").forEach((pre) => {
+    if (pre.closest(".docs-code")) return;
+    const lang = (pre.getAttribute("data-lang") || "shell").trim();
+    const wrap = document.createElement("div");
+    wrap.className = "docs-code";
+    const head = document.createElement("div");
+    head.className = "docs-code-head";
+    const pill = document.createElement("span");
+    pill.className = "ui-pill";
+    pill.textContent = lang;
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "ui-btn ui-btn-ghost docs-code-copy";
+    btn.setAttribute("aria-label", "Copy code");
+    btn.append(icon("copy", { size: 14 }), document.createTextNode("copy"));
+    btn.addEventListener("click", async () => {
+      const text = pre.textContent || "";
+      try {
+        await navigator.clipboard.writeText(text);
+        toast("Copied", { kind: "ok" });
+      } catch (_) {
+        toast("Select and copy manually", { kind: "error" });
+      }
+    });
+    head.append(pill, btn);
+    pre.parentNode.insertBefore(wrap, pre);
+    wrap.append(head, pre);
+  });
+
   hydrateNavIcons(root);
+
   const tabs = [...root.querySelectorAll(".docs-rail a.settings-tab[href^='#']")];
+  const sections = tabs
+    .map((a) => root.querySelector(a.getAttribute("href")))
+    .filter(Boolean);
   const setActive = (id) => {
     tabs.forEach((a) => a.classList.toggle("on", a.getAttribute("href") === "#" + id));
   };
@@ -105,6 +140,16 @@ function mountDocs(into) {
       try { history.replaceState(null, "", "#" + id); } catch (_) {}
     });
   });
+  if (typeof IntersectionObserver === "function" && sections.length) {
+    const io = new IntersectionObserver((entries) => {
+      const visible = entries
+        .filter((en) => en.isIntersecting)
+        .sort((a, b) => b.intersectionRatio - a.intersectionRatio)[0];
+      if (visible && visible.target.id) setActive(visible.target.id);
+    }, { rootMargin: "-20% 0px -60% 0px", threshold: [0.1, 0.25, 0.5] });
+    sections.forEach((sec) => io.observe(sec));
+  }
+
   root.querySelectorAll("[data-docs-copy]").forEach((btn) => {
     btn.addEventListener("click", async () => {
       const text = btn.getAttribute("data-docs-copy") || "";
@@ -116,6 +161,15 @@ function mountDocs(into) {
       }
     });
   });
+
+  // Deep-link on load
+  const hash = (location.hash || "").replace(/^#/, "");
+  if (hash && root.querySelector("#" + CSS.escape(hash))) {
+    setActive(hash);
+    requestAnimationFrame(() => {
+      root.querySelector("#" + CSS.escape(hash))?.scrollIntoView({ block: "start" });
+    });
+  }
 }
 
 function pathToPage(pathname) {
