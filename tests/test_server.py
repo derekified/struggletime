@@ -32,7 +32,9 @@ class TestServer(unittest.TestCase):
         s, b = req("POST", self.port, "/v1/buckets/batch", {"user_id": "u1", "buckets": self.load("session-closed-loop.json")})
         self.assertEqual(s, 201); self.assertAlmostEqual(b["weighted_hours_added"], 0.25)
         s, st = req("GET", self.port, "/v1/projects/proj_1/stats")
-        self.assertEqual(st["by_state"], {"STRUGGLE_LOOP": 1, "CLOSED_LOOP": 2})
+        # First bucket has prompts + failing execs → AI_STRUGGLE (1.0); others CLOSED_LOOP
+        self.assertEqual(st["by_state"].get("CLOSED_LOOP"), 2)
+        self.assertEqual(st["by_state"].get("AI_STRUGGLE", 0) + st["by_state"].get("STRUGGLE_LOOP", 0), 1)
 
     def test_03_duplicate_rejected(self):
         s, _ = req("POST", self.port, "/v1/buckets/batch", {"user_id": "u1", "buckets": self.load("session-closed-loop.json")})

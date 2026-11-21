@@ -26,7 +26,7 @@ import editors as edreg
 IGNORE = {".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".aitime"}
 _STOP = False
 SWITCH_QUIET_SECS = 30  # early-seal prior project after this quiet when another is active
-FORMULA = "v0.2.0-alpha"
+FORMULA = "v0.3.0-alpha"
 
 # Shell hook categories (name only — never arguments)
 EXEC_CATS = {
@@ -185,7 +185,38 @@ def empty():
         "human_edits": 0, "ai_writes": 0, "prompts": 0, "executions": 0,
         "exec_failures": 0, "commits": 0, "dwell_diff_secs": 0, "idle_secs": 0,
         "active_secs": 0, "first_event_ts": 0, "last_event_ts": 0,
+        # Passive AI-struggle friction (all IDEs/agents; metadata counters only)
+        "same_file_reedit_count": 0,
+        "ai_retry_loops": 0,
+        "failed_exec_count": 0,
+        "test_fail_to_pass_transitions": 0,
+        "agent_turn_churn": 0,
+        "human_recovery_edits": 0,
     }
+
+def _track_reedits(w, touched_rels, kind):
+    """Count overlapping re-edits / AI retry loops (rel paths stay local; sealed as file_id)."""
+    prev = w.get("tick_files") or set()
+    cur = set(touched_rels)
+    seen = w.setdefault("touched_once", set())
+    reedits = sum(1 for rel in cur if rel in seen)
+    for rel in cur:
+        seen.add(rel)
+    if reedits:
+        w["counts"]["same_file_reedit_count"] += reedits
+    # Retry loop: same files touched again after a prior tick, especially under AI/fail pressure
+    if (prev & cur) and (kind == "ai" or w["counts"].get("ai_writes", 0) > 0 or w.get("saw_fail")):
+        w["counts"]["ai_retry_loops"] += 1
+    w["tick_files"] = cur
+
+def _track_human_recovery(w, n_touch, kind):
+    """1–2 file human edits after an AI burst or failed run count as recovery."""
+    if kind != "human":
+        return
+    if n_touch < 1 or n_touch > 2:
+        return
+    if w["counts"].get("ai_writes", 0) > 0 or w.get("saw_fail") or w["counts"].get("failed_exec_count", 0) > 0:
+        w["counts"]["human_recovery_edits"] += 1
 
 def classify_edit_batch(n_touch, *, edit_ticks, lines_hint, dt_sec, recent_cats, attr_hint):
     """Fuse velocity/cadence/exec class — never 5+ files ⇒ AI by default."""
@@ -389,32 +420,55 @@ def note_activity(w, now_wall, now_mono):
     w["had_activity"] = True
     w["silent_followup"] = 0
 
+def _acc_label(w, key, label):
+    """Accumulate editor/agent labels across ticks (last human recovery must not erase AI)."""
+    lab = _clean_label(label, "")
+    if not lab:
+        return
+    bag = w.setdefault(key, {})
+    bag[lab] = bag.get(lab, 0) + 1
+
 def apply_event_to_watcher(w, e, now_wall, now_mono):
     counts = w["counts"]
     exec_categories = w["exec_categories"]
     counts["executions"] += 1
     cat = e.get("category") or "other"
     exec_categories[cat] = exec_categories.get(cat, 0) + 1
-    if e.get("exit_code"):
+    exit_code = int(e.get("exit_code") or 0)
+    if exit_code:
         counts["exec_failures"] += 1
-        if cat in ("test_runner", "compiler"):
+        counts["failed_exec_count"] += 1
+        if cat in ("test_runner", "compiler", "ai_cli", "other"):
             w["saw_fail"] = True
     elif cat in ("test_runner", "compiler") and w.get("saw_fail"):
         w["saw_pass_after_fail"] = True
+        counts["test_fail_to_pass_transitions"] += 1
+        w["saw_fail"] = False  # allow another fail→pass cycle in the same window
     if cat == "ai_cli":
         counts["prompts"] += 1
+        counts["agent_turn_churn"] += 1
+        ag = e.get("agent") or _clean_label(e.get("verb") or "ai-cli", "unknown-agent")
+        ed = e.get("editor") or w["attr_hint"].get("editor")
         w["attr_hint"] = {
-            "agent": e.get("agent") or _clean_label(e.get("verb") or "ai-cli", "unknown-agent"),
-            "editor": e.get("editor") or w["attr_hint"].get("editor"),
+            "agent": ag,
+            "editor": ed,
             "source": "adapter",
         }
+        _acc_label(w, "agents_acc", ag)
+        _acc_label(w, "editors_acc", ed)
+    if e.get("event_type") in ("tool", "prompt", "start") or (cat == "ai_cli" and e.get("verb")):
+        counts["agent_turn_churn"] = max(counts["agent_turn_churn"], counts["prompts"])
     if cat == "editor":
         eds = detect_running_editors()
+        ed = e.get("editor") or (eds[0] if eds else "unknown")
+        ag = e.get("agent") or "human"
         w["attr_hint"] = {
-            "editor": e.get("editor") or (eds[0] if eds else "unknown"),
-            "agent": e.get("agent") or "human",
+            "editor": ed,
+            "agent": ag,
             "source": "adapter",
         }
+        _acc_label(w, "editors_acc", ed)
+        _acc_label(w, "agents_acc", ag)
     if cat == "git" and e.get("verb") == "commit":
         counts["commits"] += 1
     n = int(e.get("files_touched_count") or 0)
@@ -428,6 +482,13 @@ def apply_event_to_watcher(w, e, now_wall, now_mono):
                 "agent": e.get("agent") or agents[0],
                 "source": w["attr_hint"].get("source") or "adapter",
             }
+    # Adapter re-edit signal without paths: treat multi-touch as retry churn
+    if n > 0 and cat in ("editor", "ai_cli") and (w.get("saw_fail") or counts.get("ai_writes", 0) > 0):
+        if n <= 2 and (e.get("agent") or "human") == "human":
+            counts["human_recovery_edits"] += 1
+        elif counts.get("ai_writes", 0) > 0 or cat == "ai_cli":
+            counts["ai_retry_loops"] += 1
+            counts["same_file_reedit_count"] += max(1, min(n, 5))
     note_activity(w, now_wall, now_mono)
 
 def seal_bucket(w, bucket_secs, install_id):
@@ -455,6 +516,9 @@ def seal_bucket(w, bucket_secs, install_id):
     counts["idle_secs"] = min(int(bucket_secs), idle_tail) if idle_tail > 60 or not w.get("had_activity") else 0
     if w.get("saw_pass_after_fail") and counts["exec_failures"] == 0:
         counts["exec_failures"] = max(1, counts["exec_failures"])
+    if w.get("saw_pass_after_fail") and counts.get("test_fail_to_pass_transitions", 0) == 0:
+        counts["test_fail_to_pass_transitions"] = 1
+    counts["failed_exec_count"] = max(int(counts.get("failed_exec_count") or 0), int(counts.get("exec_failures") or 0))
 
     anchor, files = git_anchor(repo, state["salt"], bursts, file_meta=file_meta)
     lines = anchor["lines_added"] + anchor["lines_deleted"]
@@ -492,6 +556,17 @@ def seal_bucket(w, bucket_secs, install_id):
         agents[ag] = agents.get(ag, 0) + 1
         lang = f.get("language") or "other"
         languages[lang] = languages.get(lang, 0) + 1
+    # Window-level attribution: keep AI agent/editor even if last tick was human recovery
+    for ed, n in (w.get("editors_acc") or {}).items():
+        editors[ed] = editors.get(ed, 0) + n
+    for ag, n in (w.get("agents_acc") or {}).items():
+        agents[ag] = agents.get(ag, 0) + n
+    if attr_hint.get("editor"):
+        ed = _clean_label(attr_hint["editor"], "unknown")
+        editors[ed] = editors.get(ed, 0) + 1
+    if attr_hint.get("agent"):
+        ag = _clean_label(attr_hint["agent"], "human")
+        agents[ag] = agents.get(ag, 0) + 1
     if not editors:
         ed, ag, _ = default_attr("human", attr_hint)
         editors[ed] = 1
@@ -529,6 +604,10 @@ def reset_window(w, now_wall=None, now_mono=None, keep_alive=False, after_active
     w["saw_fail"] = False
     w["saw_pass_after_fail"] = False
     w["had_activity"] = False
+    w["tick_files"] = set()
+    w["touched_once"] = set()
+    w["editors_acc"] = {}
+    w["agents_acc"] = {}
     if keep_alive:
         w["started_wall"] = now_wall or int(time.time())
         w["started_mono"] = now_mono or time.monotonic()
@@ -544,7 +623,8 @@ def reset_window(w, now_wall=None, now_mono=None, keep_alive=False, after_active
 def ensure_gitignore(repo):
     gi = repo / ".gitignore"
     if (repo / ".git").exists() and (not gi.exists() or ".aitime-ledger.json" not in gi.read_text(errors="ignore")):
-        open(gi, "a").write("\n.aitime-ledger.json\n")
+        with open(gi, "a") as fh:
+            fh.write("\n.aitime-ledger.json\n")
 
 def load_ledger(repo):
     ledger = repo / ".aitime-ledger.json"
@@ -579,6 +659,10 @@ def make_watcher(path, project_id):
         "saw_fail": False,
         "saw_pass_after_fail": False,
         "had_activity": False,
+        "tick_files": set(),
+        "touched_once": set(),
+        "editors_acc": {},
+        "agents_acc": {},
         "started_wall": None,
         "started_mono": None,
         "last_activity": time.monotonic(),
@@ -682,7 +766,8 @@ def poll_repo_files(w, bucket_secs):
         note_activity(w, now_wall, now_mono)
         w["edit_ticks"] += 1
         n_touch = sum(1 for op in ops.values() if op != "deleted")
-        # Approximate lines from current dirty numstat (metadata only)
+        # Approximate lines from current dirty numstat (metadata only).
+        # Untracked creates are invisible to `git diff --numstat` — estimate from touch count.
         lines_hint = 0
         try:
             for line in git(w["repo"], "diff", "--numstat").splitlines():
@@ -690,7 +775,9 @@ def poll_repo_files(w, bucket_secs):
                 if len(p) >= 2:
                     lines_hint += (int(p[0]) if p[0].isdigit() else 0) + (int(p[1]) if p[1].isdigit() else 0)
         except Exception:
-            lines_hint = n_touch * 10
+            lines_hint = 0
+        if lines_hint < n_touch * 5:
+            lines_hint = max(lines_hint, n_touch * 50)
         kind = classify_edit_batch(
             n_touch,
             edit_ticks=w["edit_ticks"],
@@ -699,17 +786,46 @@ def poll_repo_files(w, bucket_secs):
             recent_cats=w["exec_categories"],
             attr_hint=w["attr_hint"],
         )
+        # Passive fallback: AI IDE/agent (process or env) + re-edits/fails ⇒ AI struggle context
+        running_agents = detect_running_agents()
+        running_editors = detect_running_editors()
+        if kind == "human" and running_agents and (
+            w["edit_ticks"] > 1 or n_touch >= 3 or w.get("saw_fail")
+        ):
+            kind = "ai"
         editor, agent, source = default_attr(kind, w["attr_hint"])
+        touched = [rel for rel, op in ops.items() if op != "deleted"]
+        _track_reedits(w, touched, kind)
+        _track_human_recovery(w, n_touch, kind)
         if kind == "ai":
             w["counts"]["ai_writes"] += max(n_touch, 1)
+            if running_agents or (w["attr_hint"].get("agent") not in (None, "", "human")):
+                w["counts"]["agent_turn_churn"] += 1
         else:
             w["counts"]["human_edits"] += max(n_touch, 1)
+        _acc_label(w, "editors_acc", editor)
+        _acc_label(w, "agents_acc", agent)
         for rel, op in ops.items():
             w["bursts"][rel] = w["bursts"].get(rel, 0) + (0 if op == "deleted" else 1)
             lang = language_from_rel(rel)
             w["rel_langs"][rel] = lang
             w["file_meta"][rel] = {
                 "op": op, "editor": editor, "agent": agent, "source": source, "language": lang,
+            }
+        # Stash running editor hint for seal attribution when adapters are absent
+        if running_editors and not w["attr_hint"].get("editor"):
+            w["attr_hint"] = {
+                **w["attr_hint"],
+                "editor": running_editors[0],
+                "source": w["attr_hint"].get("source") or "layer1",
+            }
+        if running_agents and kind == "ai" and (
+            not w["attr_hint"].get("agent") or w["attr_hint"].get("agent") == "human"
+        ):
+            w["attr_hint"] = {
+                **w["attr_hint"],
+                "agent": running_agents[0],
+                "source": w["attr_hint"].get("source") or "layer1",
             }
     w["prev_snap"] = snap
 

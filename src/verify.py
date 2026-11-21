@@ -19,6 +19,9 @@ ALLOWED_TOP = {
 ALLOWED_COUNTS = {
     "human_edits","ai_writes","prompts","executions","exec_failures","commits","dwell_diff_secs",
     "idle_secs","active_secs","first_event_ts","last_event_ts",
+    # Passive AI-struggle friction counters (IDE/agent agnostic)
+    "same_file_reedit_count","ai_retry_loops","failed_exec_count",
+    "test_fail_to_pass_transitions","agent_turn_churn","human_recovery_edits",
 }
 ALLOWED_GIT = {"head_commit","lines_added","lines_deleted","dirty_files"}
 # op/editor/agent/source/language are metadata labels only — never raw paths or content
@@ -123,8 +126,20 @@ def billable_secs(bucket):
 
 def friction(bucket):
     c = bucket["counts"]
-    raw = 0.35 * min(c["exec_failures"], 3) / 3 + 0.25 * min(c["executions"], 4) / 4 \
-        + 0.20 * min(c["human_edits"], 10) / 10 + 0.20 * (1 if (c["commits"] or c["human_edits"]) else 0) * min(c["prompts"] + 1, 3) / 3
+    struggle = (
+        0.15 * min(c.get("same_file_reedit_count", 0), 5) / 5
+        + 0.15 * min(c.get("ai_retry_loops", 0), 4) / 4
+        + 0.15 * min(c.get("test_fail_to_pass_transitions", 0), 3) / 3
+        + 0.10 * min(c.get("human_recovery_edits", 0), 4) / 4
+        + 0.10 * min(c.get("agent_turn_churn", 0), 5) / 5
+    )
+    raw = (
+        0.25 * min(c.get("exec_failures", 0) or c.get("failed_exec_count", 0), 3) / 3
+        + 0.15 * min(c.get("executions", 0), 4) / 4
+        + 0.10 * min(c.get("human_edits", 0), 10) / 10
+        + 0.10 * (1 if (c.get("commits") or c.get("human_edits")) else 0) * min(c.get("prompts", 0) + 1, 3) / 3
+        + struggle
+    )
     return round(min(raw, 1.0), 3)
 
 def friction_timeline(buckets):
@@ -162,12 +177,35 @@ def _idle_decay_factor(idle_secs):
         return 0.0
     return round((SILENT_ZERO_SECS - idle) / (SILENT_ZERO_SECS - SILENT_FULL_SECS), 4)
 
+def is_ai_struggle(c):
+    """Iterative AI recovery across any IDE/agent — not a single-pass dump."""
+    reedit = int(c.get("same_file_reedit_count") or 0)
+    retries = int(c.get("ai_retry_loops") or 0)
+    fail_pass = int(c.get("test_fail_to_pass_transitions") or 0)
+    churn = int(c.get("agent_turn_churn") or 0)
+    recovery = int(c.get("human_recovery_edits") or 0)
+    failed = int(c.get("failed_exec_count") or 0) or int(c.get("exec_failures") or 0)
+    ai = int(c.get("ai_writes") or 0)
+    prompts = int(c.get("prompts") or 0)
+
+    if fail_pass > 0 and (reedit > 0 or recovery > 0 or retries > 0 or ai > 0 or prompts > 0):
+        return True
+    if failed > 0 and reedit > 0 and (ai > 0 or churn > 0 or prompts > 0):
+        return True
+    if retries >= 2 and (failed > 0 or recovery > 0 or fail_pass > 0):
+        return True
+    if churn >= 3 and failed > 0 and (reedit > 0 or recovery > 0 or int(c.get("human_edits") or 0) > 0):
+        return True
+    if recovery > 0 and (ai > 0 or failed > 0) and (reedit > 0 or fail_pass > 0 or retries > 0):
+        return True
+    return False
+
 def weight(bucket):
     """Causal weight from fused passive signals — not raw file-count heuristics."""
     c = bucket["counts"]
     cats = bucket.get("exec_categories") or {}
-    followup = c.get("human_edits", 0) > 0 or c.get("commits", 0) > 0
-    steering = c.get("prompts", 0) > 0 or c.get("human_edits", 0) > 0
+    followup = c.get("human_edits", 0) > 0 or c.get("commits", 0) > 0 or c.get("human_recovery_edits", 0) > 0
+    steering = c.get("prompts", 0) > 0 or c.get("human_edits", 0) > 0 or c.get("agent_turn_churn", 0) > 0
     verified_loop = (
         c.get("exec_failures", 0) > 0
         and c.get("executions", 0) > 1
@@ -175,23 +213,38 @@ def weight(bucket):
     )
     closed = steering and c.get("executions", 0) > 0 and followup
     formatterish = int(cats.get("formatter", 0) or 0) > 0
+    ai_struggle = is_ai_struggle(c)
 
-    # Unverified bulk AI: multi-file agent dump with no test/build/edit follow-up
+    # Unverified bulk AI: multi-file agent dump with no test/build/edit follow-up / no struggle
     open_loop = (
         c.get("ai_writes", 0) > 0
         and c.get("human_edits", 0) == 0
+        and c.get("human_recovery_edits", 0) == 0
         and c.get("executions", 0) == 0
         and c.get("dwell_diff_secs", 0) < 30
         and not formatterish
+        and not ai_struggle
+        and c.get("same_file_reedit_count", 0) == 0
+        and c.get("ai_retry_loops", 0) == 0
+    )
+    # Passive AI-generation staring: AI writes then long idle, no recovery
+    ai_stare = (
+        c.get("ai_writes", 0) > 0
+        and c.get("human_edits", 0) == 0
+        and c.get("executions", 0) == 0
+        and c.get("idle_secs", 0) >= SILENT_FULL_SECS
+        and not ai_struggle
     )
 
-    if verified_loop:
+    if ai_struggle or (verified_loop and (c.get("ai_writes", 0) > 0 or c.get("prompts", 0) > 0 or c.get("agent_turn_churn", 0) > 0)):
+        w, state = 1.0, "AI_STRUGGLE"
+    elif verified_loop:
         w, state = 1.0, "STRUGGLE_LOOP"
     elif closed:
         w, state = 1.0, "CLOSED_LOOP"
     elif c.get("ai_writes", 0) > 0 and c.get("dwell_diff_secs", 0) >= 30 and followup:
         w, state = 0.85, "AI_REVIEWED"
-    elif open_loop:
+    elif open_loop or ai_stare:
         w, state = 0.20, "OPEN_LOOP_AGENT_DUMP"
     elif c.get("human_edits", 0) > 0:
         w, state = 0.70, "HUMAN_UNVERIFIED"
@@ -205,7 +258,8 @@ def weight(bucket):
         w, state = 0.0, "FALLBACK"
 
     # Gradual idle decay after the active span (replaces idle_secs >= 240 → 0 cliff)
-    if state not in ("SILENT_DEBUG", "FALLBACK") and c.get("idle_secs", 0) > SILENT_FULL_SECS:
+    # Do not decay AI_STRUGGLE / STRUGGLE_LOOP — recovery work already paid the cost
+    if state not in ("SILENT_DEBUG", "FALLBACK", "AI_STRUGGLE", "STRUGGLE_LOOP") and c.get("idle_secs", 0) > SILENT_FULL_SECS:
         factor = _idle_decay_factor(c.get("idle_secs", 0))
         w = round(w * factor, 4)
         if factor <= 0:
@@ -215,7 +269,7 @@ def weight(bucket):
     return w, state
 
 def flags(buckets, weighted_hours):
-    total = lambda k: sum(b["counts"][k] for b in buckets)
+    total = lambda k: sum(b["counts"].get(k, 0) for b in buckets)
     lines = sum(b["git"]["lines_added"] + b["git"]["lines_deleted"] for b in buckets)
     out = []
     if lines and weighted_hours / (lines / 1000) > 10:

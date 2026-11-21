@@ -265,7 +265,7 @@ def stats_for(c, project=None, user=None):
     weighted_today = sum(r["weighted_secs"] for r in rows if date.fromtimestamp(r["bucket_start_wall"]).isoformat() == today_s)
     weighted_week = sum(r["weighted_secs"] for r in rows if date.fromtimestamp(r["bucket_start_wall"]).isoformat() >= week_cut)
     n = len(rows) or 1
-    loop_n = by_state.get("CLOSED_LOOP", 0) + by_state.get("STRUGGLE_LOOP", 0)
+    loop_n = by_state.get("CLOSED_LOOP", 0) + by_state.get("STRUGGLE_LOOP", 0) + by_state.get("AI_STRUGGLE", 0)
     dump_n = by_state.get("OPEN_LOOP_AGENT_DUMP", 0)
     projects_n = len({r["project_id"] for r in rows})
     return {"buckets": len(rows), "raw_secs": raw,
@@ -281,11 +281,14 @@ def stats_for(c, project=None, user=None):
             "flags": flags(buckets, weighted / 3600) if buckets else []}
 
 STATE_LABELS = {
+    "AI_STRUGGLE": "ai struggle",
     "CLOSED_LOOP": "closed loop",
     "STRUGGLE_LOOP": "struggle loop",
     "OPEN_LOOP_AGENT_DUMP": "agent dump",
+    "AI_REVIEWED": "ai reviewed",
     "SILENT_DEBUG": "silent debug",
     "HUMAN_UNVERIFIED": "human unverified",
+    "AI_UNREVIEWED": "ai unverified",
     "IDLE": "idle",
     "EXEC_ONLY": "exec only",
 }

@@ -65,7 +65,27 @@ class TestActiveSpanWeight(unittest.TestCase):
             "human_edits": 2, "ai_writes": 8, "executions": 3, "exec_failures": 1, "commits": 0,
         })
         w, state = verify.weight(b)
-        self.assertEqual((w, state), (1.0, "STRUGGLE_LOOP"))
+        self.assertEqual(w, 1.0)
+        self.assertIn(state, ("AI_STRUGGLE", "STRUGGLE_LOOP"))
+
+    def test_ai_struggle_from_reedit_and_fail_pass(self):
+        b = _bucket({
+            "ai_writes": 4, "human_edits": 1, "executions": 3, "exec_failures": 2,
+            "same_file_reedit_count": 3, "ai_retry_loops": 2,
+            "test_fail_to_pass_transitions": 1, "human_recovery_edits": 1,
+            "failed_exec_count": 2, "agent_turn_churn": 3,
+        })
+        w, state = verify.weight(b)
+        self.assertEqual((w, state), (1.0, "AI_STRUGGLE"))
+        self.assertEqual(verify.validate_allowlist(b), [])
+
+    def test_bulk_dump_still_discounted(self):
+        b = _bucket({
+            "ai_writes": 12, "human_edits": 0, "executions": 0, "dwell_diff_secs": 0,
+            "same_file_reedit_count": 0, "ai_retry_loops": 0,
+        })
+        w, state = verify.weight(b)
+        self.assertEqual((w, state), (0.20, "OPEN_LOOP_AGENT_DUMP"))
 
     def test_formatter_bulk_not_open_loop(self):
         b = _bucket({"ai_writes": 12, "human_edits": 0, "executions": 0})

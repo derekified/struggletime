@@ -49,19 +49,24 @@ BUILTIN_SIGNATURES = [
     {"match": "kate", "editor": "kate", "kind": "editor"},
     {"match": "gedit", "editor": "gedit", "kind": "editor"},
     {"match": "notepad++", "editor": "notepadpp", "kind": "editor"},
-    # CLI / agent processes (agent id may differ from editor label)
+    # CLI / desktop AI agents (agent id may differ from editor label)
+    {"match": "claude-code", "editor": "claude-code", "agent": "claude", "kind": "cli_agent"},
     {"match": "claude", "editor": "claude-code", "agent": "claude", "kind": "cli_agent"},
     {"match": "codex", "editor": "codex", "agent": "codex", "kind": "cli_agent"},
+    {"match": "chatgpt", "editor": "codex", "agent": "codex", "kind": "cli_agent"},
+    {"match": "openai", "editor": "codex", "agent": "codex", "kind": "cli_agent"},
     {"match": "openclaw", "editor": "openclaw", "agent": "openclaw", "kind": "cli_agent"},
     {"match": "aider", "editor": "aider", "agent": "aider", "kind": "cli_agent"},
     {"match": "goose", "editor": "goose", "agent": "goose", "kind": "cli_agent"},
     {"match": "opencode", "editor": "opencode", "agent": "opencode", "kind": "cli_agent"},
+    {"match": "gemini-cli", "editor": "gemini-cli", "agent": "gemini", "kind": "cli_agent"},
     {"match": "gemini", "editor": "gemini-cli", "agent": "gemini", "kind": "cli_agent"},
     {"match": "cursor-agent", "editor": "cursor", "agent": "cursor-agent", "kind": "cli_agent"},
     {"match": "amp", "editor": "amp", "agent": "amp", "kind": "cli_agent"},
     {"match": "crush", "editor": "crush", "agent": "crush", "kind": "cli_agent"},
     {"match": "qwen", "editor": "qwen", "agent": "qwen", "kind": "cli_agent"},
     {"match": "cline", "editor": "cline", "agent": "cline", "kind": "cli_agent"},
+    {"match": "roo-code", "editor": "roo", "agent": "roo", "kind": "cli_agent"},
     {"match": "roo", "editor": "roo", "agent": "roo", "kind": "cli_agent"},
     {"match": "continue", "editor": "continue", "agent": "continue", "kind": "cli_agent"},
     {"match": "copilot", "editor": "copilot", "agent": "copilot", "kind": "cli_agent"},
@@ -248,6 +253,8 @@ def classify_active(burst_kind="human", hint=None):
     """Pick (editor, agent, kind, source) for this poll window.
 
     Never returns local-daemon / untracked when a known or inferred process is up.
+    Honors STRUGGLETIME_EDITOR / AITIME_EDITOR and STRUGGLETIME_AGENT / AITIME_AGENT
+    for passive tests and headless attribution without a live IDE process.
     """
     hint = hint or {}
     blob = process_blob()
@@ -255,6 +262,16 @@ def classify_active(burst_kind="human", hint=None):
     editors = [h["editor"] for h in hits if h["kind"] in ("ai_ide", "editor")]
     agents = [h["agent"] for h in hits if h["kind"] == "cli_agent" and h.get("agent")]
     ai_ides = [h["editor"] for h in hits if h["kind"] == "ai_ide"]
+    env_ed = _clean_label(
+        os.environ.get("STRUGGLETIME_EDITOR") or os.environ.get("AITIME_EDITOR") or "", ""
+    )
+    env_ag = _clean_label(
+        os.environ.get("STRUGGLETIME_AGENT") or os.environ.get("AITIME_AGENT") or "", ""
+    )
+    if env_ed and env_ed not in editors:
+        editors.insert(0, env_ed)
+    if env_ag and env_ag not in agents:
+        agents.insert(0, env_ag)
 
     editor = _clean_label(hint.get("editor"), "") or (editors[0] if editors else "")
     if not editor:
