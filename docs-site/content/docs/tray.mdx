@@ -1,15 +1,27 @@
 ---
 title: CLI and tray
-description: StruggleTime single-binary CLI and tray supervisor.
+description: One binary for the desktop tray app and the struggletime CLI.
 ---
 
-The release binary is one executable: `struggletime`. Tray, CLI, daemon, and
-local HTTP server all live inside it. Download from
-[GitHub Releases](https://github.com/derekified/struggletime/releases).
+The release binary is one executable: `struggletime` / `struggletime.exe`.
+Tray, CLI, daemon, and local HTTP server all live inside it. Download from
+[GitHub Releases](https://github.com/derekified/struggletime/releases). See
+[Installation](/docs/installation) for App + PATH setup on each OS.
+
+## App mode vs CLI mode
+
+| How you launch | What happens |
+|---|---|
+| Double-click / Start Menu / Applications / `struggletime --tray` | Tray icon + background tracker supervisor (no extra console on Windows) |
+| Terminal with a subcommand (`status`, `apikey`, `serve`, …) | Normal CLI on stdout/stderr, then exit |
+| Terminal with no args (interactive TTY) | Prints `status` |
+
+App and CLI share settings, API key, linked projects, and the hash-chained ledger.
 
 ## CLI
 
 ```bash
+struggletime --version
 struggletime apikey <st_…>
 struggletime start --repo ~/my-project
 struggletime status
@@ -22,6 +34,7 @@ struggletime logs
 struggletime server          # show or set API URL
 struggletime config          # settings path
 struggletime verify --ledger .aitime-ledger.json
+struggletime --help
 ```
 
 Settings live in `~/.config/struggletime/settings.json`. `start` re-launches
@@ -37,14 +50,16 @@ struggletime serve           # http://127.0.0.1:18765
 ## Tray
 
 ```bash
+struggletime --tray
 struggletime tray
-# force supervisor-only (no menu-bar icon):
+# supervisor only (no icon; prints status):
 struggletime tray --headless
 ```
 
-On **macOS** and **Windows**, `tray` opens a menu-bar / notification-area icon
-using the StruggleTime SVG (transparent background), tinted from your
-colourscheme (`theme` in `settings.json`, default `classic`):
+On **macOS** and **Windows**, and on **Linux** release builds with AppIndicator,
+the tray opens a menu-bar / notification-area icon using the StruggleTime SVG
+(transparent background), tinted from your colourscheme (`theme` in
+`settings.json`, default `classic`):
 
 | State | Icon colour |
 |---|---|
@@ -52,7 +67,7 @@ colourscheme (`theme` in `settings.json`, default `classic`):
 | Paused | theme `--trust-yellow` |
 | Idle | theme `--mut` |
 
-Menu (same layout as the old Python tray):
+Menu:
 
 - Status / Today (read-only)
 - set / link API key…
@@ -66,12 +81,22 @@ Menu (same layout as the old Python tray):
 - settings…
 - quit
 
-On **Linux**, or if the graphical tray cannot start, it runs a headless
-supervisor that prints the same status line and keeps the daemon alive.
+If the graphical tray cannot start, StruggleTime falls back to a headless
+supervisor that keeps the daemon alive.
 
-Login autostart: `sh daemon/autostart.sh`.
+### Auto-start on login
+
+```bash
+sh daemon/autostart.sh
+```
+
+- **macOS:** LaunchAgent → `struggletime --tray`
+- **Linux:** `~/.config/autostart/struggletime.desktop` (+ optional user systemd unit)
+- **Windows:** `install.ps1 -Autostart` writes a Startup-folder shortcut
 
 ## Privacy
 
 Only allowlisted metadata is synced. After a seal, open
 `.aitime-ledger.json` in the project folder, or run `struggletime logs`.
+File paths are stored as `sha256(salt:path)`. Each sealed bucket points at the
+previous one with `prev_hash`.

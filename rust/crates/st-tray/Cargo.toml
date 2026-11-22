@@ -9,6 +9,11 @@ description = "StruggleTime menu bar / system tray (native binary)"
 name = "struggletime-tray"
 path = "src/main.rs"
 
+[features]
+default = []
+# Linux AppIndicator tray pulls GTK. Enable for desktop release packages.
+linux-tray = ["dep:tray-icon", "dep:winit", "dep:resvg", "dep:usvg", "dep:tiny-skia"]
+
 [dependencies]
 st-core = { workspace = true }
 serde = { workspace = true }
@@ -19,10 +24,18 @@ chrono = { workspace = true }
 reqwest = { workspace = true }
 open = "5"
 
-# Graphical tray + SVG→PNG on desktop OS with a menu bar / notification area.
+# Always-on graphical tray for macOS / Windows.
 [target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
 tray-icon = "0.19"
 winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
 resvg = "0.44"
 usvg = "0.44"
 tiny-skia = "0.11"
+
+# Optional Linux tray (libayatana-appindicator). Opt-in via feature `linux-tray`.
+[target.'cfg(target_os = "linux")'.dependencies]
+tray-icon = { version = "0.19", optional = true }
+winit = { version = "0.30", default-features = false, features = ["rwh_06", "x11", "wayland"], optional = true }
+resvg = { version = "0.44", optional = true }
+usvg = { version = "0.44", optional = true }
+tiny-skia = { version = "0.11", optional = true }

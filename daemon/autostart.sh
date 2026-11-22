@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install StruggleTime so the tray starts on login. No sudo.
+# Start StruggleTime tray on login. No sudo.
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${HOME}/.local/bin"
@@ -8,7 +8,7 @@ AUTOSTART="${XDG_CONFIG_HOME:-$HOME/.config}/autostart"
 DATA="${STRUGGLETIME_HOME:-$HOME/.aitime}"
 
 mkdir -p "$BIN" "$CONFIG" "$DATA"
-sh "$ROOT/scripts/install_binaries.sh"
+sh "$ROOT/scripts/install.sh"
 
 LAUNCHER="$BIN/struggletime-login"
 cat > "$LAUNCHER" <<EOF
@@ -17,7 +17,7 @@ export PATH="\$HOME/.local/bin:\$PATH"
 export STRUGGLETIME_CONFIG="\${STRUGGLETIME_CONFIG:-\$HOME/.config/struggletime}"
 export AITIME_HOME="\${AITIME_HOME:-\$HOME/.aitime}"
 mkdir -p "\$STRUGGLETIME_CONFIG" "\$AITIME_HOME"
-exec struggletime tray --headless
+exec struggletime --tray
 EOF
 chmod +x "$LAUNCHER"
 
@@ -30,6 +30,8 @@ case "$OS" in
 Type=Application
 Name=StruggleTime
 Exec=$LAUNCHER
+Icon=struggletime
+Terminal=false
 X-GNOME-Autostart-enabled=true
 EOF
     cat > "${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user/struggletime.service" <<EOF
@@ -53,7 +55,11 @@ EOF
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0"><dict>
   <key>Label</key><string>com.struggletime.tray</string>
-  <key>ProgramArguments</key><array><string>$LAUNCHER</string></array>
+  <key>ProgramArguments</key>
+  <array>
+    <string>$BIN/struggletime</string>
+    <string>--tray</string>
+  </array>
   <key>RunAtLoad</key><true/>
 </dict></plist>
 EOF

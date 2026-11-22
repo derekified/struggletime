@@ -9,6 +9,11 @@ description = "StruggleTime single binary — tray, CLI, daemon, and local HTTP 
 name = "struggletime"
 path = "src/main.rs"
 
+[features]
+default = []
+# Forward Linux AppIndicator tray (GTK). Used by release CI on Linux.
+linux-tray = ["st-tray/linux-tray"]
+
 [dependencies]
 st-core = { workspace = true }
 st-daemon = { path = "../st-daemon" }

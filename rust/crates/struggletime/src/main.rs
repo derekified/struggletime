@@ -1,4 +1,10 @@
 //! StruggleTime — single native binary (tray + CLI + daemon + local HTTP server).
+//!
+//! Dual entrypoint:
+//! - Desktop / no TTY / `--tray` → system tray (no console window on Windows release builds)
+//! - Terminal with CLI args → normal stdout/stderr CLI
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
+
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use st_core::ledger::Ledger;
@@ -7,6 +13,7 @@ use st_daemon::{run as run_daemon, DaemonArgs};
 use st_helper::{run as run_helper, HelperCli, HelperCmd};
 use st_server::{run as run_server, ServerArgs};
 use st_tray::{run as run_tray, TrayArgs};
+use std::io::IsTerminal;
 use std::path::PathBuf;
 
 #[derive(Parser, Debug)]
@@ -16,6 +23,10 @@ use std::path::PathBuf;
     version
 )]
 struct Cli {
+    /// Start the desktop tray (same as double-clicking the app)
+    #[arg(long)]
+    tray: bool,
+
     #[command(subcommand)]
     cmd: Option<Cmd>,
 }
@@ -81,8 +92,22 @@ enum Cmd {
 }
 
 fn main() -> Result<()> {
+    #[cfg(windows)]
+    win_console::attach_if_cli();
+
     let cli = Cli::parse();
-    match cli.cmd.unwrap_or(Cmd::Status) {
+    let cmd = if cli.tray {
+        Cmd::Tray(TrayArgs::default())
+    } else if let Some(cmd) = cli.cmd {
+        cmd
+    } else if !std::io::stdin().is_terminal() || !std::io::stdout().is_terminal() {
+        // Double-click / GUI launch / piped invoke with no subcommand → tray.
+        Cmd::Tray(TrayArgs::default())
+    } else {
+        Cmd::Status
+    };
+
+    match cmd {
         Cmd::Daemon(args) => run_daemon(args),
         Cmd::Serve(args) => run_server(args),
         Cmd::Tray(args) => run_tray(args),
@@ -152,5 +177,51 @@ fn verify_ledger(path: Option<PathBuf>) -> Result<()> {
             eprintln!("chain:   {e}");
         }
         bail!("hash chain verification failed ({} error(s))", errs.len());
+    }
+}
+
+#[cfg(windows)]
+mod win_console {
+    //! Attach to the parent console when invoked as a CLI from a terminal.
+    //! Release builds use windows_subsystem = "windows" so double-click has no console.
+
+    #[link(name = "kernel32")]
+    extern "system" {
+        fn AttachConsole(dw_process_id: u32) -> i32;
+        fn AllocConsole() -> i32;
+    }
+
+    const ATTACH_PARENT_PROCESS: u32 = 0xFFFF_FFFF;
+
+    fn wants_gui_tray(args: &[String]) -> bool {
+        if args.is_empty() {
+            return true;
+        }
+        if args
+            .iter()
+            .any(|a| a == "--help" || a == "-h" || a == "--version" || a == "-V")
+        {
+            return false;
+        }
+        if args == ["--tray"] {
+            return true;
+        }
+        if args.first().map(String::as_str) == Some("tray") {
+            // Graphical tray only; --headless prints to a console.
+            return !args.iter().any(|a| a == "--headless");
+        }
+        false
+    }
+
+    pub fn attach_if_cli() {
+        let args: Vec<String> = std::env::args().skip(1).collect();
+        if wants_gui_tray(&args) {
+            return;
+        }
+        unsafe {
+            if AttachConsole(ATTACH_PARENT_PROCESS) == 0 {
+                let _ = AllocConsole();
+            }
+        }
     }
 }

@@ -28,8 +28,21 @@ jobs:
       - name: build unified binary
         working-directory: rust
         run: cargo build --release -p struggletime
+      - name: Linux tray deps + release build with AppIndicator
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libayatana-appindicator3-dev libgtk-3-dev
+          cd rust && cargo build --release -p struggletime --features linux-tray
       - name: adapter suite
         run: sh scripts/verify_adapters.sh
+      - name: stage linux package smoke
+        run: |
+          chmod +x scripts/*.sh
+          sh scripts/stage_release.sh struggletime-linux-x86_64 rust/target/release/struggletime /tmp/st-dist
+          test -x /tmp/st-dist/struggletime-linux-x86_64/struggletime
+          test -f /tmp/st-dist/struggletime-linux-x86_64/install.sh
+          test -f /tmp/st-dist/struggletime-linux-x86_64/struggletime.desktop
+
 
   docs:
     runs-on: ubuntu-latest

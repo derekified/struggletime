@@ -2,6 +2,7 @@
 #[derive(Clone, Copy, Debug)]
 pub struct ThemePalette {
     pub id: &'static str,
+    #[allow(dead_code)]
     pub bg: &'static str,
     pub accent: &'static str,
     pub mut_fg: &'static str,

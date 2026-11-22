@@ -9,46 +9,52 @@ AGPLv3. Built for Hack Club projects.
 
 https://github.com/derekified/struggletime
 
-## Releases & prebuilt binaries
+## Releases — App + CLI
 
-Download a single OS binary from
-[GitHub Releases](https://github.com/derekified/struggletime/releases)
-(built on `v*` tags). One `struggletime` / `struggletime.exe` includes:
+Each [GitHub Release](https://github.com/derekified/struggletime/releases)
+ships **one** `struggletime` / `struggletime.exe` used as both:
 
-| Built-in | Command |
+| Mode | How |
 |---|---|
-| Tray supervisor | `struggletime tray` |
-| CLI | `struggletime status`, `start`, `apikey`, … |
-| Background tracker | `struggletime daemon` |
-| Local HTTP server | `struggletime serve` |
+| Desktop tray app | Start Menu / Applications / `struggletime --tray` |
+| CLI | `struggletime status`, `apikey`, `start`, … |
 
-### Quick install
+Same binary, same settings, same hash-chained ledger (`prev_hash`,
+`sha256(salt:path)`).
 
-Requires a published
-[GitHub Release](https://github.com/derekified/struggletime/releases)
-(`v*` tag). If `curl` returns a 9-byte body / `Not Found`, no release is up yet.
-Build from source below, or wait for the latest `v*` release assets.
-
-**macOS Universal** (Apple Silicon + Intel)
+### macOS Universal (Apple Silicon + Intel)
 
 ```bash
 curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
 curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
 shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
 tar -xzf struggletime-macos-universal.tar.gz
-chmod +x struggletime-macos-universal/struggletime
-sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
-struggletime tray   # menu-bar icon on macOS
+sh struggletime-macos-universal/install.sh struggletime-macos-universal/struggletime
+struggletime --version
+open -a StruggleTime
 ```
 
 **macOS Intel:** same steps with `struggletime-macos-intel.tar.gz`.
 
-**Windows x64:** download `struggletime-windows-x64.exe`, check it against
-`SHA256SUMS.txt` or the `.sha256` file, then put it on your PATH as
-`struggletime.exe`.
+### Linux x86_64
 
-Every release includes `SHA256SUMS.txt`. More detail:
-[docs/installation](https://struggletime.screenseekr.com/docs/installation/).
+```bash
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-linux-x86_64.tar.gz
+tar -xzf struggletime-linux-x86_64.tar.gz
+sh struggletime-linux-x86_64/install.sh struggletime-linux-x86_64/struggletime
+struggletime --version
+```
+
+### Windows x64
+
+Download `struggletime-windows-x64.zip`, then:
+
+```powershell
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+struggletime --version
+```
+
+Full steps: [docs/installation](https://struggletime.screenseekr.com/docs/installation/).
 
 ## Install from source
 
@@ -56,14 +62,12 @@ Every release includes `SHA256SUMS.txt`. More detail:
 git clone https://github.com/derekified/struggletime.git
 cd struggletime
 make rust
-make install-binaries      # ~/.local/bin/struggletime
+make install               # App + CLI
 struggletime serve         # http://127.0.0.1:18765
 struggletime apikey <st_…>
 struggletime start --repo ~/my-project
 struggletime status
 ```
-
-You do not need a scripting-language runtime.
 
 ## What it does
 
@@ -79,6 +83,7 @@ Optional IDE and agent adapters live under `adapters/`.
 |---|---|
 | `rust/` | unified `struggletime` binary (`make rust`) |
 | `daemon/` | installers, shell hooks, assets |
+| `scripts/install.sh` / `install.ps1` | App + CLI installers |
 | `adapters/` | optional editor / agent bridges |
 | `server/static/` | dashboard SPA |
 | `docs-site/` | Fumadocs → `/docs` |
@@ -89,7 +94,7 @@ Optional IDE and agent adapters live under `adapters/`.
 
 ```bash
 make rust              # release binary
-make install-binaries  # link into ~/.local/bin
+make install           # desktop app + CLI on PATH
 make check             # cargo test + adapter verify
 make clippy
 make server            # struggletime serve

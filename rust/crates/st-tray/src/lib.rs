@@ -1,4 +1,7 @@
-#![cfg_attr(not(any(target_os = "macos", target_os = "windows")), allow(dead_code))]
+#![cfg_attr(
+    not(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray"))),
+    allow(dead_code)
+)]
 //! StruggleTime tray — menu-bar matching the classic Python tray.
 use anyhow::Result;
 use clap::Parser;
@@ -21,9 +24,18 @@ mod theme;
 #[command(name = "struggletime-tray")]
 pub struct TrayArgs {
     #[arg(long, default_value_t = false)]
-    headless: bool,
+    pub headless: bool,
     #[arg(long, default_value_t = 15)]
-    interval: u64,
+    pub interval: u64,
+}
+
+impl Default for TrayArgs {
+    fn default() -> Self {
+        Self {
+            headless: false,
+            interval: 15,
+        }
+    }
 }
 
 #[derive(Clone, Default)]
@@ -37,16 +49,16 @@ pub fn run(args: TrayArgs) -> Result<()> {
     ensure_daemon_if_configured()?;
 
     if !args.headless {
-        #[cfg(any(target_os = "macos", target_os = "windows"))]
+        #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray")))]
         {
             match native::run_native_tray(args.interval.max(5), Arc::clone(&state)) {
                 Ok(()) => return Ok(()),
                 Err(e) => eprintln!("graphical tray unavailable ({e}); using headless supervisor"),
             }
         }
-        #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+        #[cfg(not(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray"))))]
         {
-            eprintln!("StruggleTime tray: headless supervisor on this OS (menu-bar icon is macOS/Windows)");
+            eprintln!("StruggleTime tray: headless supervisor on this OS");
         }
     }
     run_headless(args.interval.max(5), state)
@@ -428,7 +440,7 @@ fn do_open_api_key_page() {
     open_url(&format!("{}/settings", browser_base(&s)));
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray")))]
 mod native {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};
@@ -570,7 +582,7 @@ mod native {
             let tip = format_duration(self.state.lock().map(|g| g.hours).unwrap_or(0.0));
             if let Some(tray) = &self.tray {
                 let _ = tray.set_tooltip(Some(tip.clone()));
-                let _ = tray.set_title(Some(tip));
+                tray.set_title(Some(tip));
             }
             self.item_status.set_text(status_line(&self.state));
             self.item_today.set_text(today_line(&self.state));

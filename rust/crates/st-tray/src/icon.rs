@@ -2,7 +2,7 @@
 use crate::theme::ThemePalette;
 use anyhow::Result;
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray")))]
 pub fn make_icon(theme: ThemePalette, tracking: bool, paused: bool) -> Result<tray_icon::Icon> {
     use crate::theme::icon_fg;
     let fg = icon_fg(theme, tracking, paused);
@@ -10,7 +10,7 @@ pub fn make_icon(theme: ThemePalette, tracking: bool, paused: bool) -> Result<tr
     tray_icon::Icon::from_rgba(rgba, w, h).map_err(|e| anyhow::anyhow!(e))
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray")))]
 fn render_svg_rgba(fg: &str, size: u32) -> Result<(Vec<u8>, u32, u32)> {
     use anyhow::Context;
     let raw = include_str!("../assets/struggletime.svg");
@@ -40,7 +40,7 @@ fn render_svg_rgba(fg: &str, size: u32) -> Result<(Vec<u8>, u32, u32)> {
     Ok((pixmap.take(), size, size))
 }
 
-#[cfg(not(any(target_os = "macos", target_os = "windows")))]
+#[cfg(not(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray"))))]
 pub fn make_icon(_theme: ThemePalette, _tracking: bool, _paused: bool) -> Result<()> {
     Ok(())
 }

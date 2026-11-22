@@ -5,7 +5,10 @@ daemon, and local HTTP server.
 
 ```bash
 cargo build --release -p struggletime
+# Linux release packages with AppIndicator tray:
+cargo build --release -p struggletime --features linux-tray
 ./target/release/struggletime --help
+./target/release/struggletime --tray
 ```
 
 | Subcommand | Crate | Role |
@@ -13,17 +16,18 @@ cargo build --release -p struggletime
 | `daemon` | `st-daemon` | watch repos, seal ledger, sync |
 | `serve` | `st-server` | API + static dashboard |
 | (CLI) | `st-helper` | apikey / start / stop / status |
-| `tray` | `st-tray` | headless supervisor |
+| `tray` / `--tray` | `st-tray` | desktop tray or headless supervisor |
 | (shared) | `st-core` | scoring, ledger, privacy |
 
-Legacy thin binaries (`struggletime-daemon`, …) still build from the same libs
-for local debugging. Releases ship only `struggletime`.
+Desktop double-click / no TTY / `--tray` starts the tray. Terminal commands
+(`status`, `apikey`, …) run as a normal CLI (Windows release builds attach the
+parent console).
 
 ```bash
 cargo test --workspace
 cargo build --release -p struggletime
 # from repo root:
-make install-binaries
+make install
 ```
 
 Privacy: buckets are allowlisted metadata only. File identities are

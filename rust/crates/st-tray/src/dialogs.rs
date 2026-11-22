@@ -1,8 +1,9 @@
 //! Native OS prompts (osascript / PowerShell) for tray actions.
 use std::path::{Path, PathBuf};
-#[cfg(any(target_os = "macos", target_os = "windows"))]
+#[cfg(any(target_os = "macos", target_os = "windows", target_os = "linux"))]
 use std::process::Command;
 
+#[cfg(target_os = "macos")]
 fn escape_as(s: &str) -> String {
     s.replace('\\', "\\\\").replace('"', "\\\"")
 }
@@ -46,7 +47,31 @@ pub fn prompt(title: &str, message: &str, secret: bool) -> Option<String> {
         let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
         return if s.is_empty() { None } else { Some(s) };
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    {
+        let _ = secret;
+        // Prefer zenity, then kdialog; never echo secrets to the terminal.
+        if let Ok(out) = Command::new("zenity")
+            .args(["--entry", "--title", title, "--text", message])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                return if s.is_empty() { None } else { Some(s) };
+            }
+        }
+        if let Ok(out) = Command::new("kdialog")
+            .args(["--title", title, "--inputbox", message])
+            .output()
+        {
+            if out.status.success() {
+                let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+                return if s.is_empty() { None } else { Some(s) };
+            }
+        }
+        None
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = (title, message, secret);
         None
@@ -87,7 +112,20 @@ pub fn alert(title: &str, message: &str) -> bool {
             .map(|s| s.success())
             .unwrap_or(false);
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    {
+        if Command::new("zenity")
+            .args(["--info", "--title", title, "--text", message])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+        {
+            return true;
+        }
+        eprintln!("[{title}] {message}");
+        true
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         eprintln!("[{title}] {message}");
         true
@@ -121,7 +159,15 @@ pub fn confirm(title: &str, message: &str) -> bool {
             .map(|s| s.success())
             .unwrap_or(false)
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    {
+        Command::new("zenity")
+            .args(["--question", "--title", title, "--text", message])
+            .status()
+            .map(|s| s.success())
+            .unwrap_or(false)
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = (title, message);
         false
@@ -183,7 +229,31 @@ if ($f.ShowDialog() -eq 'OK') { Write-Output $f.SelectedPath; exit 0 } else { ex
             Some(PathBuf::from(s))
         }
     }
-    #[cfg(not(any(target_os = "macos", target_os = "windows")))]
+    #[cfg(target_os = "linux")]
+    {
+        let start_s = start.to_string_lossy();
+        let out = Command::new("zenity")
+            .args([
+                "--file-selection",
+                "--directory",
+                "--title",
+                title,
+                "--filename",
+                &format!("{start_s}/"),
+            ])
+            .output()
+            .ok()?;
+        if !out.status.success() {
+            return None;
+        }
+        let s = String::from_utf8_lossy(&out.stdout).trim().to_string();
+        if s.is_empty() {
+            None
+        } else {
+            Some(PathBuf::from(s))
+        }
+    }
+    #[cfg(not(any(target_os = "macos", target_os = "windows", target_os = "linux")))]
     {
         let _ = (title, start);
         None

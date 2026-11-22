@@ -37,36 +37,54 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
+      - name: Linux tray deps
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y libayatana-appindicator3-dev libgtk-3-dev
       - name: Build release binary
         working-directory: rust
-        run: cargo build --release -p struggletime --target ${{ matrix.target }}
+        run: |
+          EXTRA=
+          if [ "${{ runner.os }}" = "Linux" ]; then
+            EXTRA="--features linux-tray"
+          fi
+          cargo build --release -p struggletime --target ${{ matrix.target }} $EXTRA
+        shell: bash
       - name: Stage artifact (Unix)
         if: runner.os != 'Windows'
         run: |
           set -euo pipefail
-          OUT="dist/${{ matrix.artifact }}"
-          mkdir -p "$OUT"
+          chmod +x scripts/*.sh
           BIN="rust/target/${{ matrix.target }}/release/struggletime"
-          cp "$BIN" "$OUT/struggletime"
-          chmod +x "$OUT/struggletime"
+          mkdir -p dist
+          sh scripts/stage_release.sh "${{ matrix.artifact }}" "$BIN" dist
           (
             cd dist
             tar -czf "${{ matrix.artifact }}.tar.gz" "${{ matrix.artifact }}"
             shasum -a 256 "${{ matrix.artifact }}.tar.gz" > "${{ matrix.artifact }}.tar.gz.sha256"
+            # Also ship a ready-to-open .app zip on macOS arch builds
+            if [ -d "${{ matrix.artifact }}/StruggleTime.app" ]; then
+              ditto -c -k --sequesterRsrc --keepParent \
+                "${{ matrix.artifact }}/StruggleTime.app" \
+                "${{ matrix.artifact }}-app.zip" 2>/dev/null \
+                || (cd "${{ matrix.artifact }}" && zip -qr "../${{ matrix.artifact }}-app.zip" StruggleTime.app)
+              shasum -a 256 "${{ matrix.artifact }}-app.zip" > "${{ matrix.artifact }}-app.zip.sha256"
+            fi
           )
       - name: Stage artifact (Windows)
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
-          $out = "dist/${{ matrix.artifact }}"
-          New-Item -ItemType Directory -Force -Path $out | Out-Null
-          Copy-Item "rust/target/${{ matrix.target }}/release/struggletime.exe" "$out/struggletime.exe"
-          Compress-Archive -Path "$out\struggletime.exe" -DestinationPath "dist/${{ matrix.artifact }}.zip" -Force
-          Copy-Item "rust/target/${{ matrix.target }}/release/struggletime.exe" "dist/struggletime-windows-x64.exe"
-          $hashZip = (Get-FileHash "dist/${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
-          Set-Content -Path "dist/${{ matrix.artifact }}.zip.sha256" -Value "$hashZip  ${{ matrix.artifact }}.zip"
-          $hashExe = (Get-FileHash "dist/struggletime-windows-x64.exe" -Algorithm SHA256).Hash.ToLower()
-          Set-Content -Path "dist/struggletime-windows-x64.exe.sha256" -Value "$hashExe  struggletime-windows-x64.exe"
+          $bin = "rust/target/${{ matrix.target }}/release/struggletime.exe"
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          bash scripts/stage_release.sh "${{ matrix.artifact }}" $bin dist
+          Compress-Archive -Path "dist\${{ matrix.artifact }}\*" -DestinationPath "dist\${{ matrix.artifact }}.zip" -Force
+          Copy-Item $bin "dist\struggletime-windows-x64.exe"
+          $hashZip = (Get-FileHash "dist\${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "dist\${{ matrix.artifact }}.zip.sha256" -Value "$hashZip  ${{ matrix.artifact }}.zip"
+          $hashExe = (Get-FileHash "dist\struggletime-windows-x64.exe" -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "dist\struggletime-windows-x64.exe.sha256" -Value "$hashExe  struggletime-windows-x64.exe"
       - uses: actions/upload-artifact@v4
         with:
           name: ${{ matrix.artifact }}
@@ -78,25 +96,33 @@ jobs:
     needs: build
     runs-on: macos-latest
     steps:
+      - uses: actions/checkout@v4
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
-      - name: Make universal binary (lipo)
+      - name: Make universal binary + app
         run: |
           set -euo pipefail
-          mkdir -p dist/struggletime-macos-universal /tmp/arm /tmp/intel
+          chmod +x scripts/*.sh
+          mkdir -p dist /tmp/arm /tmp/intel
           tar -xzf artifacts/struggletime-macos-aarch64/struggletime-macos-aarch64.tar.gz -C /tmp/arm
           tar -xzf artifacts/struggletime-macos-intel/struggletime-macos-intel.tar.gz -C /tmp/intel
+          mkdir -p /tmp/uni
           lipo -create \
             /tmp/arm/struggletime-macos-aarch64/struggletime \
             /tmp/intel/struggletime-macos-intel/struggletime \
-            -output dist/struggletime-macos-universal/struggletime
-          chmod +x dist/struggletime-macos-universal/struggletime
-          lipo -info dist/struggletime-macos-universal/struggletime
+            -output /tmp/uni/struggletime
+          chmod +x /tmp/uni/struggletime
+          lipo -info /tmp/uni/struggletime
+          sh scripts/stage_release.sh struggletime-macos-universal /tmp/uni/struggletime dist
           (
             cd dist
             tar -czf struggletime-macos-universal.tar.gz struggletime-macos-universal
             shasum -a 256 struggletime-macos-universal.tar.gz > struggletime-macos-universal.tar.gz.sha256
+            ditto -c -k --sequesterRsrc --keepParent \
+              struggletime-macos-universal/StruggleTime.app \
+              struggletime-macos-universal-app.zip
+            shasum -a 256 struggletime-macos-universal-app.zip > struggletime-macos-universal-app.zip.sha256
           )
       - uses: actions/upload-artifact@v4
         with:
@@ -104,6 +130,8 @@ jobs:
           path: |
             dist/struggletime-macos-universal.tar.gz
             dist/struggletime-macos-universal.tar.gz.sha256
+            dist/struggletime-macos-universal-app.zip
+            dist/struggletime-macos-universal-app.zip.sha256
 
   release:
     needs: [build, macos-universal]
@@ -129,7 +157,7 @@ jobs:
           path: artifacts
       - name: Assemble SHA256SUMS + publish
         env:
-          GH_TOKEN: ${{ github.token }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           set -euo pipefail
           TAG="${{ steps.meta.outputs.tag }}"
@@ -151,6 +179,7 @@ jobs:
             test -f struggletime-macos-universal.tar.gz
             test -f struggletime-macos-intel.tar.gz
             test -f struggletime-windows-x64.exe
+            test -f struggletime-linux-x86_64.tar.gz
           )
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             git fetch --tags origin
@@ -162,23 +191,44 @@ jobs:
           cat > /tmp/release-notes.md <<EOF
           ## Downloads
 
-          - macOS Universal (\`struggletime-macos-universal.tar.gz\`) — Apple Silicon + Intel
-          - macOS Intel (\`struggletime-macos-intel.tar.gz\`) — x86_64-apple-darwin
-          - Windows x64 (\`struggletime-windows-x64.exe\` / .zip) — x86_64-pc-windows-msvc
-          - Linux x86_64 (\`struggletime-linux-x86_64.tar.gz\`)
+          Each OS package is **one** \`struggletime\` binary used as both the desktop tray app and the CLI.
+
+          - **macOS Universal** — \`struggletime-macos-universal.tar.gz\` (+ \`…-app.zip\` for StruggleTime.app)
+          - **macOS Intel** — \`struggletime-macos-intel.tar.gz\`
+          - **Windows x64** — \`struggletime-windows-x64.exe\` / \`.zip\` (run \`install.ps1\`)
+          - **Linux x86_64** — \`struggletime-linux-x86_64.tar.gz\` (run \`install.sh\`)
 
           Verify with \`SHA256SUMS.txt\`.
+
+          ### macOS (Universal)
 
           \`\`\`bash
           curl -fLO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz
           curl -fLO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz.sha256
           shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
           tar -xzf struggletime-macos-universal.tar.gz
-          sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
-          struggletime tray
+          sh struggletime-macos-universal/install.sh struggletime-macos-universal/struggletime
+          struggletime --version
+          \`\`\`
+
+          ### Linux
+
+          \`\`\`bash
+          curl -fLO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-linux-x86_64.tar.gz
+          tar -xzf struggletime-linux-x86_64.tar.gz
+          sh struggletime-linux-x86_64/install.sh struggletime-linux-x86_64/struggletime
+          struggletime --version
+          \`\`\`
+
+          ### Windows
+
+          Download \`struggletime-windows-x64.zip\`, then:
+
+          \`\`\`powershell
+          powershell -ExecutionPolicy Bypass -File .\\install.ps1
+          struggletime --version
           \`\`\`
           EOF
-          # Strip the leading spaces that YAML block indentation added to the heredoc body.
           sed -i 's/^          //' /tmp/release-notes.md
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "StruggleTime $TAG" \

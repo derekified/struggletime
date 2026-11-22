@@ -1,83 +1,123 @@
 ---
 title: Installation
-description: Install the StruggleTime single binary and link a project.
+description: Install StruggleTime as a desktop app and CLI on macOS, Linux, and Windows.
 ---
 
 Repo: [github.com/derekified/struggletime](https://github.com/derekified/struggletime).
 
+StruggleTime ships as **one native binary** that is both:
+
+- a **desktop tray app** (menu bar / notification area / AppIndicator)
+- a **`struggletime` CLI** in your terminal
+
+App mode and CLI mode share the same binary, the same SQLite/settings store, and
+the same hash-chained ledger (`.aitime-ledger.json` with `prev_hash`). Paths leave
+as salted IDs (`sha256(salt:path)`). Only allowlisted metadata (~25–50 KB per
+bucket) is sealed — never prompts, transcripts, file contents, argv, or raw paths.
+
 ## Requirements
 
-- A release archive **or** a Rust toolchain to build from source
+- A [GitHub Release](https://github.com/derekified/struggletime/releases) archive,
+  **or** a Rust toolchain to build from source
 - Git
-- Node 22+ only if you rebuild docs (`make docs`)
 
-## Releases & prebuilt binaries
-
-Download from [GitHub Releases](https://github.com/derekified/struggletime/releases)
-(built on each `v*` tag). Each archive is **one** `struggletime` binary that
-bundles:
-
-- tray supervisor
-- CLI (`status`, `start`, `apikey`, …)
-- background tracker (`daemon`)
-- local HTTP server (`serve`)
-
-### macOS Universal (Apple Silicon + Intel)
+## macOS (Universal — Apple Silicon + Intel)
 
 ```bash
-# fails fast with HTTP 404 if no release assets exist yet (-f)
 curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
 curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
 shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
 tar -xzf struggletime-macos-universal.tar.gz
-chmod +x struggletime-macos-universal/struggletime
-sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
-struggletime tray
+sh struggletime-macos-universal/install.sh struggletime-macos-universal/struggletime
 ```
 
-### macOS Intel (`x86_64`)
+That installs:
+
+- `StruggleTime.app` in `/Applications` (or `~/Applications`) — menu-bar app, no Dock icon (`LSUIElement`)
+- `struggletime` on your PATH (`~/.local/bin` and `/usr/local/bin` when writable)
+
+You can also open the ready-made `struggletime-macos-universal-app.zip` and drag
+`StruggleTime.app` into Applications, then:
 
 ```bash
-curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz
-curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz.sha256
-shasum -a 256 -c struggletime-macos-intel.tar.gz.sha256
-tar -xzf struggletime-macos-intel.tar.gz
-chmod +x struggletime-macos-intel/struggletime
-sudo install -m 755 struggletime-macos-intel/struggletime /usr/local/bin/struggletime
+sudo ln -sf /Applications/StruggleTime.app/Contents/MacOS/struggletime /usr/local/bin/struggletime
 ```
 
-### Windows (x64)
+### macOS Intel only
+
+Same steps with `struggletime-macos-intel.tar.gz`.
+
+### Check the install
+
+```bash
+struggletime --version
+open -a StruggleTime          # tray
+struggletime status           # CLI
+```
+
+Login autostart: `sh daemon/autostart.sh` (LaunchAgent calling `struggletime --tray`).
+
+## Linux (x86_64)
+
+Release Linux builds include the AppIndicator tray (`linux-tray` feature). Install
+`libayatana-appindicator3` (or AppIndicator) for the icon. Without the library,
+StruggleTime still runs a headless supervisor and keeps tracking.
+
+```bash
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-linux-x86_64.tar.gz
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-linux-x86_64.tar.gz.sha256
+sha256sum -c struggletime-linux-x86_64.tar.gz.sha256
+tar -xzf struggletime-linux-x86_64.tar.gz
+sh struggletime-linux-x86_64/install.sh struggletime-linux-x86_64/struggletime
+```
+
+That installs:
+
+- `~/.local/bin/struggletime`
+- `~/.local/share/applications/struggletime.desktop` (shows up as **StruggleTime**)
+- `~/.config/autostart/struggletime.desktop` (login start; set `AUTOSTART_INSTALL=0` to skip)
+
+```bash
+struggletime --version
+struggletime --tray           # or open StruggleTime from your app menu
+struggletime status
+```
+
+## Windows (x64)
+
+1. Download `struggletime-windows-x64.zip` from
+   [Releases](https://github.com/derekified/struggletime/releases).
+2. Extract, then run:
 
 ```powershell
-# Download struggletime-windows-x64.exe (+ .sha256) from Releases, then:
-Get-FileHash .\struggletime-windows-x64.exe -Algorithm SHA256
-# Compare to the hash in struggletime-windows-x64.exe.sha256 / SHA256SUMS.txt
-# Put struggletime-windows-x64.exe on your PATH as struggletime.exe
+powershell -ExecutionPolicy Bypass -File .\install.ps1
+# optional login start:
+powershell -ExecutionPolicy Bypass -File .\install.ps1 -Autostart
 ```
 
-A `.zip` of the same binary is also published. See
-[Releases](https://github.com/derekified/struggletime/releases).
+That installs:
 
-### Checksums
+- `%LocalAppData%\Programs\StruggleTime\struggletime.exe`
+- **Start Menu → StruggleTime** (launches tray, no console window)
+- user `PATH` so `struggletime` works in PowerShell, Command Prompt, and Windows Terminal
 
-Every release includes `SHA256SUMS.txt`. Prefer verifying before first run.
+Open a **new** terminal:
 
-## Build from source
-
-```bash
-git clone https://github.com/derekified/struggletime.git
-cd struggletime
-make rust
-make install-binaries    # ~/.local/bin/struggletime
-struggletime serve       # http://127.0.0.1:18765
+```powershell
+struggletime --version
+struggletime apikey <st_…>
+struggletime status
 ```
+
+Double-clicking the app (or the Start Menu shortcut) starts the tray. Running
+`struggletime status` from a terminal attaches to that console as a normal CLI.
 
 ## Sign in and API key
 
-1. Continue with Hack Club Slack.
+1. Continue with Hack Club Slack on the web dashboard.
 2. Claim a public handle if asked.
 3. Settings → Profile → create a StruggleTime API key (`st_...`).
-4. Paste it:
+4. Paste it into the tray (**set / link API key…**) or:
 
 ```bash
 struggletime apikey <paste-key-here>
@@ -88,10 +128,10 @@ struggletime apikey <paste-key-here>
 ```bash
 struggletime start --repo ~/my-project
 struggletime status
-struggletime tray          # optional supervisor
+struggletime --tray
 ```
 
-Shell hooks (exec categories only, never argv):
+Shell hooks (category labels only — never argv):
 
 ```bash
 # bash / zsh
@@ -101,13 +141,30 @@ source /path/to/struggletime/daemon/hooks.sh
 . C:\path\to\struggletime\daemon\hooks.ps1
 ```
 
+## Build from source
+
+```bash
+git clone https://github.com/derekified/struggletime.git
+cd struggletime
+make rust
+make install                 # App + CLI via scripts/install.sh
+struggletime serve           # http://127.0.0.1:18765
+```
+
+On Windows from source:
+
+```powershell
+cargo build --release -p struggletime --manifest-path rust\Cargo.toml
+powershell -ExecutionPolicy Bypass -File .\scripts\install.ps1
+```
+
 ## Debug
 
 ```bash
 STRUGGLETIME_DEBUG=1 struggletime daemon --repo ~/my-project
 struggletime daemon --debug --repo ~/my-project
 struggletime verify --ledger .aitime-ledger.json
-make check                 # cargo test + adapter verify
+make check
 ```
 
 Debug logs print allowlisted labels only (`editor`, `event_type`, counts).
