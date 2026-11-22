@@ -376,16 +376,15 @@ pub fn validate_allowlist(bucket: &Value) -> Vec<String> {
             if let Some(obj) = f.as_object() {
                 for (k, v) in obj {
                     if let Some(s) = v.as_str() {
-                        if s.starts_with('/') || s.contains(":\\") || s.contains("\\\\") {
-                            if *k != "file_id"
-                                && *k != "op"
-                                && *k != "source"
-                                && *k != "editor"
-                                && *k != "agent"
-                                && *k != "language"
-                            {
-                                errs.push(format!("files[{i}].{k}: looks like an unhashed path"));
-                            }
+                        if (s.starts_with('/') || s.contains(":\\") || s.contains("\\\\"))
+                            && *k != "file_id"
+                            && *k != "op"
+                            && *k != "source"
+                            && *k != "editor"
+                            && *k != "agent"
+                            && *k != "language"
+                        {
+                            errs.push(format!("files[{i}].{k}: looks like an unhashed path"));
                         }
                     }
                 }
