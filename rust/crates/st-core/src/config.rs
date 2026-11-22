@@ -4,7 +4,7 @@ use serde_json::Value;
 use std::fs;
 use std::path::{Path, PathBuf};
 
-pub const DEFAULT_SERVER: &str = "https://62-83-116-143.sslip.io";
+pub const DEFAULT_SERVER: &str = "https://struggletime.screenseekr.com";
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct LinkedProject {

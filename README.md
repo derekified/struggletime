@@ -48,7 +48,7 @@ struggletime tray   # menu-bar icon on macOS
 `struggletime.exe`.
 
 Every release includes `SHA256SUMS.txt`. More detail:
-[docs/installation](https://62-83-116-143.sslip.io/docs/installation/).
+[docs/installation](https://struggletime.screenseekr.com/docs/installation/).
 
 ## Install from source
 
