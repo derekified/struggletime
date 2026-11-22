@@ -1,6 +1,7 @@
 import defaultMdxComponents from 'fumadocs-ui/mdx';
 import type { ComponentPropsWithoutRef } from 'react';
 import type { MDXComponents } from 'mdx/types';
+import { DocsPre } from './docs-pre';
 
 function Table(props: ComponentPropsWithoutRef<'table'>) {
   return (
@@ -14,6 +15,7 @@ export function getMDXComponents(components?: MDXComponents) {
   return {
     ...defaultMdxComponents,
     table: Table,
+    pre: DocsPre,
     ...components,
   } satisfies MDXComponents;
 }

@@ -489,12 +489,14 @@ body {
 }
 
 /*
- * Fumadocs CodeBlock: <figure.shiki.border> > [copy] + <div.fd-scroll-container> > <pre>
- * One chrome only — border/bg on the outer figure; pre/viewport stay naked.
+ * Docs code blocks (st-codeblock via components/mdx.tsx):
+ * <figure.st-codeblock> > .st-code-copy + .st-code-viewport > pre
+ * One outer border; copy control sits in a dedicated gutter (never clipped by overflow).
  */
+.docs-app figure.st-codeblock,
+.docs-app figure.shiki.st-codeblock,
 .docs-app figure.shiki,
-.docs-app figure:has(pre),
-.docs-app figure.not-prose:has(pre) {
+.docs-app figure:has(pre) {
   position: relative;
   width: 100%;
   max-width: 100%;
@@ -508,12 +510,17 @@ body {
   overflow: hidden !important;
 }
 
-.docs-app figure.shiki > div,
-.docs-app figure:has(pre) > div.fd-scroll-container,
-.docs-app figure:has(pre) > div {
+.docs-app .st-code-viewport,
+.docs-app figure.st-codeblock > div.fd-scroll-container,
+.docs-app figure.shiki > div.fd-scroll-container {
+  position: relative;
+  z-index: 0;
+  box-sizing: border-box !important;
+  width: calc(100% - 3.5rem) !important;
+  max-width: calc(100% - 3.5rem) !important;
   margin: 0 !important;
   padding: 0.75rem 0.875rem !important;
-  padding-right: 3rem !important; /* pr-12: clear of copy button */
+  padding-right: 3.5rem !important; /* pr-14 */
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -524,25 +531,31 @@ body {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: var(--st-line) transparent;
+  /* keep scrolled ink inside this box — never over the copy gutter */
+  overflow-clip-margin: 0 !important;
 }
 
-.docs-app figure.shiki > div::-webkit-scrollbar,
-.docs-app figure:has(pre) > div::-webkit-scrollbar {
+.docs-app .st-code-viewport::-webkit-scrollbar,
+.docs-app figure.st-codeblock > div::-webkit-scrollbar,
+.docs-app figure.shiki > div.fd-scroll-container::-webkit-scrollbar {
   height: 8px;
   width: 8px;
 }
 
-.docs-app figure.shiki > div::-webkit-scrollbar-thumb,
-.docs-app figure:has(pre) > div::-webkit-scrollbar-thumb {
+.docs-app .st-code-viewport::-webkit-scrollbar-thumb,
+.docs-app figure.st-codeblock > div::-webkit-scrollbar-thumb,
+.docs-app figure.shiki > div.fd-scroll-container::-webkit-scrollbar-thumb {
   background: var(--st-line);
   border-radius: 999px;
   border: 2px solid transparent;
   background-clip: padding-box;
 }
 
+.docs-app figure.st-codeblock pre,
+.docs-app figure.st-codeblock code,
 .docs-app figure.shiki pre,
-.docs-app figure:has(pre) pre,
 .docs-app figure.shiki code,
+.docs-app figure:has(pre) pre,
 .docs-app figure:has(pre) code {
   background: transparent !important;
   border: 0 !important;
@@ -562,28 +575,69 @@ body {
   box-sizing: border-box;
 }
 
-/* Bare <pre> outside CodeBlock (rare) — single box */
 .docs-app .prose > pre {
   background: var(--st-panel) !important;
   border: 1px solid var(--st-line) !important;
   border-radius: var(--st-radius) !important;
   padding: 12px 14px !important;
-  padding-right: 3rem !important;
+  padding-right: 3.5rem !important;
   overflow-x: auto !important;
   scrollbar-width: thin;
   scrollbar-color: var(--st-line) transparent;
 }
 
-/* Copy control — top-right of the single outer frame */
-.docs-app figure.shiki button,
-.docs-app figure:has(pre) button[aria-label*="opy" i],
-.docs-app figure.shiki [class*="absolute"] button {
-  position: absolute;
-  top: 0.5rem;
-  right: 0.5rem;
-  z-index: 2;
-  width: auto !important;
-  max-width: none !important;
+/* Dedicated copy slot — top-2.5 / right-2.5, outside the scroll viewport */
+.docs-app .st-code-copy {
+  position: absolute !important;
+  top: 0.625rem !important;
+  right: 0.625rem !important;
+  z-index: 20 !important;
+  isolation: isolate;
+  box-sizing: border-box;
+  width: 2rem;
+  height: 2rem;
+  margin: 0;
+  padding: 0;
+  overflow: visible !important;
+  border: 0;
+  background: transparent;
+  pointer-events: none;
+}
+
+.docs-app .st-code-copy button {
+  pointer-events: auto;
+  position: relative !important;
+  z-index: 20 !important;
+  box-sizing: border-box !important;
+  width: 2rem !important;
+  height: 2rem !important;
+  min-width: 2rem !important;
+  min-height: 2rem !important;
+  max-width: 2rem !important;
+  max-height: 2rem !important;
+  padding: 0.5rem !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-shrink: 0 !important;
+  overflow: visible !important;
+  border: 1px solid var(--st-line) !important;
+  border-radius: 0.5rem !important;
+  background: var(--st-panel2) !important;
+  color: var(--st-mut) !important;
+  box-shadow: none !important;
+  line-height: 0 !important;
+  transition: none !important;
+  /* solid plate so scrolled code cannot show through */
+  background-clip: padding-box !important;
+}
+
+.docs-app .st-code-copy button svg {
+  width: 0.875rem !important;
+  height: 0.875rem !important;
+  flex-shrink: 0;
+  overflow: visible !important;
 }
 
 .docs-app hr {
