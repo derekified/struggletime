@@ -367,7 +367,9 @@ pub fn validate_allowlist(bucket: &Value) -> Vec<String> {
         for (i, f) in files.iter().enumerate() {
             if let Some(fid) = f.get("file_id").and_then(|x| x.as_str()) {
                 if fid.len() != 16 || !fid.chars().all(|c| c.is_ascii_hexdigit()) {
-                    errs.push(format!("files[{i}].file_id: must be 16 hex chars (salted id)"));
+                    errs.push(format!(
+                        "files[{i}].file_id: must be 16 hex chars (salted id)"
+                    ));
                 }
             }
             // Absolute / home-looking strings must never appear as values under files.
@@ -375,13 +377,14 @@ pub fn validate_allowlist(bucket: &Value) -> Vec<String> {
                 for (k, v) in obj {
                     if let Some(s) = v.as_str() {
                         if s.starts_with('/') || s.contains(":\\") || s.contains("\\\\") {
-                            if *k != "file_id" && *k != "op" && *k != "source" && *k != "editor"
+                            if *k != "file_id"
+                                && *k != "op"
+                                && *k != "source"
+                                && *k != "editor"
                                 && *k != "agent"
                                 && *k != "language"
                             {
-                                errs.push(format!(
-                                    "files[{i}].{k}: looks like an unhashed path"
-                                ));
+                                errs.push(format!("files[{i}].{k}: looks like an unhashed path"));
                             }
                         }
                     }
@@ -490,10 +493,7 @@ mod tests {
             "files": [{"file_id": "aaaaaaaaaaaaaaaa", "path": "/tmp/x.rs"}]
         });
         let errs = validate_allowlist(&b);
-        assert!(
-            errs.iter().any(|e| e.contains("prompt_text")),
-            "{errs:?}"
-        );
+        assert!(errs.iter().any(|e| e.contains("prompt_text")), "{errs:?}");
         assert!(errs.iter().any(|e| e.contains("path")), "{errs:?}");
     }
 

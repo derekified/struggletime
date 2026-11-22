@@ -138,16 +138,8 @@ fn status_tooltip() -> String {
         .ok()
         .map(|p| p.trim().to_string())
         .unwrap_or_else(|| "-".into());
-    let alive = pid
-        .parse::<u32>()
-        .ok()
-        .map(process_alive)
-        .unwrap_or(false);
-    let daemon = if alive {
-        pid
-    } else {
-        "down".to_string()
-    };
+    let alive = pid.parse::<u32>().ok().map(process_alive).unwrap_or(false);
+    let daemon = if alive { pid } else { "down".to_string() };
     format!(
         "StruggleTime | {} | handle={} | daemon={} | paused={}",
         normalize_server(&s.server),
