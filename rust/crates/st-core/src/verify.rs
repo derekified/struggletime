@@ -356,49 +356,64 @@ pub fn verify_chain(buckets: &[Value]) -> Vec<String> {
 }
 
 pub fn validate_allowlist(bucket: &Value) -> Vec<String> {
-    const FORBIDDEN: &[&str] = &[
-        "content",
-        "text",
-        "code",
-        "prompt_text",
-        "command",
-        "args",
-        "keystrokes",
-        "screenshot",
-        "image",
-        "path",
-        "filepath",
-        "file_path",
-        "raw",
-        "transcript",
-    ];
+    use crate::agent_events::FORBIDDEN_KEYS;
+
     let mut errs = Vec::new();
-    if let Some(obj) = bucket.as_object() {
-        for k in obj.keys() {
-            if FORBIDDEN.contains(&k.as_str()) {
-                errs.push(format!(
-                    "top.{k}: forbidden (raw content can never be sent)"
-                ));
-            }
-        }
-    }
+    collect_forbidden_paths(bucket, "top", &mut errs);
     if let Some(files) = bucket.get("files").and_then(|v| v.as_array()) {
         if files.len() > 50 {
             errs.push("files: max 50 per bucket".into());
         }
         for (i, f) in files.iter().enumerate() {
+            if let Some(fid) = f.get("file_id").and_then(|x| x.as_str()) {
+                if fid.len() != 16 || !fid.chars().all(|c| c.is_ascii_hexdigit()) {
+                    errs.push(format!("files[{i}].file_id: must be 16 hex chars (salted id)"));
+                }
+            }
+            // Absolute / home-looking strings must never appear as values under files.
             if let Some(obj) = f.as_object() {
-                for k in obj.keys() {
-                    if FORBIDDEN.contains(&k.as_str()) {
-                        errs.push(format!(
-                            "files[{i}].{k}: forbidden (raw content can never be sent)"
-                        ));
+                for (k, v) in obj {
+                    if let Some(s) = v.as_str() {
+                        if s.starts_with('/') || s.contains(":\\") || s.contains("\\\\") {
+                            if *k != "file_id" && *k != "op" && *k != "source" && *k != "editor"
+                                && *k != "agent"
+                                && *k != "language"
+                            {
+                                errs.push(format!(
+                                    "files[{i}].{k}: looks like an unhashed path"
+                                ));
+                            }
+                        }
                     }
                 }
             }
         }
     }
+    // Keep the historical FORBIDDEN list name in error text for ops familiarity.
+    let _ = FORBIDDEN_KEYS;
     errs
+}
+
+fn collect_forbidden_paths(v: &Value, prefix: &str, errs: &mut Vec<String>) {
+    use crate::agent_events::FORBIDDEN_KEYS;
+    match v {
+        Value::Object(map) => {
+            for (k, child) in map {
+                if FORBIDDEN_KEYS.contains(&k.as_str()) {
+                    errs.push(format!(
+                        "{prefix}.{k}: forbidden (raw content can never be sent)"
+                    ));
+                }
+                collect_forbidden_paths(child, &format!("{prefix}.{k}"), errs);
+            }
+        }
+        Value::Array(items) => {
+            for (i, child) in items.iter().enumerate() {
+                collect_forbidden_paths(child, &format!("{prefix}[{i}]"), errs);
+            }
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]
@@ -465,5 +480,31 @@ mod tests {
 
         let errs = verify_chain(&[a, b]);
         assert!(errs.is_empty(), "{errs:?}");
+    }
+
+    #[test]
+    fn allowlist_rejects_nested_prompt_and_path() {
+        let b = json!({
+            "bucket_id": "x",
+            "counts": {"human_edits": 1, "meta": {"prompt_text": "leak"}},
+            "files": [{"file_id": "aaaaaaaaaaaaaaaa", "path": "/tmp/x.rs"}]
+        });
+        let errs = validate_allowlist(&b);
+        assert!(
+            errs.iter().any(|e| e.contains("prompt_text")),
+            "{errs:?}"
+        );
+        assert!(errs.iter().any(|e| e.contains("path")), "{errs:?}");
+    }
+
+    #[test]
+    fn allowlist_rejects_bad_file_id() {
+        let b = json!({
+            "bucket_id": "x",
+            "counts": {"human_edits": 1},
+            "files": [{"file_id": "not-a-salted-id", "op": "modified"}]
+        });
+        let errs = validate_allowlist(&b);
+        assert!(errs.iter().any(|e| e.contains("file_id")), "{errs:?}");
     }
 }

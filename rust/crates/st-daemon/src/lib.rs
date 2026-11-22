@@ -2,14 +2,14 @@
 use anyhow::{Context, Result};
 use chrono::Utc;
 use clap::Parser;
-use serde_json::{json, Value};
+use serde_json::json;
 use st_core::config::{
     daemon_log_path, linked_paths, load_settings, pause_flag_path, runtime_home, Settings,
 };
 use st_core::ledger::Ledger;
 use st_core::privacy::anonymized_file_id;
 use st_core::verify::FORMULA_VERSION;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, Instant, SystemTime};
@@ -387,7 +387,11 @@ async fn flush_pending(p: &mut ProjectState, settings: &Settings) -> Result<()> 
     Ok(())
 }
 
-/// Drain ~/.aitime/agent_events.jsonl (+ legacy exec.jsonl). Metadata only — never paths/argv.
+/// Drain ~/.aitime/agent_events.jsonl (+ legacy exec.jsonl). Metadata only. never paths/argv.
+///
+/// Subagent fan-out / retry storms increment per-event *counts*, but `active_secs`
+/// gains at most one tick per drain so billable `bucket_secs` cannot be inflated
+/// by thousands of micro-events in a single second.
 fn drain_agent_events(projects: &mut [ProjectState]) {
     let home = runtime_home();
     for name in ["agent_events.jsonl", "exec.jsonl"] {
@@ -399,66 +403,42 @@ fn drain_agent_events(projects: &mut [ProjectState]) {
             continue;
         }
         let _ = fs::write(&path, ""); // truncate after read
-        let Some(p) = projects.first_mut() else {
+        if projects.is_empty() {
             continue;
-        };
-        for line in raw.lines() {
-            let Ok(v) = serde_json::from_str::<Value>(line) else {
-                continue;
-            };
-            // Reject forbidden content keys
-            if let Some(obj) = v.as_object() {
-                const FORBIDDEN: &[&str] = &[
-                    "content",
-                    "text",
-                    "code",
-                    "prompt_text",
-                    "command",
-                    "args",
-                    "argv",
-                    "keystrokes",
-                    "screenshot",
-                    "image",
-                    "path",
-                    "filepath",
-                    "file_path",
-                    "raw",
-                    "transcript",
-                    "cwd",
-                    "workspace",
-                ];
-                if obj.keys().any(|k| FORBIDDEN.contains(&k.as_str())) {
-                    continue;
-                }
+        }
+        let (deltas, stats) = st_core::drain_agent_events_jsonl(&raw);
+        if stats.rejected_forbidden > 0 {
+            tracing::debug!(
+                rejected = stats.rejected_forbidden,
+                "dropped adapter lines with forbidden keys"
+            );
+        }
+        let mut touched: HashSet<usize> = HashSet::new();
+        for d in &deltas {
+            let idx = d
+                .project_id
+                .as_ref()
+                .and_then(|pid| projects.iter().position(|p| p.id == *pid))
+                .unwrap_or(0);
+            let p = &mut projects[idx];
+            p.human_edits += d.human_edits;
+            p.ai_writes += d.ai_writes;
+            p.prompts += d.prompts;
+            p.executions += d.executions;
+            p.exec_failures += d.exec_failures;
+            touched.insert(idx);
+        }
+        if stats.activity_tick > 0 {
+            if touched.is_empty() {
+                touched.insert(0);
             }
-            let et = v.get("event_type").and_then(|x| x.as_str()).unwrap_or("");
-            let cat = v.get("category").and_then(|x| x.as_str()).unwrap_or("");
-            match et {
-                "edit" | "save" | "modified" | "created" | "focus" => p.human_edits += 1,
-                "tool" | "start" | "stop" => {
-                    p.ai_writes += 1;
-                    if et == "tool" || cat == "ai_cli" {
-                        p.executions += 1;
-                    }
-                }
-                "prompt" => p.prompts += 1,
-                "exec" | "play" => {
-                    p.executions += 1;
-                    if v.get("exit_code").and_then(|x| x.as_i64()).unwrap_or(0) != 0 {
-                        p.exec_failures += 1;
-                    }
-                }
-                _ => {
-                    if cat == "ai_cli" {
-                        p.ai_writes += 1;
-                    } else if cat == "editor" {
-                        p.human_edits += 1;
-                    }
-                }
+            // At most one active_secs tick per touched project per drain (not per event).
+            for idx in touched {
+                let p = &mut projects[idx];
+                p.active_secs += 1;
+                p.last_activity = Instant::now();
+                p.idle_secs = 0;
             }
-            p.active_secs += 1;
-            p.last_activity = Instant::now();
-            p.idle_secs = 0;
         }
     }
 }

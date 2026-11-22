@@ -1,11 +1,12 @@
 PORT ?= 18765
 
-.PHONY: help check test verify-adapters server daemon tray rust rust-test binaries install-binaries docs docs-dev package clean clippy
+.PHONY: help check test verify-adapters adversarial server daemon tray rust rust-test binaries install-binaries docs docs-dev package clean clippy
 
 help:
 	@echo "make rust / binaries   build unified struggletime binary"
 	@echo "make install-binaries  link into ~/.local/bin"
 	@echo "make check             cargo test + adapter verify"
+	@echo "make adversarial       isolated subagent adversarial harness"
 	@echo "make clippy            cargo clippy -D warnings"
 	@echo "make server            struggletime serve on :$(PORT)"
 	@echo "make daemon            struggletime daemon --repo=\$$REPO"
@@ -20,6 +21,9 @@ test: check
 
 verify-adapters:
 	sh scripts/verify_adapters.sh
+
+adversarial: rust
+	bash scripts/adversarial_subagent_harness.sh
 
 rust binaries:
 	cd rust && cargo build --release -p struggletime
