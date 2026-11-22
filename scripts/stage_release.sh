@@ -16,6 +16,13 @@ case "$ARTIFACT" in
   *windows*)
     cp "$BIN" "$OUT/struggletime.exe"
     cp "$ROOT/scripts/install.ps1" "$OUT/install.ps1"
+    if [ -d "$ROOT/adapters" ]; then
+      cp -a "$ROOT/adapters" "$OUT/adapters"
+    fi
+    if [ -d "$ROOT/daemon" ]; then
+      mkdir -p "$OUT/daemon"
+      cp -f "$ROOT/daemon/hooks.sh" "$ROOT/daemon/hooks.ps1" "$OUT/daemon/" 2>/dev/null || true
+    fi
     cat > "$OUT/README.txt" <<'EOF'
 StruggleTime for Windows
 ========================
@@ -43,6 +50,15 @@ EOF
     sh "$ROOT/scripts/package_macos_app.sh" "$OUT/struggletime" "$OUT"
     cp "$ROOT/scripts/install.sh" "$OUT/install.sh"
     chmod +x "$OUT/install.sh"
+    if [ -d "$ROOT/adapters" ]; then
+      cp -a "$ROOT/adapters" "$OUT/adapters"
+      mkdir -p "$OUT/StruggleTime.app/Contents/Resources"
+      cp -a "$ROOT/adapters" "$OUT/StruggleTime.app/Contents/Resources/adapters"
+    fi
+    if [ -d "$ROOT/daemon" ]; then
+      mkdir -p "$OUT/daemon"
+      cp -f "$ROOT/daemon/hooks.sh" "$ROOT/daemon/hooks.ps1" "$OUT/daemon/" 2>/dev/null || true
+    fi
     cat > "$OUT/README.txt" <<'EOF'
 StruggleTime for macOS
 ======================
@@ -71,6 +87,13 @@ EOF
     mkdir -p "$OUT/share/icons"
     if [ -f "$ROOT/daemon/assets/struggletime.svg" ]; then
       cp "$ROOT/daemon/assets/struggletime.svg" "$OUT/share/icons/struggletime.svg"
+    fi
+    if [ -d "$ROOT/adapters" ]; then
+      cp -a "$ROOT/adapters" "$OUT/adapters"
+    fi
+    if [ -d "$ROOT/daemon" ]; then
+      mkdir -p "$OUT/daemon"
+      cp -f "$ROOT/daemon/hooks.sh" "$ROOT/daemon/hooks.ps1" "$OUT/daemon/" 2>/dev/null || true
     fi
     cat > "$OUT/struggletime.desktop" <<EOF
 [Desktop Entry]

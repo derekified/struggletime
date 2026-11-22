@@ -425,6 +425,44 @@ fn do_settings() {
     );
 }
 
+fn do_install_adapters() {
+    if !dialogs::confirm(
+        "Install adapters",
+        "Install StruggleTime adapters for editors and agents?\n\n\
+         VS Code/Cursor, Neovim, Claude Code, Codex wrap, shell hooks, and project kits.\n\
+         Allowlisted labels only — never prompts, paths, or file contents.",
+    ) {
+        return;
+    }
+    let bin = cli_bin();
+    let out = Command::new(&bin).args(["adapters", "install"]).output();
+    let body = match out {
+        Ok(o) => {
+            let mut t = String::from_utf8_lossy(&o.stdout).trim().to_string();
+            let err = String::from_utf8_lossy(&o.stderr).trim().to_string();
+            if t.is_empty() {
+                t = err;
+            } else if !err.is_empty() {
+                t = format!("{t}\n{err}");
+            }
+            if t.is_empty() {
+                t = if o.status.success() {
+                    "done".into()
+                } else {
+                    format!("failed ({})", o.status)
+                };
+            }
+            // Keep the dialog readable.
+            if t.len() > 3500 {
+                t = format!("{}…\n\n(full output: struggletime adapters install)", &t[..3500]);
+            }
+            t
+        }
+        Err(e) => format!("could not run struggletime adapters install: {e}"),
+    };
+    let _ = dialogs::alert("Adapters", &body);
+}
+
 fn do_dashboard() {
     let s = load_settings().unwrap_or_default();
     let path = if s.token.is_empty() {
@@ -468,6 +506,7 @@ mod native {
         dash: tray_icon::menu::MenuId,
         inspect: tray_icon::menu::MenuId,
         settings: tray_icon::menu::MenuId,
+        adapters: tray_icon::menu::MenuId,
         quit: tray_icon::menu::MenuId,
     }
 
@@ -499,6 +538,7 @@ mod native {
         let item_stop = MenuItem::new("stop tracking", is_tracking, None);
         let item_dash = MenuItem::new("open dashboard", true, None);
         let item_inspect = MenuItem::new("inspect what would be sent", true, None);
+        let item_adapters = MenuItem::new("install adapters…", true, None);
         let item_settings = MenuItem::new("settings…", true, None);
         let item_quit = MenuItem::new("quit", true, None);
 
@@ -513,6 +553,7 @@ mod native {
             dash: item_dash.id().clone(),
             inspect: item_inspect.id().clone(),
             settings: item_settings.id().clone(),
+            adapters: item_adapters.id().clone(),
             quit: item_quit.id().clone(),
         };
 
@@ -531,6 +572,7 @@ mod native {
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&item_dash)?;
         menu.append(&item_inspect)?;
+        menu.append(&item_adapters)?;
         menu.append(&item_settings)?;
         menu.append(&PredefinedMenuItem::separator())?;
         menu.append(&item_quit)?;
@@ -613,6 +655,8 @@ mod native {
                 do_dashboard();
             } else if id == &self.ids.inspect {
                 do_inspect();
+            } else if id == &self.ids.adapters {
+                do_install_adapters();
             } else if id == &self.ids.settings {
                 do_settings();
             } else if id == &self.ids.quit {

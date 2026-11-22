@@ -1,4 +1,8 @@
 //! Native `struggletime-helper` — starts the Rust daemon, manages API key / links.
+mod adapters;
+
+pub use adapters::{install_adapters, install_all_adapters, list_adapters, ADAPTER_NAMES};
+
 use anyhow::{bail, Context, Result};
 use clap::{Parser, Subcommand};
 use st_core::config::{
@@ -61,6 +65,22 @@ pub enum HelperCmd {
     /// Show or set server URL
     Server {
         url: Option<String>,
+    },
+    /// List or install optional editor / agent adapters
+    Adapters {
+        #[command(subcommand)]
+        action: Option<AdaptersAction>,
+    },
+}
+
+#[derive(Subcommand, Debug)]
+pub enum AdaptersAction {
+    /// Show available adapters and install status
+    List,
+    /// Install adapters into editor / user paths (default: all)
+    Install {
+        /// Adapter names (vscode, neovim, claude-code, codex, hooks, …)
+        names: Vec<String>,
     },
 }
 
@@ -173,6 +193,13 @@ pub fn run(cli: HelperCli) -> Result<()> {
             }
             println!("{}", normalize_server(&s.server));
         }
+        HelperCmd::Adapters { action } => match action.unwrap_or(AdaptersAction::List) {
+            AdaptersAction::List => list_adapters()?,
+            AdaptersAction::Install { names } => {
+                let summary = install_adapters(&names)?;
+                println!("{summary}");
+            }
+        },
     }
     Ok(())
 }

@@ -38,6 +38,20 @@ source /path/to/struggletime/daemon/hooks.sh
 
 Adapters write allowlisted metadata only to `~/.aitime/agent_events.jsonl`. No document text, prompts, argv, or absolute paths. Verify with `make verify-adapters`.
 
+### One-shot install
+
+From a release package or repo checkout (adapters next to the binary, or
+downloadable if missing):
+
+```bash
+struggletime adapters list
+struggletime adapters install                 # all known adapters
+struggletime adapters install vscode neovim   # subset
+```
+
+Or use **install adapters…** in the tray menu. Manual per-adapter steps below
+still work if you prefer.
+
 ### VS Code family (`adapters/vscode`)
 
 Works in any VS Code fork that exposes `vscode.env.appName`:

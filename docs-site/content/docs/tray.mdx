@@ -34,8 +34,17 @@ struggletime logs
 struggletime server          # show or set API URL
 struggletime config          # settings path
 struggletime verify --ledger .aitime-ledger.json
+struggletime adapters list
+struggletime adapters install
+struggletime adapters install vscode neovim
 struggletime --help
 ```
+
+`adapters install` copies editor/agent helpers into the usual user paths
+(VS Code/Cursor extensions, Neovim packpath, Claude Code hooks, Codex wrap,
+shell hooks). Project kits (Godot / Unity / JetBrains) are vendored under
+`~/.config/struggletime/adapters/` with symlink instructions. The tray menu
+item **install adapters…** runs the same install.
 
 Settings live in `~/.config/struggletime/settings.json`. `start` re-launches
 the same binary as `struggletime daemon` (or `STRUGGLETIME_DAEMON` if set).
@@ -78,6 +87,7 @@ Menu:
 - start tracking / stop tracking
 - open dashboard
 - inspect what would be sent
+- install adapters…
 - settings…
 - quit
 

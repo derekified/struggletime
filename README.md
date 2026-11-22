@@ -67,6 +67,7 @@ struggletime serve         # http://127.0.0.1:18765
 struggletime apikey <st_…>
 struggletime start --repo ~/my-project
 struggletime status
+struggletime adapters install   # VS Code/Cursor, Neovim, Claude, hooks, …
 ```
 
 ## What it does
