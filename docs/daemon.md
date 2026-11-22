@@ -123,14 +123,21 @@ chain makes both facts visible in review.
 ## editor / agent attribution (extensible, no plugins required)
 
 Layer 1 maps running processes to `editor` / `agent` via
-`daemon/editors.py`. Built-ins cover Cursor, VS Code, Windsurf, Trae,
-Kiro, Zed, VSCodium, Neovim, Helix (`hx`), JetBrains (IntelliJ /
-PyCharm / CLion / WebStorm / GoLand / RustRover / Rider / Android
-Studio), Godot, Unity, KiCad (`kicad` / `pcbnew` / `eeschema` /
-`gerbview`), Blender, FreeCAD, OpenSCAD, Aseprite, Krita, GIMP, Figma,
-Xcode, Arduino IDE, Jupyter, RStudio, Obsidian, Claude Code, Codex,
-OpenClaw, Aider, Goose, OpenCode, Gemini CLI, and more. Override or
-extend without code changes:
+`daemon/editors.py`. Built-ins (also listed under `/docs/daemon`):
+
+- **AI IDEs:** Cursor, Windsurf, Trae, Kiro, Zed, Antigravity
+- **Editors / IDEs:** VS Code, VSCodium, Neovim, Helix (`hx`), Kakoune,
+  Sublime, Emacs, Vim, JetBrains (IDEA / WebStorm / PyCharm / GoLand /
+  CLion / Rider / RustRover / Android Studio), Fleet, Nova, TextMate,
+  Kate, gedit, Notepad++, Xcode, Arduino IDE
+- **Game / creative / CAD / notebooks:** Godot, Unity, KiCad (`pcbnew` /
+  `eeschema` / `gerbview`), Blender, FreeCAD, OpenSCAD, Aseprite, Krita,
+  GIMP, Figma, Jupyter, RStudio, Obsidian
+- **CLI agents:** Claude Code, Codex, OpenClaw, Aider, Goose, OpenCode,
+  Gemini CLI, Amp, Crush, Qwen, Cline, Roo, Continue, Copilot,
+  `cursor-agent`
+
+Override or extend without code changes:
 
 ```jsonc
 // ~/.config/struggletime/editors.json
@@ -154,17 +161,18 @@ adapters emit compact allowlisted lines into `~/.aitime/agent_events.jsonl`
 each poll tick, then falls back to the registry above so
 `os` / `language` / `editor` / `agent` stay populated. there is **no MCP
 server** and no raw paths, prompts, or keystrokes in the bridge.
+setup steps: `/docs/integrations` (source `docs-site/content/docs/integrations.mdx`).
 
-| adapter | what it adds | setup |
+| adapter | tools | what it adds |
 |---|---|---|
-| vscode / cursor (`adapters/vscode`) | human edits, focus, file op counts | load `extension.js` as an extension |
-| claude code (`adapters/claude-code`) | agent turn boundaries | merge `hooks.json` into `.claude/settings.json` |
-| codex / any cli (`adapters/codex`) | turn boundaries for cli agents | shell wrapper / `agent_event.py` in its readme |
-| openclaw (`adapters/openclaw`) | turns + tool result counts from local session logs | `python3 adapters/openclaw/adapter.py` |
-| neovim (`adapters/neovim`) | insert vs external edits, focus, saves | `require("struggletime").setup()` |
-| godot (`adapters/godot`) | focus, filesystem edits, playtest | enable `addons/struggletime` |
-| jetbrains (`adapters/jetbrains`) | typing vs bulk writes, window focus | build the Kotlin scaffold |
-| unity (`adapters/unity`) | focus, asset saves, play mode | drop `Editor/StruggleTimeTracker.cs` |
+| `adapters/vscode` | VS Code, Cursor, Windsurf, Trae, Kiro, VSCodium | human edits, focus, file-op counts |
+| `adapters/neovim` | Neovim | insert vs external edits, focus, saves |
+| `adapters/jetbrains` | IntelliJ family + Android Studio | typing vs bulk writes, window focus |
+| `adapters/godot` | Godot 4 | focus, filesystem edits, playtest |
+| `adapters/unity` | Unity Editor | focus, asset saves, play mode |
+| `adapters/claude-code` | Claude Code | agent turn boundaries |
+| `adapters/codex` | Codex, Aider, other CLIs | turn start/stop via `wrap.sh` |
+| `adapters/openclaw` | OpenClaw | session turn / tool counts |
 
 legacy `~/.aitime/exec.jsonl` is still drained for older hooks. if an
 adapter breaks when its tool updates, layer 1 keeps counting — that is

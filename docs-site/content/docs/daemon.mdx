@@ -69,24 +69,110 @@ See [Privacy](/docs/privacy).
 
 ## Editor / agent labels (Layer 1)
 
-`daemon/editors.py` maps running processes to `editor` / `agent` labels. Built-ins cover the VS Code family, JetBrains IDEs, Neovim, Helix (`hx`), Godot, Unity, KiCad, Blender, FreeCAD, OpenSCAD, Aseprite, Krita, GIMP, Figma, Xcode, Arduino IDE, Jupyter, RStudio, Obsidian, plus common CLI agents. Override without code changes via `~/.config/struggletime/editors.json`.
+`daemon/editors.py` maps running processes to `editor` / `agent` labels from the process list. No plugin required for attribution — if the tool is running over a linked repo, saves and git activity still count. Override or extend without code changes via `~/.config/struggletime/editors.json`.
+
+### AI-native IDEs
+
+| Label | Matched processes (examples) |
+|---|---|
+| `cursor` | Cursor |
+| `windsurf` | Windsurf |
+| `trae` | Trae |
+| `kiro` | Kiro |
+| `zed` | Zed |
+| `antigravity` | Antigravity |
+
+### Editors and IDEs
+
+| Label | Matched processes (examples) |
+|---|---|
+| `vscode` | Visual Studio Code, `code.exe`, Code Helper |
+| `vscodium` | VSCodium, Code - OSS, Codium |
+| `neovim` | `nvim` |
+| `helix` | Helix, `hx` |
+| `kakoune` | Kakoune |
+| `sublime` | Sublime Text, `subl` |
+| `emacs` | Emacs |
+| `vim` | Vim (not Neovim) |
+| `jetbrains` | IntelliJ IDEA, WebStorm, PyCharm, GoLand, CLion, Rider, RustRover, Android Studio (`studio64`) |
+| `fleet` | JetBrains Fleet |
+| `nova` | Nova |
+| `textmate` | TextMate |
+| `kate` | Kate |
+| `gedit` | gedit |
+| `notepadpp` | Notepad++ |
+| `xcode` | Xcode |
+| `arduino` | Arduino IDE |
+
+### Game, creative, CAD, and notebooks
+
+| Label | Matched processes (examples) |
+|---|---|
+| `godot` | Godot |
+| `unity` | Unity, Unity Hub |
+| `kicad` | KiCad, `pcbnew`, `eeschema`, `gerbview` |
+| `blender` | Blender |
+| `freecad` | FreeCAD |
+| `openscad` | OpenSCAD |
+| `aseprite` | Aseprite |
+| `krita` | Krita |
+| `gimp` | GIMP |
+| `figma` | Figma |
+| `jupyter` | JupyterLab, Jupyter Notebook |
+| `rstudio` | RStudio |
+| `obsidian` | Obsidian |
+
+### CLI / desktop AI agents
+
+| Label | Agent id | Matched processes (examples) |
+|---|---|---|
+| `claude-code` | `claude` | `claude`, `claude-code` |
+| `codex` | `codex` | Codex, ChatGPT CLI, OpenAI CLI |
+| `openclaw` | `openclaw` | OpenClaw |
+| `aider` | `aider` | Aider |
+| `goose` | `goose` | Goose |
+| `opencode` | `opencode` | OpenCode |
+| `gemini-cli` | `gemini` | Gemini CLI |
+| `cursor` | `cursor-agent` | `cursor-agent` |
+| `amp` | `amp` | Amp |
+| `crush` | `crush` | Crush |
+| `qwen` | `qwen` | Qwen |
+| `cline` | `cline` | Cline |
+| `roo` | `roo` | Roo / Roo Code |
+| `continue` | `continue` | Continue |
+| `copilot` | `copilot` | Copilot |
+
+Custom entries:
+
+```jsonc
+// ~/.config/struggletime/editors.json
+{
+  "signatures": [
+    {"match": "my-ide", "editor": "my-ide", "kind": "ai_ide"},
+    {"match": "my-cli", "editor": "my-cli", "agent": "my-cli", "kind": "cli_agent"}
+  ],
+  "aliases": { "code": "vscode" }
+}
+```
+
+`kind` is `ai_ide`, `editor`, or `cli_agent`. Unknown tools that still touch a linked repo get a sanitized process-name label plus burst shape (1–2 files ≈ human; 5+ ≈ agent/formatter).
 
 ## Optional adapters (Layer 2)
 
-Adapters append allowlisted lines to `~/.aitime/agent_events.jsonl` (counts and labels only). The daemon drains that file each poll tick, then falls back to process signatures. There is no MCP server.
+Adapters append allowlisted lines to `~/.aitime/agent_events.jsonl` (counts and labels only). The daemon drains that file each poll tick, then falls back to process signatures. There is no MCP server. Setup details: [Integrations](/docs/integrations).
 
-| Adapter | Adds | Setup |
+| Path | Tools | Adds |
 |---|---|---|
-| `adapters/vscode` | Human edits, focus, file-op counts | Load `extension.js` |
-| `adapters/claude-code` | Agent turn boundaries | Merge `hooks.json` |
-| `adapters/codex` | CLI turn boundaries | Shell wrapper / README |
-| `adapters/openclaw` | Session turn / tool counts | Run `adapter.py` |
-| `adapters/neovim` | Insert vs external edits, focus, saves | `require("struggletime").setup()` |
-| `adapters/godot` | Focus, filesystem edits, playtest | Enable `addons/struggletime` |
-| `adapters/jetbrains` | Typing vs bulk writes, window focus | Build the Kotlin scaffold |
-| `adapters/unity` | Focus, asset saves, play mode | Drop `Editor/StruggleTimeTracker.cs` |
+| `adapters/vscode` | VS Code, Cursor, Windsurf, Trae, Kiro, VSCodium | Human edits, focus, file-op counts |
+| `adapters/neovim` | Neovim | Insert vs external edits, focus, saves |
+| `adapters/jetbrains` | IntelliJ family + Android Studio | Typing vs bulk writes, window focus |
+| `adapters/godot` | Godot 4 | Focus, filesystem edits, playtest |
+| `adapters/unity` | Unity Editor | Focus, asset saves, play mode |
+| `adapters/claude-code` | Claude Code | Agent turn boundaries (`hooks.json`) |
+| `adapters/codex` | Codex, Aider, other CLIs | Turn start/stop via `wrap.sh` |
+| `adapters/openclaw` | OpenClaw | Session turn / tool counts from local logs |
 
-Legacy `~/.aitime/exec.jsonl` is still drained for older hooks. If an adapter breaks, Layer 1 keeps counting.
+Shell hooks (`daemon/hooks.sh`, `daemon/hooks.ps1`) emit `test` / `build` / `run` categories without argv. Legacy `~/.aitime/exec.jsonl` is still drained. If an adapter breaks, Layer 1 keeps counting.
 
 ## Cache / lock ignores
 

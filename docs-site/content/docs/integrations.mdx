@@ -1,9 +1,23 @@
 ---
 title: Integrations
-description: Shell hooks and optional IDE/agent adapters, GitHub, and Slack.
+description: Editors, agents, shell hooks, optional adapters, GitHub, and Slack.
 ---
 
-Integrations are optional and self-hosted. With nothing configured, the tracker still watches saved files and git activity in your project folder.
+Integrations are optional and self-hosted. With nothing configured, the tracker still watches saved files and git activity in your project folder. Layer 1 process labels cover many editors and agents out of the box; adapters only add finer counts.
+
+## What works without an adapter
+
+`daemon/editors.py` already labels these from the process list when they run over a linked repo. Full tables live on [Desktop tracker](/docs/daemon#editor--agent-labels-layer-1).
+
+**AI IDEs:** Cursor, Windsurf, Trae, Kiro, Zed, Antigravity
+
+**Editors / IDEs:** VS Code, VSCodium, Neovim, Helix, Kakoune, Sublime Text, Emacs, Vim, JetBrains (IDEA, WebStorm, PyCharm, GoLand, CLion, Rider, RustRover, Android Studio), Fleet, Nova, TextMate, Kate, gedit, Notepad++, Xcode, Arduino IDE
+
+**Game / creative / CAD / notebooks:** Godot, Unity, KiCad, Blender, FreeCAD, OpenSCAD, Aseprite, Krita, GIMP, Figma, Jupyter, RStudio, Obsidian
+
+**CLI agents:** Claude Code, Codex, OpenClaw, Aider, Goose, OpenCode, Gemini CLI, Amp, Crush, Qwen, Cline, Roo, Continue, Copilot, Cursor agent
+
+Extend labels in `~/.config/struggletime/editors.json` without shipping a plugin.
 
 ## Shell hooks (exec categories)
 
@@ -17,27 +31,111 @@ source /path/to/struggletime/daemon/hooks.sh
 . C:\path\to\struggletime\daemon\hooks.ps1
 ```
 
-IDE/agent adapters follow the same rule: category and timing metadata only. Thin adapters live under `adapters/` (VS Code family, Neovim, Godot, JetBrains, Unity, Claude Code, Codex, OpenClaw). See [Daemon](/docs/daemon) for the full table and cache/lock ignore list.
+## Optional adapters
+
+Adapters write allowlisted metadata only to `~/.aitime/agent_events.jsonl`. No document text, prompts, argv, or absolute paths. Verify with `make verify-adapters`.
+
+### VS Code family (`adapters/vscode`)
+
+Works in any VS Code fork that exposes `vscode.env.appName`:
+
+| `appName` contains | `editor` label |
+|---|---|
+| Cursor | `cursor` |
+| Windsurf | `windsurf` |
+| Trae | `trae` |
+| Kiro | `kiro` |
+| VSCodium / Code - OSS | `vscodium` |
+| Visual Studio Code | `vscode` |
+
+Load `adapters/vscode/extension.js` as a local extension. Emits human-edit, focus, and file-op counts.
+
+### Neovim (`adapters/neovim`)
+
+```lua
+-- lazy.nvim example
+{
+  dir = "/path/to/struggletime/adapters/neovim",
+  name = "struggletime",
+  config = function()
+    require("struggletime").setup()
+  end,
+}
+```
+
+Or add `adapters/neovim` to `runtimepath` and call `require("struggletime").setup()`. Emits insert vs external-edit, focus, and save counts.
+
+### JetBrains (`adapters/jetbrains`)
+
+Covers IntelliJ IDEA, PyCharm, CLion, WebStorm, GoLand, RustRover, Rider, and Android Studio.
+
+```text
+adapters/jetbrains/
+  src/main/kotlin/com/struggletime/StruggleTimeStartup.kt
+  src/main/resources/META-INF/plugin.xml
+```
+
+Build with the IntelliJ Platform Gradle plugin, or symlink the sources into a throwaway plugin module. Emits typing-burst vs bulk-write counts and window focus.
+
+### Godot 4 (`adapters/godot`)
+
+Copy or symlink `adapters/godot/addons/struggletime` into your project, then enable the plugin under **Project → Project Settings → Plugins**. Emits focus, filesystem/edit heartbeats, and playtest counts.
+
+### Unity (`adapters/unity`)
+
+Drop `adapters/unity/Editor/StruggleTimeTracker.cs` into any `Assets/.../Editor/` folder (or symlink the tree). Emits focus pulses, asset-save counts, and play-mode enter/exit.
+
+### Claude Code (`adapters/claude-code`)
+
+Merge `adapters/claude-code/hooks.json` into `.claude/settings.json` hooks. Emits agent turn / tool boundary counts — no prompt or tool-arg text.
+
+### Codex / Aider / other CLIs (`adapters/codex`)
+
+```bash
+chmod +x adapters/codex/wrap.sh
+alias codex='$PWD/adapters/codex/wrap.sh codex'
+alias aider='$PWD/adapters/codex/wrap.sh aider'
+```
+
+Wraps start/stop around the CLI. Manual bridge:
+
+```bash
+python3 daemon/agent_event.py --editor codex --agent codex --event-type start
+codex "$@"
+python3 daemon/agent_event.py --editor codex --agent codex --event-type stop \
+  --op modified --exit-code $? --files-touched-count 1
+```
+
+### OpenClaw (`adapters/openclaw`)
+
+OpenClaw runs agents inside its gateway, so shell hooks see file/git results but miss turns. Run the adapter next to the daemon:
+
+```bash
+python3 adapters/openclaw/adapter.py
+python3 daemon/daemon.py --repo ~/.openclaw/workspace/your-project
+```
+
+Tails local session logs and appends turn/tool counts only — message text and tool arguments are discarded.
 
 ## GitHub
 
 ### Connect with OAuth
 
-1. GitHub -> Settings -> Developer settings -> OAuth Apps -> New OAuth App
+1. GitHub → Settings → Developer settings → OAuth Apps → New OAuth App
 2. Authorization callback URL: `https://your-server/v1/auth/github/callback` (local: `http://127.0.0.1:18765/v1/auth/github/callback`)
 3. Start the server with `GITHUB_CLIENT_ID` and `GITHUB_CLIENT_SECRET` (env, `.env`, or secret store; never committed)
 4. In StruggleTime Settings, use "sign in with github", approve on GitHub, land back linked
 
 The server exchanges the one-time code, reads your GitHub login, and discards the OAuth token. Only the username is stored. The manual endpoint `POST /v1/users/{handle}/github` still exists for tests and automation. The login appears on your public profile and in the builders list.
 
-### Repo webhooks (push -> commit anchors)
+### Repo webhooks (push → commit anchors)
 
-1. On your repo: Settings -> Webhooks -> Add webhook
+1. On your repo: Settings → Webhooks → Add webhook
 2. Payload URL: `https://your-server/v1/integrations/github/webhook`
 3. Content type `application/json`, events: `push` only
 4. Set a secret and start the server with the same value: `GITHUB_WEBHOOK_SECRET=... python3 server/server.py`
 
-`server.py` verifies the signature (bad signature -> 401), matches the push to the project whose repo URL matches, and stores a commit anchor: commit count and head SHA only. Commit messages are never stored. Anchors appear on `GET /v1/projects/{id}/github` for review cross-checks. With no secret set, webhooks are accepted unverified (fine locally, not on the public internet).
+`server.py` verifies the signature (bad signature → 401), matches the push to the project whose repo URL matches, and stores a commit anchor: commit count and head SHA only. Commit messages are never stored. Anchors appear on `GET /v1/projects/{id}/github` for review cross-checks. With no secret set, webhooks are accepted unverified (fine locally, not on the public internet).
 
 ### Live repo lookup (optional)
 
@@ -47,13 +145,13 @@ The server exchanges the one-time code, reads your GitHub login, and discards th
 
 ### Notifications
 
-Set `SLACK_WEBHOOK_URL` (Slack app -> Incoming Webhooks) before starting the server. New submissions and finished reviews post to that channel. If unset, the same messages queue locally and stay readable at `GET /v1/integrations/events`.
+Set `SLACK_WEBHOOK_URL` (Slack app → Incoming Webhooks) before starting the server. New submissions and finished reviews post to that channel. If unset, the same messages queue locally and stay readable at `GET /v1/integrations/events`.
 
 ### OAuth and slash command
 
-For identity: Slack app -> OAuth & Permissions -> redirect URL `https://your-server/v1/auth/slack/callback`, then start the server with `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET`. In StruggleTime Settings, use "sign in with slack", approve, land back linked. The code exchange happens server-side; only your Slack user id is kept.
+For identity: Slack app → OAuth & Permissions → redirect URL `https://your-server/v1/auth/slack/callback`, then start the server with `SLACK_CLIENT_ID` and `SLACK_CLIENT_SECRET`. In StruggleTime Settings, use "sign in with slack", approve, land back linked. The code exchange happens server-side; only your Slack user id is kept.
 
-1. In the same Slack app: Slash Commands -> `/struggletime`
+1. In the same Slack app: Slash Commands → `/struggletime`
 2. Request URL: `https://your-server/v1/integrations/slack/command`
 3. Automation fallback: `POST /v1/users/you/slack {"slack_user_id":"U0123ABCD"}`
 4. Start the server with `SLACK_SIGNING_SECRET=<signing secret from the app Basic Information page>`

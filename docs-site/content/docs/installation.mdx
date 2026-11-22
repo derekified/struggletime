@@ -89,6 +89,16 @@ make verify-adapters
 
 Debug logs print allowlisted labels only (`editor`, `event_type`, counts) — never paths, prompts, or argv.
 
+## Editors and tools
+
+Layer 1 labels many editors and agents from the process list with no plugin
+(Cursor, VS Code, Neovim, Helix, JetBrains, Godot, Unity, KiCad, Blender,
+Claude Code, Codex, Aider, OpenClaw, and more). Optional adapters under
+`adapters/` add finer counts for VS Code family, Neovim, JetBrains, Godot,
+Unity, Claude Code, Codex/Aider, and OpenClaw.
+
+Full tables and setup: [Desktop tracker](/docs/daemon), [Integrations](/docs/integrations).
+
 ## Config paths
 
 | What | Where |

@@ -140,6 +140,21 @@ class TestDashboard(unittest.TestCase):
         privacy_l = privacy_docs.lower()
         for needle in ("sha256", "prev_hash", "stdlib", "allowlist"):
             self.assertIn(needle, privacy_l)
+        s, daemon_docs = req(self.port, "GET", "/docs/daemon/")
+        self.assertEqual(s, 200)
+        daemon_l = daemon_docs.lower()
+        for needle in ("cursor", "neovim", "helix", "jetbrains", "godot", "unity", "kicad",
+                       "blender", "claude-code", "codex", "openclaw", "aider", "gemini-cli",
+                       "adapters/vscode", "adapters/neovim", "adapters/jetbrains",
+                       "adapters/godot", "adapters/unity", "adapters/claude-code",
+                       "adapters/codex", "adapters/openclaw"):
+            self.assertIn(needle, daemon_l)
+        s, integ_docs = req(self.port, "GET", "/docs/integrations/")
+        self.assertEqual(s, 200)
+        integ_l = integ_docs.lower()
+        for needle in ("vscode", "neovim", "jetbrains", "godot", "unity", "claude code",
+                       "codex", "openclaw", "shell hooks", "github", "slack"):
+            self.assertIn(needle, integ_l)
         s, web_docs = req(self.port, "GET", "/docs/web-app/")
         self.assertEqual(s, 200)
         self.assertIn("leaderboard", web_docs.lower())

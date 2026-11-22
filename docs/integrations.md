@@ -1,72 +1,31 @@
 # Integrations
 
-Both integrations are optional, work self-hosted, and degrade
-gracefully: configure nothing and everything still runs.
+Live docs (setup for every editor/agent adapter, shell hooks, GitHub,
+Slack): `/docs/integrations` — source
+`docs-site/content/docs/integrations.mdx`.
 
-## github
+## Layer 1 (no plugin)
 
-### connect with oauth
+Process labels from `daemon/editors.py` — AI IDEs, editors, JetBrains,
+Godot/Unity/KiCad/Blender/CAD/creative tools, Jupyter/RStudio/Obsidian,
+and CLI agents (Claude Code, Codex, OpenClaw, Aider, Goose, OpenCode,
+Gemini, Amp, Crush, Qwen, Cline, Roo, Continue, Copilot, …). Full tables
+on `/docs/daemon`.
 
-1. github → settings → developer settings → oauth apps → new oauth app
-2. authorization callback url: `https://your-server/v1/auth/github/callback`
-   (locally: `http://127.0.0.1:18765/v1/auth/github/callback`)
-3. start the server with `GITHUB_CLIENT_ID` + `GITHUB_CLIENT_SECRET`
-   (env, `.env`, or the platform secret store — never committed)
-4. in struggletime: settings → claim/sign in with your handle →
-   "sign in with github". you are redirected to github, approve, and
-   land back on settings linked.
+## Layer 2 adapters under `adapters/`
 
-the server exchanges the one-time code, reads your github login, and
-discards the oauth token. only the username is stored. the manual
-endpoint (`POST /v1/users/{handle}/github`) still exists for tests and
-automation. shown on your public profile and in the builders list.
+| Path | Tools |
+|---|---|
+| `vscode/` | VS Code, Cursor, Windsurf, Trae, Kiro, VSCodium |
+| `neovim/` | Neovim |
+| `jetbrains/` | IDEA, PyCharm, CLion, WebStorm, GoLand, RustRover, Rider, Android Studio |
+| `godot/` | Godot 4 |
+| `unity/` | Unity Editor |
+| `claude-code/` | Claude Code hooks |
+| `codex/` | Codex / Aider / CLI wrap |
+| `openclaw/` | OpenClaw session tail |
 
-### repo webhooks (push → commit anchors)
+Shell hooks: `daemon/hooks.sh`, `daemon/hooks.ps1`.
 
-1. on your repo: settings → webhooks → add webhook
-2. payload url: `https://your-server/v1/integrations/github/webhook`
-3. content type `application/json`, events: just `push`
-4. set a secret, and start the server with the same value:
-   `GITHUB_WEBHOOK_SECRET=... python3 server/server.py`
-
-what happens: the signature is verified (bad signature → 401), the
-push is matched to the project whose repo url matches, and the push is
-stored as a commit anchor — commit **count and head sha only**, commit
-messages are never stored. anchors appear on
-`GET /v1/projects/{id}/github` and are what reviewers cross-check your
-tracked buckets against. with no secret set, webhooks are accepted
-unverified (fine locally, not on the internet).
-
-### live repo lookup (optional)
-
-`GET /v1/projects/{id}/github?fetch=1` fetches stars/branch/last push
-from the github api. set `GITHUB_TOKEN` to raise rate limits. off
-unless you ask for it — the server never phones home on its own.
-
-## slack
-
-### notifications
-
-set `SLACK_WEBHOOK_URL` (slack app → incoming webhooks) before starting
-the server. new submissions and finished reviews post to that channel.
-not set? the same messages queue locally and stay readable at
-`GET /v1/integrations/events`. nothing is silently dropped either way.
-
-### connect with oauth + slash command
-
-for identity: slack app → oauth & permissions → redirect url
-`https://your-server/v1/auth/slack/callback`, then start the server
-with `SLACK_CLIENT_ID` + `SLACK_CLIENT_SECRET`. in struggletime:
-settings → "sign in with slack" → approve on slack → back, linked.
-the code exchange happens server-side; only your slack user id is kept.
-
-1. in the same slack app: slash commands → `/struggletime`
-2. request url: `https://your-server/v1/integrations/slack/command`
-3. (automation fallback: `POST /v1/users/you/slack {"slack_user_id":"U0123ABCD"}`)
-4. start the server with `SLACK_SIGNING_SECRET=<signing secret from
-   the app's basic information page>`
-
-`/struggletime stats` replies (only to you) with your weighted hours,
-streak and bucket count. `/struggletime stats somehandle` looks up a
-handle directly. forged signatures get a 401; with no secret set the
-command works unsigned for local testing.
+Both GitHub and Slack are optional, self-hosted, and degrade gracefully:
+configure nothing and the tracker still runs.
