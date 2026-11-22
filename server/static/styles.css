@@ -262,6 +262,8 @@ select.theme-sel,.theme-sel,select:not(.ui-input){width:auto}
 .setup-banner-actions{position:relative;z-index:32;display:flex;gap:8px;flex-wrap:wrap;align-items:center;pointer-events:auto;isolation:isolate}
 .setup-banner-actions .ui-btn{position:relative;z-index:33;pointer-events:auto;cursor:pointer;touch-action:manipulation;-webkit-tap-highlight-color:transparent}
 #daemon-banner-dismiss{position:relative;z-index:34}
+/* Early dismiss (inline head script) — keep banner out of layout before app.js runs */
+html.tracker-banner-dismissed #daemon-banner{display:none!important}
 .install-steps{margin:12px 0 0;padding-left:18px;display:flex;flex-direction:column;gap:14px}
 .install-steps li{padding-left:4px}
 .install-steps b{display:block;margin-bottom:6px;font-size:13px}

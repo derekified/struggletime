@@ -294,8 +294,10 @@ function showPage(page, { push = false, load = true } = {}) {
   paintLogin();
   if (page === "settings") paintSettingsForm();
   if (page === "docs") { location.href = "/docs/"; return; }
+  // Always re-apply banner visibility (respects localStorage dismiss) before any
+  // async key refresh, so navigation never flashes a dismissed banner back on.
+  paintDaemonBanners();
   if (isSignedIn()) refreshApiKeyStatus();
-  else paintDaemonBanners();
   if (load) loadActivePageData();
 }
 
@@ -1185,23 +1187,55 @@ async function saveProfile(patch) {
   return r;
 }
 
-const DAEMON_BANNER_DISMISS_KEY = "st_daemon_banner_dismissed";
+const DAEMON_BANNER_DISMISS_KEY = "struggletime:dismiss-tracker-banner";
+const DAEMON_BANNER_DISMISS_LEGACY = "st_daemon_banner_dismissed";
 const INSTALL_DOCS_URL = "/docs/installation/";
 const TRAY_DOCS_URL = "/docs/tray/";
+/** In-memory fallback when localStorage is unavailable (private mode, quota). */
+let daemonBannerDismissedMem = false;
 function isDaemonBannerDismissed() {
+  if (daemonBannerDismissedMem) return true;
+  if (typeof document !== "undefined" && document.documentElement.classList.contains("tracker-banner-dismissed")) {
+    daemonBannerDismissedMem = true;
+    return true;
+  }
   try {
-    if (localStorage.getItem(DAEMON_BANNER_DISMISS_KEY) === "1") return true;
+    const v = localStorage.getItem(DAEMON_BANNER_DISMISS_KEY);
+    if (v === "true" || v === "1") {
+      daemonBannerDismissedMem = true;
+      return true;
+    }
+    const legacy = localStorage.getItem(DAEMON_BANNER_DISMISS_LEGACY);
+    if (legacy === "1" || legacy === "true") {
+      try { localStorage.setItem(DAEMON_BANNER_DISMISS_KEY, "true"); } catch (_) {}
+      daemonBannerDismissedMem = true;
+      return true;
+    }
     // Migrate prior session-only dismissals into permanent localStorage.
-    if (sessionStorage.getItem(DAEMON_BANNER_DISMISS_KEY) === "1") {
-      localStorage.setItem(DAEMON_BANNER_DISMISS_KEY, "1");
+    if (sessionStorage.getItem(DAEMON_BANNER_DISMISS_LEGACY) === "1"
+      || sessionStorage.getItem(DAEMON_BANNER_DISMISS_KEY) === "true") {
+      try { localStorage.setItem(DAEMON_BANNER_DISMISS_KEY, "true"); } catch (_) {}
+      daemonBannerDismissedMem = true;
       return true;
     }
   } catch (_) {}
   return false;
 }
 function dismissDaemonBanner() {
-  try { localStorage.setItem(DAEMON_BANNER_DISMISS_KEY, "1"); } catch (_) {}
-  if ($("daemon-banner")) $("daemon-banner").hidden = true;
+  daemonBannerDismissedMem = true;
+  try {
+    localStorage.setItem(DAEMON_BANNER_DISMISS_KEY, "true");
+    localStorage.setItem(DAEMON_BANNER_DISMISS_LEGACY, "1");
+  } catch (_) {}
+  try {
+    document.documentElement.classList.add("tracker-banner-dismissed");
+  } catch (_) {}
+  const global = $("daemon-banner");
+  if (global) {
+    global.hidden = true;
+    global.setAttribute("hidden", "");
+  }
+  paintDaemonBanners();
 }
 
 function paintDaemonBanners() {
@@ -1227,8 +1261,13 @@ function paintDaemonBanners() {
   const global = $("daemon-banner");
   if (global) {
     // Guests never see the daemon banner; dismiss is permanent via localStorage.
-    global.hidden = !(show && !dismissed && activePage !== "landing" && activePage !== "login");
-    if (!global.hidden) {
+    const visible = !!(show && !dismissed && activePage !== "landing" && activePage !== "login");
+    global.hidden = !visible;
+    if (dismissed) {
+      try { document.documentElement.classList.add("tracker-banner-dismissed"); } catch (_) {}
+    }
+    if (visible) {
+      global.removeAttribute("hidden");
       if ($("daemon-banner-title")) $("daemon-banner-title").textContent = title;
       if ($("daemon-banner-text")) $("daemon-banner-text").textContent = msg;
       const cta = $("daemon-banner-cta");
@@ -1242,6 +1281,8 @@ function paintDaemonBanners() {
         }
       }
       hydrateNavIcons(global);
+    } else {
+      global.setAttribute("hidden", "");
     }
   }
   const settingsBanner = $("daemon-banner-settings");
@@ -1289,8 +1330,8 @@ function showApiKey(value, { fresh = false } = {}) {
 }
 
 async function refreshApiKeyStatus() {
-  if (!$("api-key-status")) return;
   try {
+    if (!$("api-key-status")) return;
     if (!isSignedIn()) {
       $("api-key-status").textContent = "sign in to manage your API key";
       if ($("api-key-reveal-row")) $("api-key-reveal-row").hidden = true;
@@ -3314,6 +3355,7 @@ if ($("daemon-banner-dismiss")) {
   $("daemon-banner-dismiss").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
+    if (typeof e.stopImmediatePropagation === "function") e.stopImmediatePropagation();
     dismissDaemonBanner();
   });
 }
