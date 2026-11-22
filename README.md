@@ -8,11 +8,6 @@ file IDs, counts, hashes). No screenshots, prompts, or source.
 Python 3.10+, stdlib only for the daemon and server. AGPLv3. Aimed at Hack
 Club projects.
 
-People say Python is annoying to package. Here there’s almost nothing to
-package: no wheels, no lockfile, no venv for the core path. `make package`
-builds a source tarball; `daemon/install.sh` symlinks a few scripts into
-`~/.local/bin`. The tray GUI is the only optional `pip install`.
-
 https://github.com/derekified/struggletime
 
 ## Run it
