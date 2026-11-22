@@ -4,6 +4,11 @@ on:
   push:
     tags: ["v*"]
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to create/publish (e.g. v0.1.0)"
+        required: true
+        type: string
 
 permissions:
   contents: write
@@ -14,16 +19,16 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - os: macos-latest
+          - os: macos-14
             target: aarch64-apple-darwin
             artifact: struggletime-macos-aarch64
-          - os: macos-13
+          - os: macos-14
             target: x86_64-apple-darwin
             artifact: struggletime-macos-intel
           - os: windows-latest
             target: x86_64-pc-windows-msvc
             artifact: struggletime-windows-x64
-          - os: ubuntu-latest
+          - os: ubuntu-22.04
             target: x86_64-unknown-linux-gnu
             artifact: struggletime-linux-x86_64
     runs-on: ${{ matrix.os }}
@@ -57,7 +62,6 @@ jobs:
           New-Item -ItemType Directory -Force -Path $out | Out-Null
           Copy-Item "rust/target/${{ matrix.target }}/release/struggletime.exe" "$out/struggletime.exe"
           Compress-Archive -Path "$out\struggletime.exe" -DestinationPath "dist/${{ matrix.artifact }}.zip" -Force
-          # Also publish a bare .exe name expected in docs
           Copy-Item "rust/target/${{ matrix.target }}/release/struggletime.exe" "dist/struggletime-windows-x64.exe"
           $hashZip = (Get-FileHash "dist/${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
           Set-Content -Path "dist/${{ matrix.artifact }}.zip.sha256" -Value "$hashZip  ${{ matrix.artifact }}.zip"
@@ -72,7 +76,7 @@ jobs:
 
   macos-universal:
     needs: build
-    runs-on: macos-latest
+    runs-on: macos-14
     steps:
       - uses: actions/download-artifact@v4
         with:
@@ -88,6 +92,7 @@ jobs:
             /tmp/intel/struggletime-macos-intel/struggletime \
             -output dist/struggletime-macos-universal/struggletime
           chmod +x dist/struggletime-macos-universal/struggletime
+          lipo -info dist/struggletime-macos-universal/struggletime
           (
             cd dist
             tar -czf struggletime-macos-universal.tar.gz struggletime-macos-universal
@@ -102,10 +107,23 @@ jobs:
 
   release:
     needs: [build, macos-universal]
-    if: startsWith(github.ref, 'refs/tags/')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Resolve tag
+        id: meta
+        run: |
+          set -euo pipefail
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            TAG="${{ inputs.tag }}"
+          else
+            TAG="${GITHUB_REF_NAME}"
+          fi
+          case "$TAG" in
+            v*) ;;
+            *) echo "tag must start with v (got: $TAG)"; exit 1 ;;
+          esac
+          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
       - uses: actions/download-artifact@v4
         with:
           path: artifacts
@@ -114,11 +132,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           set -euo pipefail
-          TAG="${GITHUB_REF_NAME}"
+          TAG="${{ steps.meta.outputs.tag }}"
           mkdir -p upload
           find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.exe' -o -name '*.sha256' \) -print0 \
-            | xargs -0 -I{} cp {} upload/
-          # Prefer documented names; keep aarch64 build as a secondary artifact if present
+            | xargs -0 -I{} cp -f {} upload/
           (
             cd upload
             : > SHA256SUMS.txt
@@ -130,22 +147,35 @@ jobs:
                 sha256sum "$f" >> SHA256SUMS.txt
               fi
             done
+            ls -la
+            test -f struggletime-macos-universal.tar.gz
+            test -f struggletime-macos-intel.tar.gz
+            test -f struggletime-windows-x64.exe
           )
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            git fetch --tags origin
+            if ! git rev-parse "$TAG" >/dev/null 2>&1; then
+              git tag "$TAG"
+              git push origin "$TAG"
+            fi
+          fi
           gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --generate-notes \
             --title "StruggleTime $TAG" \
-            --notes "Single \`struggletime\` binary per OS: tray + CLI + daemon + local HTTP server.
+            --notes "## Downloads
 
-**Downloads**
-- macOS Universal (\`struggletime-macos-universal.tar.gz\`) — Apple Silicon + Intel
-- macOS Intel (\`struggletime-macos-intel.tar.gz\`) — \`x86_64\`
-- Windows x64 (\`struggletime-windows-x64.exe\` / \`.zip\`)
+- **macOS Universal** (\`struggletime-macos-universal.tar.gz\`) — Apple Silicon + Intel
+- **macOS Intel** (\`struggletime-macos-intel.tar.gz\`) — \`x86_64-apple-darwin\`
+- **Windows x64** (\`struggletime-windows-x64.exe\` / \`.zip\`) — \`x86_64-pc-windows-msvc\`
+- **Linux x86_64** (\`struggletime-linux-x86_64.tar.gz\`)
 
-Verify with \`SHA256SUMS.txt\`, then:
+Verify with \`SHA256SUMS.txt\`.
 
 \`\`\`bash
-struggletime serve
-struggletime apikey st_…
-struggletime start --repo ~/my-project
-struggletime status
+curl -LO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz
+curl -LO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz.sha256
+shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
+tar -xzf struggletime-macos-universal.tar.gz
+sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
+struggletime tray
 \`\`\`"
           gh release upload "$TAG" upload/* --clobber

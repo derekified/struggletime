@@ -38,10 +38,17 @@ struggletime serve           # http://127.0.0.1:18765
 
 ```bash
 struggletime tray
+# force supervisor-only (no menu-bar icon):
+struggletime tray --headless
 ```
 
-Keeps the daemon running and prints a short status line. Put the release
-binary on your PATH (`make install-binaries` or a
+On **macOS** and **Windows**, `tray` opens a menu-bar / notification-area icon
+with Start / Pause / Resume / Sync / Quit. Tooltip shows server, handle, and
+daemon pid. On **Linux**, or if the graphical tray cannot start, it runs a
+headless supervisor that prints the same status line and keeps the daemon
+alive.
+
+Put the release binary on your PATH (`make install-binaries` or a
 [Releases](https://github.com/derekified/struggletime/releases) archive).
 
 Login autostart: `sh daemon/autostart.sh`.

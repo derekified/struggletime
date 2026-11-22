@@ -25,19 +25,21 @@ bundles:
 ### macOS Universal (Apple Silicon + Intel)
 
 ```bash
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
+# fails fast with HTTP 404 if no release assets exist yet (-f)
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
 shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
 tar -xzf struggletime-macos-universal.tar.gz
 chmod +x struggletime-macos-universal/struggletime
 sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
+struggletime tray
 ```
 
 ### macOS Intel (`x86_64`)
 
 ```bash
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz.sha256
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz.sha256
 shasum -a 256 -c struggletime-macos-intel.tar.gz.sha256
 tar -xzf struggletime-macos-intel.tar.gz
 chmod +x struggletime-macos-intel/struggletime

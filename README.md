@@ -24,15 +24,21 @@ Download a single OS binary from
 
 ### Quick install
 
+Requires a published
+[GitHub Release](https://github.com/derekified/struggletime/releases)
+(`v*` tag). If `curl` returns a 9-byte body / `Not Found`, no release is up yet.
+Build from source below, or wait for the latest `v*` release assets.
+
 **macOS Universal** (Apple Silicon + Intel)
 
 ```bash
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
+curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
 shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
 tar -xzf struggletime-macos-universal.tar.gz
 chmod +x struggletime-macos-universal/struggletime
 sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
+struggletime tray   # menu-bar icon on macOS
 ```
 
 **macOS Intel:** same steps with `struggletime-macos-intel.tar.gz`.

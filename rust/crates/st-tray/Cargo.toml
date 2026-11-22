@@ -9,10 +9,6 @@ description = "StruggleTime menu bar / system tray (native binary)"
 name = "struggletime-tray"
 path = "src/main.rs"
 
-[features]
-default = []
-native-tray = []
-
 [dependencies]
 st-core = { workspace = true }
 serde = { workspace = true }
@@ -20,3 +16,10 @@ serde_json = { workspace = true }
 clap = { workspace = true }
 anyhow = { workspace = true }
 chrono = { workspace = true }
+
+# Graphical tray on desktop OS where users expect a menu-bar / notification-area icon.
+# Linux uses the headless supervisor (no GTK link) so CI and servers stay lean.
+[target.'cfg(any(target_os = "macos", target_os = "windows"))'.dependencies]
+tray-icon = "0.19"
+winit = { version = "0.30", default-features = false, features = ["rwh_06"] }
+image = { version = "0.25", default-features = false, features = ["png"] }
