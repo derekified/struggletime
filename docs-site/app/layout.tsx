@@ -4,14 +4,10 @@ import type { Metadata } from 'next';
 
 export const metadata: Metadata = {
   title: {
-    default: 'StruggleTime Docs',
-    template: '%s · StruggleTime Docs',
+    default: 'Docs',
+    template: '%s · Docs',
   },
-  description: 'Setup, tray, daemon, API, and privacy docs for StruggleTime.',
-  icons: {
-    icon: [{ url: '/img/struggletime.svg', type: 'image/svg+xml' }],
-    apple: [{ url: '/img/struggletime.svg' }],
-  },
+  description: 'Setup, tray, daemon, API, and privacy documentation.',
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {
