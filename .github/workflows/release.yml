@@ -159,23 +159,28 @@ jobs:
               git push origin "$TAG"
             fi
           fi
-          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --generate-notes \
+          cat > /tmp/release-notes.md <<EOF
+          ## Downloads
+
+          - macOS Universal (\`struggletime-macos-universal.tar.gz\`) — Apple Silicon + Intel
+          - macOS Intel (\`struggletime-macos-intel.tar.gz\`) — x86_64-apple-darwin
+          - Windows x64 (\`struggletime-windows-x64.exe\` / .zip) — x86_64-pc-windows-msvc
+          - Linux x86_64 (\`struggletime-linux-x86_64.tar.gz\`)
+
+          Verify with \`SHA256SUMS.txt\`.
+
+          \`\`\`bash
+          curl -fLO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz
+          curl -fLO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz.sha256
+          shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
+          tar -xzf struggletime-macos-universal.tar.gz
+          sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
+          struggletime tray
+          \`\`\`
+          EOF
+          # Strip the leading spaces that YAML block indentation added to the heredoc body.
+          sed -i 's/^          //' /tmp/release-notes.md
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" \
             --title "StruggleTime $TAG" \
-            --notes "## Downloads
-
-- **macOS Universal** (\`struggletime-macos-universal.tar.gz\`) — Apple Silicon + Intel
-- **macOS Intel** (\`struggletime-macos-intel.tar.gz\`) — \`x86_64-apple-darwin\`
-- **Windows x64** (\`struggletime-windows-x64.exe\` / \`.zip\`) — \`x86_64-pc-windows-msvc\`
-- **Linux x86_64** (\`struggletime-linux-x86_64.tar.gz\`)
-
-Verify with \`SHA256SUMS.txt\`.
-
-\`\`\`bash
-curl -LO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz
-curl -LO https://github.com/derekified/struggletime/releases/download/${TAG}/struggletime-macos-universal.tar.gz.sha256
-shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
-tar -xzf struggletime-macos-universal.tar.gz
-sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
-struggletime tray
-\`\`\`"
+            --notes-file /tmp/release-notes.md
           gh release upload "$TAG" upload/* --clobber
