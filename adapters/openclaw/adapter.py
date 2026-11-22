@@ -37,6 +37,10 @@ def scan(sessions_dir, state):
         state[str(f)] = len(lines)
     return events
 
+def _debug_enabled():
+    v = (os.environ.get("STRUGGLETIME_DEBUG") or os.environ.get("AITIME_DEBUG") or "").strip().lower()
+    return v in ("1", "true", "yes", "on")
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--sessions-dir", default=os.environ.get("OPENCLAW_SESSIONS", str(Path.home() / ".openclaw" / "agents" / "main" / "sessions")))
@@ -51,6 +55,9 @@ def main():
     exec_log.parent.mkdir(parents=True, exist_ok=True)
     state_file = exec_log.parent / "openclaw-adapter-state.json"
     state = json.loads(state_file.read_text()) if state_file.exists() else {}
+    debug = _debug_enabled()
+    if debug:
+        print(json.dumps({"msg": "boot", "editor": "openclaw", "kind": "adapter"}), flush=True)
     while True:
         if Path(a.sessions_dir).exists():
             for e in scan(a.sessions_dir, state):
@@ -60,7 +67,13 @@ def main():
                 e["source"] = "adapter"
                 # Never write message text / tool args — classify() already returns labels only
                 with open(exec_log, "a") as fh: fh.write(json.dumps(e) + "\n")
-                print(e, flush=True)
+                if debug:
+                    print(json.dumps({
+                        "msg": "emit", "editor": e.get("editor"), "event_type": e.get("event_type"),
+                        "files_touched_count": e.get("files_touched_count"),
+                    }), flush=True)
+                else:
+                    print(e, flush=True)
             state_file.write_text(json.dumps(state))
         if a.once: return
         time.sleep(2)

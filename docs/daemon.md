@@ -124,9 +124,13 @@ chain makes both facts visible in review.
 
 Layer 1 maps running processes to `editor` / `agent` via
 `daemon/editors.py`. Built-ins cover Cursor, VS Code, Windsurf, Trae,
-Kiro, Zed, VSCodium, Neovim, Helix, Claude Code, Codex, OpenClaw, Aider,
-Goose, OpenCode, Gemini CLI, and more. Override or extend without code
-changes:
+Kiro, Zed, VSCodium, Neovim, Helix (`hx`), JetBrains (IntelliJ /
+PyCharm / CLion / WebStorm / GoLand / RustRover / Rider / Android
+Studio), Godot, Unity, KiCad (`kicad` / `pcbnew` / `eeschema` /
+`gerbview`), Blender, FreeCAD, OpenSCAD, Aseprite, Krita, GIMP, Figma,
+Xcode, Arduino IDE, Jupyter, RStudio, Obsidian, Claude Code, Codex,
+OpenClaw, Aider, Goose, OpenCode, Gemini CLI, and more. Override or
+extend without code changes:
 
 ```jsonc
 // ~/.config/struggletime/editors.json
@@ -157,7 +161,33 @@ server** and no raw paths, prompts, or keystrokes in the bridge.
 | claude code (`adapters/claude-code`) | agent turn boundaries | merge `hooks.json` into `.claude/settings.json` |
 | codex / any cli (`adapters/codex`) | turn boundaries for cli agents | shell wrapper / `agent_event.py` in its readme |
 | openclaw (`adapters/openclaw`) | turns + tool result counts from local session logs | `python3 adapters/openclaw/adapter.py` |
+| neovim (`adapters/neovim`) | insert vs external edits, focus, saves | `require("struggletime").setup()` |
+| godot (`adapters/godot`) | focus, filesystem edits, playtest | enable `addons/struggletime` |
+| jetbrains (`adapters/jetbrains`) | typing vs bulk writes, window focus | build the Kotlin scaffold |
+| unity (`adapters/unity`) | focus, asset saves, play mode | drop `Editor/StruggleTimeTracker.cs` |
 
 legacy `~/.aitime/exec.jsonl` is still drained for older hooks. if an
 adapter breaks when its tool updates, layer 1 keeps counting — that is
 the whole point of the split.
+
+## debug mode
+
+set `STRUGGLETIME_DEBUG=1` (or `AITIME_DEBUG=1`) on the daemon or any
+adapter. debug logs print allowlisted labels only (`editor`,
+`event_type`, counts) — never paths, prompts, or argv.
+
+```bash
+STRUGGLETIME_DEBUG=1 python3 daemon/daemon.py --repo ~/my-project
+make verify-adapters
+```
+
+## cache / lock ignores
+
+tomography skips tool caches and lock files so they do not look like
+bulk agent writes:
+
+- godot: `.godot/`, `*.import`
+- unity / unreal: `Library/`, `Temp/`, `Obj/`, `Intermediate/`, `Saved/`, `Binaries/`
+- kicad / cad: `~*.lck`, `*-bak`, `*-backups/`, `fp-info-cache`
+- blender: `*.blend1`, `*.blend2`
+- xcode / jetbrains: `DerivedData/`, `xcuserdata/`, `.idea/`

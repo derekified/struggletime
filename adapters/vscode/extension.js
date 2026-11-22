@@ -5,6 +5,7 @@ const vscode = require("vscode"), fs = require("fs"), os = require("os"), path =
 const log = process.env.AITIME_AGENT_EVENTS
   || process.env.AITIME_EXEC_LOG
   || path.join(os.homedir(), ".aitime", "agent_events.jsonl");
+const DEBUG = /^(1|true|yes|on)$/i.test(String(process.env.STRUGGLETIME_DEBUG || process.env.AITIME_DEBUG || ""));
 
 function editorLabel() {
   const name = (vscode.env.appName || "").toLowerCase();
@@ -30,13 +31,20 @@ function emit(payload) {
     source: "adapter",
     ...payload,
   };
-  delete row.path; delete row.content; delete row.text;
+  delete row.path; delete row.content; delete row.text; delete row.prompt_text;
   fs.appendFileSync(log, JSON.stringify(row) + "\n");
+  if (DEBUG) {
+    console.error("[struggletime:debug]", JSON.stringify({
+      msg: "emit", editor: row.editor, event_type: row.event_type,
+      files_touched_count: row.files_touched_count, source: "adapter",
+    }));
+  }
 }
 
 function activate(ctx) {
   let timer;
   const ed = editorLabel();
+  if (DEBUG) console.error("[struggletime:debug]", JSON.stringify({ msg: "boot", editor: ed, kind: "vscode" }));
   ctx.subscriptions.push(vscode.workspace.onDidChangeTextDocument(e => {
     if (e.contentChanges.length === 0) return;
     clearTimeout(timer);
@@ -57,4 +65,4 @@ function activate(ctx) {
       files_touched_count: 0 });
   }));
 }
-module.exports = { activate, deactivate: () => {} };
+module.exports = { activate, deactivate: () => {}, editorLabel, emit };

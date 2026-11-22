@@ -11,10 +11,11 @@ editors = load("editors", "daemon/editors.py")
 
 class TestEditors(unittest.TestCase):
     def test_builtin_matches_niche_ides(self):
-        blob = "cursor helper\nwindsurf\ntrae\nkiro\nzed\nvscodium\nnvim\nhelix\nclaude\ncodex\nopenclaw\naider\ngoose\nopencode\ngemini\n"
+        blob = "cursor helper\nwindsurf\ntrae\nkiro\nzed\nvscodium\nnvim\nhelix\nclaude\ncodex\nopenclaw\naider\ngoose\nopencode\ngemini\ngodot\nunity\nkicad\nblender\n"
         hits = editors.match_signatures(blob)
         labels = {h["editor"] for h in hits}
-        for need in ("cursor", "windsurf", "trae", "kiro", "zed", "vscodium", "neovim", "helix", "claude-code", "codex", "openclaw"):
+        for need in ("cursor", "windsurf", "trae", "kiro", "zed", "vscodium", "neovim", "helix",
+                     "claude-code", "codex", "openclaw", "godot", "unity", "kicad", "blender"):
             self.assertIn(need, labels, need)
         agents = editors.detect_running_agents(blob)
         self.assertTrue(any(a in agents for a in ("claude", "codex", "openclaw", "aider")))

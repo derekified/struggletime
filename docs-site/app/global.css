@@ -179,8 +179,31 @@ body {
 @media (max-width: 800px) {
   .docs-app #nd-sidebar,
   .docs-app [data-sidebar] {
-    width: 100% !important;
+    width: min(100%, 18rem) !important;
     min-width: 0 !important;
+    max-width: 100% !important;
+  }
+  .docs-app #nd-docs-layout,
+  .docs-app main,
+  .docs-app article {
+    min-width: 0 !important;
+  }
+  .docs-app article,
+  .docs-app [class*="prose"] {
+    padding-inline: 0.75rem !important;
+  }
+  .docs-app pre,
+  .docs-app table,
+  .docs-app .overflow-x-auto {
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .docs-app table {
+    display: block;
+  }
+  .docs-app h1 {
+    font-size: 1.45rem;
   }
 }
 

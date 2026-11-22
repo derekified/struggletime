@@ -41,7 +41,7 @@ deflations require a reason code; those codes tune the next version.
 |---|---|---|
 | L1 polling watcher | Stdlib `stat` poll of git repos (`.gitignore`-aware); burst shape separates typing from agent dumps | 100% |
 | L1 shell hook | `preexec/precmd` (bash/zsh) + PowerShell prompt hook → local JSONL; category, duration, exit code only | 100% |
-| L2 adapters | VS Code/Cursor extension; Claude Code hooks; Codex/Aider `wrap.sh`; OpenClaw session tail | enrichment only |
+| L2 adapters | VS Code/Cursor; Claude Code hooks; Codex `wrap.sh`; OpenClaw session tail; Neovim; Godot; JetBrains; Unity | enrichment only |
 
 Adapters append to `~/.aitime/agent_events.jsonl`. If an adapter breaks,
 L1 still counts the session.

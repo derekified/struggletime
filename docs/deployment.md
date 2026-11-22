@@ -33,7 +33,7 @@ tunnel or a reverse proxy on the same box (below).
 
 ```bash
 # on the vps
-git clone <this repo> struggletime && cd struggletime
+git clone https://github.com/derekified/struggletime.git && cd struggletime
 cp .env.example .env        # fill in what you have, see below
 mkdir -p /srv/struggletime  # or point SERVER_DB somewhere writable
 ```

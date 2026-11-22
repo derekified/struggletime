@@ -1,11 +1,12 @@
 PY ?= python3
 PORT ?= 18765
 
-.PHONY: help check test test-cross server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs docs docs-dev clean
+.PHONY: help check test test-cross verify-adapters server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs docs docs-dev clean
 help:
 	@echo "make check    verify python, git and the test suite"
 	@echo "make test     run all tests"
 	@echo "make test-cross  Linux/macOS/Windows path+hook+adapter tests"
+	@echo "make verify-adapters  privacy + emit contract across all adapters"
 	@echo "make server   start the server + dashboard on :$(PORT)"
 	@echo "make tray     run the menu bar / system tray daemon"
 	@echo "make gui      open the daemon settings window"
@@ -29,6 +30,9 @@ test:
 
 test-cross:
 	PWSH="$(PWSH)" $(PY) -m unittest tests.test_cross_platform -v
+
+verify-adapters:
+	$(PY) scripts/verify_adapters.py
 
 server:
 	PORT=$(PORT) $(PY) server/server.py

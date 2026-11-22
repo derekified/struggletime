@@ -62,6 +62,11 @@ class TestDashboard(unittest.TestCase):
                        "fake-stats-badge", "dash-customize", "velocity-panel", "classifier-panel", "decay-panel",
                        "afternoon-panel", "chain-panel", "summary-card", "btn-dash-share", "metric-mode-sel"):
             self.assertIn(needle, home_l)
+        app_js_home = req(self.port, "GET", "/app.js")[1]
+        self.assertIn("EDITOR_DISPLAY", app_js_home)
+        self.assertIn("neovim", app_js_home.lower())
+        self.assertIn("jetbrains", app_js_home.lower())
+        self.assertIn("godot", app_js_home.lower())
         self.assertNotIn("duo-break", home_l)
         self.assertIn('data-auth="required"', home)
         self.assertIn("pendingAuthCode", req(self.port, "GET", "/app.js")[1])
@@ -74,15 +79,25 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("create", projects.lower())
         s, login = req(self.port, "GET", "/login")
         self.assertEqual(s, 200)
-        self.assertIn("continue with slack", login.lower())
+        login_l = login.lower()
+        self.assertIn("continue with hack club slack", login_l)
+        self.assertIn("hack club slack", login_l)
+        self.assertIn("auth-shell", login_l)
+        self.assertIn("uses your hack club slack profile only", login_l)
+        self.assertIn("/v1/auth/slack/start", req(self.port, "GET", "/app.js")[1])
+        self.assertIn("nav-toggle", login_l)
+        self.assertIn("github.com/derekified/struggletime", login_l)
+        self.assertNotIn("struggletime", login_l)
         s, settings = req(self.port, "GET", "/settings")
         self.assertEqual(s, 200)
-        for needle in ("sign in with slack", "connect github", "btn-github-disconnect", "settings-rail", "set-country",
+        settings_l = settings.lower()
+        for needle in ("sign in with hack club slack", "connect github", "btn-github-disconnect", "settings-rail", "set-country",
                        "btn-delete-account", "daemon-banner-dismiss",
                        'href="/docs/"', "open docs", "settings-docs",
-                       "62-83-116-143.sslip.io/docs/tray"):
-            self.assertIn(needle, settings.lower())
+                       "62-83-116-143.sslip.io/docs/tray", "settings-rail-select"):
+            self.assertIn(needle, settings_l)
         app_js = req(self.port, "GET", "/app.js")[1]
+        self.assertIn("setMobileNavOpen", app_js)
         self.assertIn("/v1/me/github/disconnect", app_js)
         self.assertIn("pageLoadGen", app_js)
         self.assertIn("TRANSIENT_HTTP", app_js)

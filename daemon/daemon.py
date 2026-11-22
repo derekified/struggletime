@@ -23,8 +23,22 @@ import install_sig
 import config as dcfg
 import agent_event as agent_evt
 import editors as edreg
+import debugutil
 
-IGNORE = {".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".aitime"}
+# Directory basenames skipped while walking linked repos (cache / VCS / IDE noise).
+IGNORE = {
+    ".git", "node_modules", "__pycache__", ".venv", "dist", "build", ".aitime",
+    # Godot / Unity / Unreal
+    ".godot", "Library", "Temp", "Obj", "Intermediate", "Saved", "Binaries",
+    # JetBrains / Xcode
+    ".idea", "DerivedData", "xcuserdata",
+}
+# Path segment names that always drop a file from tomography (nested caches).
+IGNORE_SEGMENTS = frozenset({
+    ".git", "node_modules", "__pycache__", ".venv", ".aitime",
+    ".godot", "Library", "Temp", "Obj", "Intermediate", "Saved", "Binaries",
+    ".idea", "DerivedData", "xcuserdata",
+})
 _STOP = False
 SWITCH_QUIET_SECS = 30  # early-seal prior project after this quiet when another is active
 FORMULA = FORMULA_VERSION
@@ -47,6 +61,45 @@ CACHE_DIR_MARKERS = (
     "__pycache__",
     ".tox",
 )
+
+def ignored_dir_name(name):
+    """True if an os.walk directory basename should be pruned."""
+    if not name:
+        return True
+    if name in IGNORE:
+        return True
+    if name.endswith("-backups"):
+        return True
+    return False
+
+def ignored_rel_path(rel):
+    """True if a repo-relative path is cache/lock noise (never hash into buckets)."""
+    if not rel:
+        return True
+    parts = Path(rel).parts
+    for seg in parts:
+        if seg in IGNORE_SEGMENTS:
+            return True
+        if seg.endswith("-backups"):
+            return True
+    name = parts[-1] if parts else ""
+    low = name.lower()
+    # Godot imports
+    if low.endswith(".import"):
+        return True
+    # Blender autosaves
+    if low.endswith(".blend1") or low.endswith(".blend2"):
+        return True
+    # KiCad / CAD locks and bak files
+    if low == "fp-info-cache":
+        return True
+    if low.endswith("-bak"):
+        return True
+    if low.startswith("~") and low.endswith(".lck"):
+        return True
+    if low.endswith(".lck") and low.startswith("~"):
+        return True
+    return False
 
 # Shell hook categories (name only — never arguments)
 EXEC_CATS = {
@@ -131,12 +184,18 @@ def snapshot(repo):
     """Rich tree snapshot: mtime_ns + size + inode (detects atomic agent write-renames)."""
     out = {}
     for root, dirs, files in os.walk(repo):
-        dirs[:] = [d for d in dirs if d not in IGNORE]
+        dirs[:] = [d for d in dirs if not ignored_dir_name(d)]
         for f in files:
             p = Path(root) / f
             try:
+                rel = str(p.relative_to(repo))
+            except ValueError:
+                continue
+            if ignored_rel_path(rel):
+                continue
+            try:
                 st = p.stat()
-                out[str(p.relative_to(repo))] = {
+                out[rel] = {
                     "mtime_ns": st.st_mtime_ns,
                     "size": int(st.st_size),
                     "ino": int(getattr(st, "st_ino", 0) or 0),
@@ -970,6 +1029,15 @@ def drain_shared_logs(watchers, agent_log, exec_log, shared_state):
                 e = classify_exec(line)
             except Exception:
                 continue
+            debugutil.debug_log(
+                "drain",
+                editor=e.get("editor"),
+                agent=e.get("agent"),
+                event_type=e.get("event_type"),
+                category=e.get("category"),
+                files_touched_count=e.get("files_touched_count"),
+                source=e.get("source"),
+            )
             w = None
             if e.get("project_id"):
                 for cand in watchers:
@@ -1302,9 +1370,11 @@ def main():
         f"watching {len(watchers)} project(s) [{roots}] bucket={bucket_secs}s "
         f"server={server or 'offline'} os={host_os()['id']} "
         f"agents={agent_log.name}+{exec_log.name}"
-        f"{' PAUSED' if was_paused else ''}",
+        f"{' PAUSED' if was_paused else ''}"
+        f"{' DEBUG' if debugutil.debug_enabled() else ''}",
         flush=True,
     )
+    debugutil.debug_log("boot", n=len(watchers), kind="daemon")
 
     # Seed a window for repos that already have dirty work, or when --once needs one seal
     now_wall, now_mono = int(time.time()), time.monotonic()

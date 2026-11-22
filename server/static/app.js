@@ -701,13 +701,13 @@ if (activePage === "signout" || activePage === "logout") {
 
 function oauthMsg(code) {
   return ({
-    claim_handle: "Signed in with Slack. Grab a handle next.",
-    slack_linked: "Signed in with Slack.",
+    claim_handle: "Signed in with Hack Club Slack. Grab a handle next.",
+    slack_linked: "Signed in with Hack Club Slack.",
     github_linked: "GitHub connected.",
     github_failed: "GitHub sign-in didn’t work. Try again?",
-    slack_failed: "Slack sign-in didn’t work. Try again?",
-    bad_state: "That sign-in link expired. Start again from Slack.",
-    sign_in_with_slack_first: "Sign in with Slack first.",
+    slack_failed: "Hack Club Slack sign-in didn’t work. Try again?",
+    bad_state: "That sign-in link expired. Start again from Hack Club Slack.",
+    sign_in_with_slack_first: "Sign in with Hack Club Slack first.",
   })[code] || (code ? code.replaceAll("_", " ") : "");
 }
 
@@ -1073,7 +1073,7 @@ function paintLogin() {
   const status = $("login-status");
   if (q.get("signed_out")) status.textContent = "You're signed out.";
   else if (q.get("oauth")) status.innerHTML = `<span class="tag ${String(q.get("oauth")).includes("fail") || String(q.get("oauth")).includes("denied") ? "bad" : "ok"}">${esc(oauthMsg(q.get("oauth")))}</span>`;
-  else status.textContent = signed ? "You're signed in." : "Continue with Slack to get started.";
+  else status.textContent = signed ? "You're signed in." : "Continue with Hack Club Slack to get started.";
 
   $("login-signed").hidden = !(signed && p && p.handle);
   $("login-slack-box").hidden = !!(signed && (p?.handle || p?.needs_handle));
@@ -1105,7 +1105,7 @@ function paintAuthChecks() {
   if ($("gh-oauth")) $("gh-oauth").disabled = !ready || !authStatus.github_ready || (linked && !needsRe);
   if ($("sl-oauth")) $("sl-oauth").disabled = !authStatus.slack_ready;
   if ($("login-slack")) $("login-slack").disabled = !authStatus.slack_ready;
-  if ($("login-slack-hint") && !authStatus.slack_ready) $("login-slack-hint").textContent = "Slack OAuth is not configured on this server.";
+  if ($("login-slack-hint") && !authStatus.slack_ready) $("login-slack-hint").textContent = "Hack Club Slack OAuth is not configured on this server.";
   const builders = document.querySelector('[data-top="builders"], [data-nav="builders"]');
   if (builders) builders.hidden = !!(p.handle && p.show_leaderboards === false);
 }
@@ -2109,9 +2109,12 @@ function buildFakeAnalytics() {
     { label: "CSS", hours: 3.2, pct: 7 },
   ];
   const editors = [
-    { label: "VS Code", hours: 31.0, pct: 73 },
-    { label: "Neovim", hours: 8.4, pct: 20 },
-    { label: "Cursor", hours: 3.2, pct: 7 },
+    { id: "vscode", label: "VS Code", hours: 18.0, pct: 42 },
+    { id: "neovim", label: "Neovim", hours: 8.4, pct: 20 },
+    { id: "jetbrains", label: "JetBrains", hours: 6.1, pct: 14 },
+    { id: "godot", label: "Godot", hours: 4.2, pct: 10 },
+    { id: "unity", label: "Unity", hours: 3.0, pct: 7 },
+    { id: "blender", label: "Blender", hours: 2.9, pct: 7 },
   ];
   const oses = [
     { label: "Linux", hours: 36.1, pct: 85 },
@@ -2319,7 +2322,7 @@ function renderKpis(a) {
     kpiCard("briefcase", "Project", a.top_project ? a.top_project.label : "none yet"),
     kpiCard("code", "Language", a.top_language ? a.top_language.label : "none yet"),
     kpiCard("laptop", "OS", a.top_os ? a.top_os.label : "none yet"),
-    kpiCard("terminal", "Editor", a.top_editor ? a.top_editor.label : "none yet"),
+    kpiCard("terminal", "Editor", a.top_editor ? editorDisplay(a.top_editor.id || a.top_editor.label).label : "none yet"),
   );
   box.replaceChildren(...kids);
 }
@@ -2350,16 +2353,57 @@ function renderRanked(box, items, emptyMsg) {
   }));
 }
 
+const EDITOR_DISPLAY = {
+  neovim: { label: "Neovim", glyph: "terminal" },
+  helix: { label: "Helix", glyph: "terminal" },
+  jetbrains: { label: "JetBrains", glyph: "code" },
+  godot: { label: "Godot", glyph: "waveform" },
+  unity: { label: "Unity", glyph: "waveform" },
+  kicad: { label: "KiCad", glyph: "diagram-3" },
+  blender: { label: "Blender", glyph: "photo" },
+  freecad: { label: "FreeCAD", glyph: "photo" },
+  openscad: { label: "OpenSCAD", glyph: "code" },
+  xcode: { label: "Xcode", glyph: "laptop" },
+  arduino: { label: "Arduino", glyph: "cpu" },
+  aseprite: { label: "Aseprite", glyph: "sticker" },
+  krita: { label: "Krita", glyph: "sticker" },
+  gimp: { label: "GIMP", glyph: "photo" },
+  figma: { label: "Figma", glyph: "edit" },
+  jupyter: { label: "Jupyter", glyph: "code" },
+  rstudio: { label: "RStudio", glyph: "code" },
+  obsidian: { label: "Obsidian", glyph: "docs" },
+  vscode: { label: "VS Code", glyph: "code" },
+  cursor: { label: "Cursor", glyph: "code" },
+  vscodium: { label: "VSCodium", glyph: "code" },
+  windsurf: { label: "Windsurf", glyph: "code" },
+  zed: { label: "Zed", glyph: "code" },
+};
+
+function editorDisplay(raw) {
+  const id = String(raw || "").toLowerCase().trim();
+  const hit = EDITOR_DISPLAY[id];
+  if (hit) return { id, label: hit.label, glyph: hit.glyph };
+  if (!id) return { id: "", label: "unknown", glyph: "terminal" };
+  return { id, label: id, glyph: "terminal" };
+}
+
 function renderSeg(box, items, emptyMsg) {
   if (!box) return;
   if (!items?.length) { box.replaceChildren(compactEmpty(emptyMsg)); return; }
-  box.replaceChildren(...items.slice(0, 6).map((it) => el("div", { className: "seg" }, [
-    el("div", { className: "seg-top" }, [
-      el("b", { text: it.label }),
-      el("span", { className: "seg-meta", text: `${fmtH(it.hours)} · ${it.pct || 0}%` }),
-    ]),
-    el("div", { className: "track" }, [el("i", { style: `width:${Math.max(3, it.pct || 0)}%` })]),
-  ])));
+  const isEditorBox = box.id === "break-editor";
+  box.replaceChildren(...items.slice(0, 6).map((it) => {
+    const disp = isEditorBox ? editorDisplay(it.id || it.label) : null;
+    const labelKids = disp
+      ? [icon(disp.glyph, { size: 14, className: "seg-ico" }), document.createTextNode(disp.label)]
+      : [document.createTextNode(it.label)];
+    return el("div", { className: "seg" }, [
+      el("div", { className: "seg-top" }, [
+        el("b", { className: disp ? "seg-editor-label" : "" }, labelKids),
+        el("span", { className: "seg-meta", text: `${fmtH(it.hours)} · ${it.pct || 0}%` }),
+      ]),
+      el("div", { className: "track" }, [el("i", { style: `width:${Math.max(3, it.pct || 0)}%` })]),
+    ]);
+  }));
 }
 
 function renderModePie(a) {
@@ -3035,7 +3079,7 @@ function paintHeroCta() {
     } else {
       primary.href = "/login";
       primary.innerHTML = "";
-      primary.append(icon("slack", { size: 16 }), document.createTextNode("continue with slack"));
+      primary.append(icon("slack", { size: 16 }), document.createTextNode("continue with hack club slack"));
     }
   }
   if (secondary) {
@@ -3121,11 +3165,11 @@ if ($("login-signout")) $("login-signout").addEventListener("submit", async (e) 
 });
 if ($("sl-login-form")) $("sl-login-form").addEventListener("submit", (e) => {
   e.preventDefault();
-  if (!(authStatus && authStatus.slack_ready)) { toast("Slack OAuth not configured", { kind: "error" }); return; }
+  if (!(authStatus && authStatus.slack_ready)) { toast("Hack Club Slack OAuth not configured", { kind: "error" }); return; }
   location.href = "/v1/auth/slack/start";
 });
 if ($("login-slack")) $("login-slack").addEventListener("click", () => {
-  if (!(authStatus && authStatus.slack_ready)) { toast("Slack OAuth not configured", { kind: "error" }); return; }
+  if (!(authStatus && authStatus.slack_ready)) { toast("Hack Club Slack OAuth not configured", { kind: "error" }); return; }
   location.href = "/v1/auth/slack/start";
 });
 if ($("login-claim-form")) $("login-claim-form").addEventListener("submit", async (e) => {
@@ -3223,21 +3267,57 @@ if ($("btn-github-disconnect")) {
   });
 }
 
-document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
-  tab.addEventListener("click", () => {
-    const id = tab.dataset.settingsTab;
-    document.querySelectorAll("[data-settings-tab]").forEach((t) => t.classList.toggle("on", t === tab));
-    document.querySelectorAll(".settings-panel").forEach((p) => {
-      const on = p.id === "settings-" + id;
-      p.classList.toggle("on", on);
-      p.hidden = !on;
-    });
-    if (id === "docs") {
-      location.href = "/docs/";
-      return;
-    }
-    hydrateNavIcons($("settings-main") || document);
+function setSettingsSection(id) {
+  if (id === "daemon") {
+    location.href = "https://62-83-116-143.sslip.io/docs/tray/";
+    return;
+  }
+  if (id === "docs") {
+    location.href = "/docs/";
+    return;
+  }
+  document.querySelectorAll("[data-settings-tab]").forEach((t) => t.classList.toggle("on", t.dataset.settingsTab === id));
+  document.querySelectorAll(".settings-panel").forEach((p) => {
+    const on = p.id === "settings-" + id;
+    p.classList.toggle("on", on);
+    p.hidden = !on;
   });
+  const sel = $("settings-rail-select");
+  if (sel && sel.value !== id) sel.value = id;
+  hydrateNavIcons($("settings-main") || document);
+}
+
+document.querySelectorAll("[data-settings-tab]").forEach((tab) => {
+  tab.addEventListener("click", () => setSettingsSection(tab.dataset.settingsTab));
+});
+if ($("settings-rail-select")) {
+  $("settings-rail-select").addEventListener("change", (e) => setSettingsSection(e.target.value));
+}
+
+function setMobileNavOpen(open) {
+  document.body.classList.toggle("nav-open", !!open);
+  const btn = $("nav-toggle");
+  if (btn) {
+    btn.setAttribute("aria-expanded", open ? "true" : "false");
+    btn.setAttribute("aria-label", open ? "Close menu" : "Open menu");
+  }
+}
+if ($("nav-toggle")) {
+  $("nav-toggle").addEventListener("click", () => {
+    setMobileNavOpen(!document.body.classList.contains("nav-open"));
+  });
+}
+if ($("nav-backdrop")) {
+  $("nav-backdrop").addEventListener("click", () => setMobileNavOpen(false));
+}
+document.querySelectorAll("#top-nav a").forEach((a) => {
+  a.addEventListener("click", () => setMobileNavOpen(false));
+});
+window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") setMobileNavOpen(false);
+});
+window.addEventListener("resize", () => {
+  if (window.innerWidth > 720) setMobileNavOpen(false);
 });
 
 if ($("btn-save-region")) $("btn-save-region").addEventListener("click", () => saveProfile({

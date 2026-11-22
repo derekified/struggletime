@@ -1,0 +1,12 @@
+<idea-plugin>
+  <id>com.struggletime.adapter</id>
+  <name>StruggleTime</name>
+  <version>0.1.0</version>
+  <vendor>StruggleTime</vendor>
+  <description>Layer-2 StruggleTime enrichment — typing/focus counts only. No document text or paths.</description>
+  <depends>com.intellij.modules.platform</depends>
+  <idea-version since-build="223"/>
+  <extensions defaultExtensionNs="com.intellij">
+    <postStartupActivity implementation="com.struggletime.StruggleTimeStartup"/>
+  </extensions>
+</idea-plugin>

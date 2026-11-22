@@ -23,6 +23,9 @@
     </span>
     <span class="word">StruggleTime</span>
   </a>
+  <button type="button" class="nav-toggle" id="nav-toggle" aria-expanded="false" aria-controls="top-nav" aria-label="Open menu">
+    <span class="nav-ico" data-glyph="menu"></span>
+  </button>
   <nav class="top-nav" id="top-nav">
     <a href="/home" data-top="home" data-nav-link data-nav="home" data-auth="required">home</a>
     <a href="/projects" data-top="projects" data-nav-link data-nav="projects" data-auth="required">projects</a>
@@ -49,6 +52,7 @@
     <span class="live" id="live-txt" title="status">●</span>
   </div>
 </header>
+<button type="button" class="nav-backdrop" id="nav-backdrop" aria-label="Close menu" tabindex="-1"></button>
 
 <div class="shell no-side" id="app-shell">
   <main>
@@ -73,7 +77,7 @@
           <h1>count the loops that fixed the code</h1>
           <p class="lead">Time tracking for people who ship. It weights fail→fix→pass loops higher than idle staring or unread agent dumps, and never uploads your prompts or file contents.</p>
           <div class="hero-cta">
-            <a class="ui-btn" id="hero-primary" href="/login" data-nav-link><span class="nav-ico" data-glyph="slack"></span>continue with slack</a>
+            <a class="ui-btn" id="hero-primary" href="/login" data-nav-link><span class="nav-ico" data-glyph="slack"></span>continue with hack club slack</a>
             <a class="ui-btn ui-btn-ghost" id="hero-secondary" href="/docs/" data-nav-link><span class="nav-ico" data-glyph="docs"></span>read the docs</a>
           </div>
           <div class="hero-live" id="hero-live" aria-label="Live struggle weight preview">
@@ -117,33 +121,35 @@
 
     <!-- LOGIN -->
     <section class="page page-wide" id="page-login">
-      <div class="auth-split">
-        <div class="auth-aside">
-          <h1>sign in</h1>
-          <p class="lead">Use Slack, claim a handle, then optionally link GitHub for private repos. No passwords.</p>
-        </div>
-        <div class="auth-card ui-panel">
-          <div id="login-status" class="sub">checking your session…</div>
-          <div id="login-signed" hidden>
-            <p class="sub">you're already signed in.</p>
-            <a class="ui-btn" href="/home" data-nav-link><span class="nav-ico" data-glyph="home"></span>open your dashboard</a>
-            <form id="login-signout" style="margin-top:10px"><button class="ui-btn ui-btn-ghost" type="submit">sign out</button></form>
+      <div class="auth-shell">
+        <div class="auth-split">
+          <div class="auth-aside">
+            <h1>sign in</h1>
+            <p class="lead">Sign in with Hack Club Slack, pick your handle, and link GitHub later if you want private repo access. No passwords.</p>
           </div>
-          <div id="login-slack-box">
-            <button class="ui-btn auth-provider" id="login-slack" type="button">
-              <span class="nav-ico" data-glyph="slack-fill"></span>continue with slack
-            </button>
-            <p class="sub" id="login-slack-hint">We only ask for your Slack profile. Nothing else.</p>
+          <div class="auth-card ui-panel">
+            <div id="login-status" class="sub">checking your session…</div>
+            <div id="login-signed" hidden>
+              <p class="sub">You're already signed in.</p>
+              <a class="ui-btn" href="/home" data-nav-link><span class="nav-ico" data-glyph="home"></span>open your dashboard</a>
+              <form id="login-signout" style="margin-top:10px"><button class="ui-btn ui-btn-ghost" type="submit">sign out</button></form>
+            </div>
+            <div id="login-slack-box">
+              <button class="ui-btn auth-provider" id="login-slack" type="button">
+                <span class="nav-ico" data-glyph="slack-fill"></span>continue with hack club slack
+              </button>
+              <p class="sub" id="login-slack-hint">Uses your Hack Club Slack profile only.</p>
+            </div>
+            <div id="login-claim-box" hidden>
+              <p class="sub">Choose a public handle. It stays tied to your Hack Club Slack account.</p>
+              <form id="login-claim-form" class="claim-row">
+                <input class="ui-input" id="login-handle" placeholder="your-handle" required autocomplete="username">
+                <button class="ui-btn" type="submit"><span class="nav-ico" data-glyph="badge-check"></span>claim</button>
+              </form>
+              <div class="sub" id="login-claim-out"></div>
+            </div>
+            <a class="sub back-link" href="/" data-nav-link><span class="nav-ico" data-glyph="back"></span>back home</a>
           </div>
-          <div id="login-claim-box" hidden>
-            <p class="sub">Choose a public handle. It stays tied to your Slack account.</p>
-            <form id="login-claim-form" class="claim-row">
-              <input class="ui-input" id="login-handle" placeholder="your-handle" required autocomplete="username">
-              <button class="ui-btn" type="submit"><span class="nav-ico" data-glyph="badge-check"></span>claim</button>
-            </form>
-            <div class="sub" id="login-claim-out"></div>
-          </div>
-          <a class="sub back-link" href="/" data-nav-link><span class="nav-ico" data-glyph="back"></span>back home</a>
         </div>
       </div>
     </section>
@@ -464,11 +470,11 @@
       </div>
 
       <div id="slack-login-box" class="ui-panel settings-gate">
-        <div class="sub">Slack is how you get in. No handle and password login.</div>
-        <form id="sl-login-form" style="margin-top:10px"><button class="ui-btn" id="sl-oauth" type="submit"><span class="nav-ico" data-glyph="slack"></span>sign in with slack</button></form>
+        <div class="sub">Hack Club Slack is how you get in. No password login.</div>
+        <form id="sl-login-form" style="margin-top:10px"><button class="ui-btn" id="sl-oauth" type="submit"><span class="nav-ico" data-glyph="slack"></span>sign in with hack club slack</button></form>
       </div>
       <div id="claim-box" class="ui-panel settings-gate" hidden>
-        <div class="sub">Pick a public handle tied to your Slack account.</div>
+        <div class="sub">Pick a public handle tied to your Hack Club Slack account.</div>
         <form id="claim-form" class="claim-row">
           <input class="ui-input" id="c-handle" placeholder="pick a handle" required>
           <button class="ui-btn" type="submit">claim handle</button>
@@ -477,10 +483,19 @@
       </div>
 
       <div class="settings-layout" id="settings-main" hidden>
+        <label class="settings-rail-select-wrap" for="settings-rail-select">
+          <span class="sub">Section</span>
+          <select class="ui-input" id="settings-rail-select" aria-label="Settings section">
+            <option value="profile">Profile</option>
+            <option value="daemon">Daemon</option>
+            <option value="docs">Docs</option>
+            <option value="appearance">Appearance</option>
+          </select>
+        </label>
         <aside class="settings-rail" role="tablist">
           <button type="button" class="settings-tab on" data-settings-tab="profile" role="tab"><span class="nav-ico" data-glyph="profile"></span> Profile</button>
-          <a class="settings-tab" href="https://62-83-116-143.sslip.io/docs/tray/" rel="noopener noreferrer"><span class="nav-ico" data-glyph="terminal"></span> Daemon</a>
-          <a class="settings-tab" href="/docs/" data-nav-link><span class="nav-ico" data-glyph="docs"></span> Docs</a>
+          <a class="settings-tab" href="https://62-83-116-143.sslip.io/docs/tray/" rel="noopener noreferrer" data-settings-link="daemon"><span class="nav-ico" data-glyph="terminal"></span> Daemon</a>
+          <a class="settings-tab" href="/docs/" data-nav-link data-settings-link="docs"><span class="nav-ico" data-glyph="docs"></span> Docs</a>
           <button type="button" class="settings-tab" data-settings-tab="appearance" role="tab"><span class="nav-ico" data-glyph="contrast"></span> Appearance</button>
         </aside>
         <div class="settings-panels">
@@ -574,7 +589,7 @@
               <ol class="install-steps">
                 <li>
                   <b>Get the code</b>
-                  <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git struggletime
+                  <pre class="install-code">git clone https://github.com/derekified/struggletime.git
 cd struggletime</pre>
                 </li>
                 <li>
@@ -682,8 +697,8 @@ source /path/to/struggletime/daemon/hooks.sh
       <a class="site-foot-ico" href="/builders" data-nav-link aria-label="Builders" title="Builders"><span class="nav-ico" data-glyph="people-2"></span></a>
       <a class="site-foot-ico" href="/settings" data-nav-link aria-label="Settings" title="Settings"><span class="nav-ico" data-glyph="settings"></span></a>
       <a class="site-foot-ico" href="/docs/privacy/" aria-label="Privacy" title="Privacy"><span class="nav-ico" data-glyph="private"></span></a>
-      <a class="site-foot-ico" href="https://origin.cursor.com/derekified/struggletime" rel="noopener noreferrer" aria-label="Source" title="Source"><span class="nav-ico" data-glyph="github"></span></a>
-      <a class="site-foot-ico" href="https://origin.cursor.com/derekified/struggletime/blob/main/LICENSE" rel="noopener noreferrer" aria-label="License" title="License"><span class="nav-ico" data-glyph="card-list"></span></a>
+      <a class="site-foot-ico" href="https://github.com/derekified/struggletime" rel="noopener noreferrer" aria-label="Source" title="Source"><span class="nav-ico" data-glyph="github"></span></a>
+      <a class="site-foot-ico" href="https://github.com/derekified/struggletime/blob/main/LICENSE" rel="noopener noreferrer" aria-label="License" title="License"><span class="nav-ico" data-glyph="card-list"></span></a>
     </nav>
   </footer>
 </div>

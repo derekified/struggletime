@@ -5,9 +5,10 @@ export const docsRoute = '/docs';
 export const docsImageRoute = '/og/docs';
 
 export const gitConfig = {
-  user: 'doruk-aydin',
+  user: 'derekified',
   repo: 'struggletime',
   branch: 'main',
+  host: 'github.com',
 };
 
 const getImageUrl = createGetUrl(docsImageRoute);

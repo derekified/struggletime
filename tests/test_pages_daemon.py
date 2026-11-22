@@ -49,7 +49,7 @@ class TestPagesDaemon(unittest.TestCase):
         self.assertIn('id="nav-stats"', home)
         self.assertIn("lb-list", req(self.port, "GET", "/builders")[1])
         s, html = req(self.port, "GET", "/settings")
-        for needle in ("sign in with slack", "connect github", "claim handle", "daemon",
+        for needle in ("sign in with hack club slack", "connect github", "claim handle", "daemon",
                        'data-settings-tab="profile"', 'data-settings-tab="appearance"', "danger zone",
                        "leaderboard privacy", "set-country"):
             self.assertIn(needle, html.lower())

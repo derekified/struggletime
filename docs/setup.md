@@ -6,7 +6,7 @@ no database to run. Works on windows, mac and linux.
 ## 1. check your machine
 
 ```bash
-git clone <this repo> && cd struggletime
+git clone https://github.com/derekified/struggletime.git && cd struggletime
 make check        # python, git, full test suite
 ```
 

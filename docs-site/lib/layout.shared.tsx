@@ -30,7 +30,7 @@ export function baseOptions(): BaseLayoutProps {
         </span>
       ),
     },
-    githubUrl: `https://origin.cursor.com/${gitConfig.user}/${gitConfig.repo}`,
+    githubUrl: `https://${gitConfig.host || 'github.com'}/${gitConfig.user}/${gitConfig.repo}`,
     themeSwitch: {
       enabled: false,
     },

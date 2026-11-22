@@ -299,6 +299,15 @@ class TestVscodeAdapterPackaging(unittest.TestCase):
                            capture_output=True, text=True, timeout=10)
         self.assertEqual(r.returncode, 0, r.stderr)
 
+    def test_new_adapter_scaffolds_present(self):
+        for rel in (
+            "adapters/neovim/lua/struggletime/init.lua",
+            "adapters/godot/addons/struggletime/plugin.gd",
+            "adapters/jetbrains/src/main/kotlin/com/struggletime/StruggleTimeStartup.kt",
+            "adapters/unity/Editor/StruggleTimeTracker.cs",
+        ):
+            self.assertTrue((ROOT / rel).is_file(), rel)
+
 
 class TestLiveLinuxDaemonSmoke(unittest.TestCase):
     """On this host (Linux): seal one offline bucket and assert os=linux."""

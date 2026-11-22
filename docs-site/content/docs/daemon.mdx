@@ -67,10 +67,51 @@ After the active span ends, remaining quiet time decays toward idle. `verify.py`
 
 See [Privacy](/docs/privacy).
 
+## Editor / agent attribution (Layer 1)
+
+`daemon/editors.py` maps running processes to `editor` / `agent` labels. Built-ins cover the VS Code family, JetBrains IDEs, Neovim, Helix (`hx`), Godot, Unity, KiCad (`kicad` / `pcbnew` / `eeschema` / `gerbview`), Blender, FreeCAD, OpenSCAD, Aseprite, Krita, GIMP, Figma, Xcode, Arduino IDE, Jupyter, RStudio, Obsidian, plus the usual CLI agents. Override without code changes via `~/.config/struggletime/editors.json`.
+
+## Adapters (Layer 2, optional)
+
+Adapters append allowlisted lines to `~/.aitime/agent_events.jsonl` (counts and labels only). The daemon drains that file each poll tick, then falls back to process signatures. There is no MCP server.
+
+| Adapter | Adds | Setup |
+|---|---|---|
+| `adapters/vscode` | Human edits, focus, file-op counts | Load `extension.js` |
+| `adapters/claude-code` | Agent turn boundaries | Merge `hooks.json` |
+| `adapters/codex` | CLI turn boundaries | Shell wrapper / README |
+| `adapters/openclaw` | Session turn / tool counts | Run `adapter.py` |
+| `adapters/neovim` | Insert vs external edits, focus, saves | `require("struggletime").setup()` |
+| `adapters/godot` | Focus, filesystem edits, playtest | Enable `addons/struggletime` |
+| `adapters/jetbrains` | Typing vs bulk writes, window focus | Build the Kotlin scaffold |
+| `adapters/unity` | Focus, asset saves, play mode | Drop `Editor/StruggleTimeTracker.cs` |
+
+Legacy `~/.aitime/exec.jsonl` is still drained for older hooks. If an adapter breaks, Layer 1 keeps counting.
+
+## Cache / lock ignores
+
+Tomography skips tool caches and lock files so they do not look like bulk agent writes:
+
+- Godot: `.godot/`, `*.import`
+- Unity / Unreal: `Library/`, `Temp/`, `Obj/`, `Intermediate/`, `Saved/`, `Binaries/`
+- KiCad / CAD: `~*.lck`, `*-bak`, `*-backups/`, `fp-info-cache`
+- Blender: `*.blend1`, `*.blend2`
+- Xcode / JetBrains: `DerivedData/`, `xcuserdata/`, `.idea/`
+
+## Debug mode
+
+Set `STRUGGLETIME_DEBUG=1` (or `AITIME_DEBUG=1`) on the daemon or any adapter. Debug logs print allowlisted labels only (`editor`, `event_type`, counts) — never paths, prompts, or argv.
+
+```bash
+STRUGGLETIME_DEBUG=1 python3 daemon/daemon.py --repo ~/my-project
+make verify-adapters
+```
+
 ## Local checks
 
 ```bash
-python3 -m unittest tests.test_daemon_tracking -v
+python3 -m unittest tests.test_daemon_tracking tests.test_editors tests.test_ecosystem_adapters -v
+python3 scripts/verify_adapters.py
 python3 -c "from src import verify; print(verify.FORMULA_VERSION)"
 ```
 

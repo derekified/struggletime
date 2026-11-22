@@ -24,7 +24,8 @@ ALLOWED_EVENT_KEYS = {
     "editor", "agent", "op", "files_touched_count", "source", "project_id",
 }
 ALLOWED_EVENT_TYPES = {
-    "edit", "focus", "blur", "tool", "prompt", "stop", "start", "exec", "created", "modified", "deleted",
+    "edit", "focus", "blur", "tool", "prompt", "stop", "start", "exec",
+    "created", "modified", "deleted", "play", "save",
 }
 ALLOWED_OPS = {"created", "modified", "deleted"}
 FORBIDDEN = {
@@ -38,9 +39,10 @@ EVENT_LOG = dcfg.HOME / "agent_events.jsonl"
 EXEC_LOG = dcfg.HOME / "exec.jsonl"
 
 EVENT_TO_CATEGORY = {
-    "edit": "editor", "focus": "editor", "blur": "editor",
+    "edit": "editor", "focus": "editor", "blur": "editor", "save": "editor",
     "created": "editor", "modified": "editor", "deleted": "editor",
     "tool": "ai_cli", "prompt": "ai_cli", "stop": "ai_cli", "start": "ai_cli",
+    "play": "test_runner",
     "exec": "other",
 }
 
