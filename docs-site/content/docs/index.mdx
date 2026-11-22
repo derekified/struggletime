@@ -3,7 +3,9 @@ title: Overview
 description: What StruggleTime measures and how weighting works.
 ---
 
-StruggleTime tracks **productive struggle**: the loops where something breaks, you dig in, and it works again. Steady back-and-forth coding and fixing errors get more credit than large instant code drops you never ran, or long stretches away from the keyboard.
+StruggleTime scores time spent fixing things: break something, dig in, get
+it working again. Steady editing and error-fix loops get more credit than
+a huge paste you never ran, or long stretches away from the keyboard.
 
 ## What gets credit
 
@@ -22,24 +24,31 @@ StruggleTime tracks **productive struggle**: the loops where something breaks, y
 
 ## How trust works
 
-- **Passive file & git tracking:** the desktop tracker watches saved file changes and git activity in your project folder. It does not screenshot your screen or read file contents.
-- **Scrambled file IDs:** paths are mixed with a secret salt (`sha256(salt:path)`) before anything is sent, so raw paths and source never leave your machine.
-- **Tamper-evident history:** each sealed time slice stores `prev_hash` of the previous entry. Quiet edits to past history are easy to spot in review.
-- **Shared scoring rules:** daemon and server both use `st-core` with the same `FORMULA_VERSION`.
+- **Passive file and git tracking.** The desktop tracker watches saved file
+  changes and git activity in your project folder. It does not screenshot
+  your screen or read file contents.
+- **Salted file IDs.** Paths are mixed with a local salt
+  (`sha256(salt:path)`) before anything is sent, so raw paths and source
+  stay on your machine.
+- **Hash-chained history.** Each sealed time slice stores `prev_hash` of the
+  previous entry. Quiet edits to past history show up in review.
+- **Shared scoring.** Daemon and server both use `st-core` with the same
+  `FORMULA_VERSION`.
 
 ## Privacy
 
-`struggletime daemon` is a native binary. Wire payloads are allowlisted metadata (~25–50 KB) with scrambled file IDs. See [Privacy](/docs/privacy).
+`struggletime daemon` is a native binary. Wire payloads are allowlisted
+metadata (~25–50 KB) with salted file IDs. See [Privacy](/docs/privacy).
 
 ## Pages
 
 <Cards>
   <Card title="Installation" href="/docs/installation" description="Clone, install tracker, link a project" />
   <Card title="Getting started" href="/docs/setup" description="Clone, check, run server + daemon" />
-  <Card title="CLI and tray" href="/docs/tray" description="struggletime and the menu bar" />
+  <Card title="CLI and tray" href="/docs/tray" description="struggletime CLI and tray supervisor" />
   <Card title="Daemon" href="/docs/daemon" description="1s loop, editor labels, adapters, silent decay" />
-  <Card title="Integrations" href="/docs/integrations" description="Every editor/agent adapter, hooks, GitHub, Slack" />
-  <Card title="Privacy" href="/docs/privacy" description="What leaves your machine—and what never does" />
+  <Card title="Integrations" href="/docs/integrations" description="Editor/agent adapters, hooks, GitHub, Slack" />
+  <Card title="Privacy" href="/docs/privacy" description="What leaves your machine, and what does not" />
   <Card title="Web app" href="/docs/web-app" description="Dashboard, builders, roles" />
   <Card title="API" href="/docs/api" description="Batch ingest, chain, review" />
   <Card title="Troubleshooting" href="/docs/troubleshooting" description="Daemon, sync, and fetch fixes" />

@@ -1,18 +1,18 @@
 ---
 title: Privacy
-description: Native tracker, scrambled file IDs, allowlisted payloads, and tamper-evident local history.
+description: Native tracker, salted file IDs, allowlisted payloads, and hash-chained local history.
 ---
 
 ## Guarantees
 
-| Guarantee | Plain meaning |
+| Guarantee | Meaning |
 |---|---|
-| Native daemon | `struggletime daemon` is a compiled binary — no scripting runtime on the machine |
+| Native daemon | `struggletime daemon` is a compiled binary. No scripting runtime required. |
 | No screen / keystroke / prompt capture | No screenshots, OCR, keylogs, clipboard, or chat transcripts |
 | No content / argv | File bodies and command arguments never leave the machine |
-| Scrambled file IDs | On-wire identity is `sha256(salt:path)` hex, not absolute paths |
+| Salted file IDs | On-wire identity is `sha256(salt:path)` hex, not absolute paths |
 | Schema budget | Allowlisted JSON fields only; typical sealed slice ~25–50 KB |
-| Tamper-evident history | Each local log entry carries `prev_hash` linking to the prior seal |
+| Hash-chained history | Each local log entry carries `prev_hash` linking to the prior seal |
 
 ## What never leaves the machine
 
@@ -22,13 +22,13 @@ description: Native tracker, scrambled file IDs, allowlisted payloads, and tampe
 - Screenshots, window pixel buffers, microphone audio
 - Keystroke streams or clipboard history
 
-## Scrambled file IDs
+## Salted file IDs
 
 ```text
 file_id = hex(sha256( f"{salt}:{absolute_or_repo_relative_path}" ))
 ```
 
-Salt is local/config-scoped. The server sees opaque IDs, not path strings.
+Salt is local. The server sees opaque IDs, not path strings.
 
 ## Allowlisted schema
 

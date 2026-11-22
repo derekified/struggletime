@@ -42,6 +42,6 @@ surveillance. Agent dumps land as NONE (0.20). Struggle loops are FULL.
 ## Protocol notes
 
 1. Fixtures are synthetic stand-ins for screen-recorded ground truth.
-2. Tune only via labelled sessions + pilot — never raw production hours.
+2. Tune only via labelled sessions + pilot. never raw production hours.
 3. Next gate: 100-project pilot with reviewer time < 5 min / submission.
 

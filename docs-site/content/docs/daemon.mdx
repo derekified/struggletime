@@ -5,8 +5,9 @@ description: Native 1-second loop, multi-project watching, quiet-reading decay, 
 
 ## Process model
 
-`struggletime daemon` is a native background process. No screen capture,
-accessibility APIs for content, or third-party analytics SDKs.
+`struggletime daemon` is a native background process. It does not capture
+your screen, use accessibility APIs for content, or ship third-party
+analytics SDKs.
 
 ```text
 every ~1s
@@ -19,19 +20,19 @@ every ~1s
 
 ```bash
 struggletime daemon --repo /path/to/project
-# or via helper:
+# or:
 struggletime start --repo /path/to/project
 ```
 
 ## Multi-project afternoons
 
-Link multiple repos with the helper. The loop watches all linked roots. When
+Link multiple repos with the CLI. The loop watches all linked roots. When
 you switch trees, credit follows the project that is actually changing.
 
-## What counts as “active”
+## What counts as active
 
-Billable time is the **active span**: contiguous seconds where the tracker
-sees meaningful change (file saves, adapter/exec category events). Leaving
+Billable time is the active span: contiguous seconds where the tracker sees
+meaningful change (file saves, adapter or exec category events). Leaving
 the daemon running while you do nothing does not bill.
 
 ## Quiet reading after real work (5–12 minutes)
@@ -67,7 +68,7 @@ STRUGGLETIME_DEBUG=1 struggletime daemon --repo ~/my-project
 struggletime daemon --debug --repo ~/my-project
 ```
 
-Logs print labels only — never paths, prompts, or argv.
+Logs print labels only. Never paths, prompts, or argv.
 
 ## Verification
 

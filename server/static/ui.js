@@ -274,7 +274,7 @@
           if (!input.value.trim() && handle?.name) {
             input.value = handle.name;
             onChange?.(input.value);
-            toast("Browsers hide full paths — paste the absolute folder path for the tray daemon.", { kind: "info", duration: 4500 });
+            toast("Browsers hide full paths. Paste the absolute folder path for the tray daemon.", { kind: "info", duration: 4500 });
           } else {
             toast("Paste the absolute folder path the tray should track.", { kind: "info" });
           }

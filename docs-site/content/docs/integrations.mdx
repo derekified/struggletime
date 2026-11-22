@@ -3,7 +3,10 @@ title: Integrations
 description: Editors, agents, shell hooks, optional adapters, GitHub, and Slack.
 ---
 
-Integrations are optional and self-hosted. With nothing configured, the tracker still watches saved files and git activity in your project folder. Layer 1 process labels cover many editors and agents out of the box; adapters only add finer counts.
+Integrations are optional and self-hosted. With nothing configured, the
+tracker still watches saved files and git activity in your project folder.
+Layer 1 process labels cover many editors and agents without plugins.
+Adapters only add finer counts.
 
 ## What works without an adapter
 
@@ -83,11 +86,11 @@ Copy or symlink `adapters/godot/addons/struggletime` into your project, then ena
 
 ### Unity (`adapters/unity`)
 
-Drop `adapters/unity/Editor/StruggleTimeTracker.cs` into any `Assets/.../Editor/` folder (or symlink the tree). Emits focus pulses, asset-save counts, and play-mode enter/exit.
+Drop `adapters/unity/Editor/StruggleTimeTracker.cs` into any `Assets/../Editor/` folder (or symlink the tree). Emits focus pulses, asset-save counts, and play-mode enter/exit.
 
 ### Claude Code (`adapters/claude-code`)
 
-Merge `adapters/claude-code/hooks.json` into `.claude/settings.json` hooks. Emits agent turn / tool boundary counts — no prompt or tool-arg text.
+Merge `adapters/claude-code/hooks.json` into `.claude/settings.json` hooks. Emits agent turn / tool boundary counts. No prompt or tool-arg text.
 
 ### Codex / Aider / other CLIs (`adapters/codex`)
 
@@ -113,7 +116,7 @@ sh adapters/openclaw/run.sh
 struggletime start --repo ~/.openclaw/workspace/your-project
 ```
 
-Tails local session logs and appends turn/tool counts only — message text and tool arguments are discarded.
+Tails local session logs and appends turn/tool counts only. Message text and tool arguments are discarded.
 
 ## GitHub
 
@@ -131,7 +134,7 @@ The server exchanges the one-time code, reads your GitHub login, and discards th
 1. On your repo: Settings → Webhooks → Add webhook
 2. Payload URL: `https://your-server/v1/integrations/github/webhook`
 3. Content type `application/json`, events: `push` only
-4. Set a secret and start the server with the same value: `GITHUB_WEBHOOK_SECRET=... struggletime serve`
+4. Set a secret and start the server with the same value: `GITHUB_WEBHOOK_SECRET=.. struggletime serve`
 
 The server verifies the signature (bad signature → 401), matches the push to the project whose repo URL matches, and stores a commit anchor: commit count and head SHA only. Commit messages are never stored. Anchors appear on `GET /v1/projects/{id}/github` for review cross-checks. With no secret set, webhooks are accepted unverified (fine locally, not on the public internet).
 

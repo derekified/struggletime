@@ -29,7 +29,7 @@ pub struct TrayArgs {
 pub fn run(args: TrayArgs) -> Result<()> {
     fs::create_dir_all(runtime_home())?;
     println!("StruggleTime tray (native)");
-    println!("settings + helper drive the daemon — single binary.");
+    println!("settings + helper drive the daemon. single binary.");
     ensure_daemon()?;
     if args.headless {
         loop {

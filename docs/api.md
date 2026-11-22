@@ -29,7 +29,7 @@ account creation (`Authorization: Bearer <token>`) where noted.
 | `GET /v1/overview` | instance-wide totals for the dashboard |
 
 bucket format: [`schemas/heartbeat.schema.json`](../schemas/heartbeat.schema.json).
-anything outside that allowlist — prompt text, commands, code, paths —
+anything outside that allowlist (prompt text, commands, code, paths)
 is rejected before chain verification.
 
 ## submissions and review
@@ -53,4 +53,4 @@ is rejected before chain verification.
 errors are `{ "error": "..." }` with 400 (malformed / allowlist),
 401 (bad integration signature), 403 (private profile), 404, 409
 (duplicate), 422 (chain broken / tampered). the server answers
-malformed input with a 400 and stays up — fuzz it and see.
+malformed input with a 400 and stays up. fuzz it and see.

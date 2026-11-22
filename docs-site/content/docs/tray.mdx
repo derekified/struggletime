@@ -27,7 +27,7 @@ struggletime verify --ledger .aitime-ledger.json
 Settings live in `~/.config/struggletime/settings.json`. `start` re-launches
 the same binary as `struggletime daemon` (or `STRUGGLETIME_DAEMON` if set).
 
-## Daemon & server
+## Daemon and server
 
 ```bash
 struggletime daemon --repo ~/my-project
@@ -48,6 +48,5 @@ Login autostart: `sh daemon/autostart.sh`.
 
 ## Privacy
 
-Only allowlisted metadata is synced. Inspect what would be sealed by reading
-`.aitime-ledger.json` in the project folder after a seal, or check
-`struggletime logs`.
+Only allowlisted metadata is synced. After a seal, open
+`.aitime-ledger.json` in the project folder, or run `struggletime logs`.

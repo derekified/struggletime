@@ -7,7 +7,7 @@ description: Passive file tracking, shared st-core scoring, and the review surfa
 
 ```text
 +---------------------------------------------+
-|  StruggleTime tray / CLI (`struggletime`) |
+|  StruggleTime tray / CLI (`struggletime`)   |
 +--------------------+------------------------+
                      | starts / pauses / links
 +--------------------v------------------------+
@@ -18,7 +18,7 @@ description: Passive file tracking, shared st-core scoring, and the review surfa
 +--------------------+------------------------+
                      | POST /v1/buckets/batch
 +--------------------v------------------------+
-|  struggletime serve  (native HTTP)         |
+|  struggletime serve  (native HTTP)          |
 |  - auth, projects, stats                    |
 |  - allowlist schema                         |
 |  - static SPA + Fumadocs under /docs        |
@@ -33,11 +33,11 @@ description: Passive file tracking, shared st-core scoring, and the review surfa
 
 No OCR. Structural footprints only:
 
-- Scrambled file IDs (`sha256(salt:path)`)
+- Salted file IDs (`sha256(salt:path)`)
 - Build/test cache directory presence/mtime classes
 - Exec category events from shell hooks (name/category, not argv)
 
-## L2: Scoring what “counts”
+## L2: Scoring
 
 `st-core` turns a sealed time slice into weighted seconds. `FORMULA_VERSION`
 is stamped on every accepted bucket.
@@ -51,9 +51,10 @@ is stamped on every accepted bucket.
 
 | Path | Purpose |
 |---|---|
-| `rust/crates/st-daemon` | Tracker binary |
+| `rust/crates/st-daemon` | Tracker library / binary |
 | `rust/crates/st-server` | HTTP API + static UI |
 | `rust/crates/st-helper` / `st-tray` | CLI + supervisor |
+| `rust/crates/struggletime` | Unified binary |
 | `rust/crates/st-core` | Shared verify / scoring |
 | `weighting/` | YAML rules + calibration notes |
 | `docs-site/` | Fumadocs MDX source |

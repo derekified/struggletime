@@ -5,7 +5,9 @@ description: Review queues, reason codes, chain anomalies, and staff safeguards.
 
 ## Why review exists
 
-`st-core` catches most inflated hours automatically. Staff still catch edge cases: broken history links, git mismatches, and creative unattended pastes. Review decisions use reason codes and are stamped with `FORMULA_VERSION`.
+`st-core` catches most inflated hours automatically. Staff still catch edge
+cases: broken history links, git mismatches, and unattended pastes. Review
+decisions use reason codes and are stamped with `FORMULA_VERSION`.
 
 ## Review queue
 
@@ -48,10 +50,11 @@ Elevated staff tools look for:
 
 - Repeated history breaks after offline gaps that do not sync cleanly
 - Sudden unverified multi-file pastes with high wall-clock time
-- Cross-project copy patterns that defeat scrambled file-ID expectations
+- Cross-project copy patterns that defeat salted file-ID expectations
 - API key sharing anomalies when signals exist
 
-Prefer reducing hours plus a reason code over silent deletion when the data helps scoring tuning.
+When the data still helps scoring tuning, reduce hours and attach a reason
+code instead of deleting the row.
 
 ## Role guards
 
@@ -61,6 +64,8 @@ Prefer reducing hours plus a reason code over silent deletion when the data help
 
 ## What reviewers never see
 
-Review payloads stay on the privacy allowlist: no prompts, no file contents, no screenshots. Staff work from structural summaries, weights, and chain integrity.
+Review payloads stay on the privacy allowlist: no prompts, no file contents,
+no screenshots. Staff work from structural summaries, weights, and chain
+integrity.
 
 Also: [Privacy](/docs/privacy), [Architecture](/docs/architecture), [API](/docs/api).

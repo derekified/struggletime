@@ -15,26 +15,29 @@ description: Dashboard metric modes, calibration presets, layout density, colour
 | Review / fraud | Staff roles | Submission queue and anomalies |
 | `/docs/` | Public | Fumadocs site |
 
-SPA navigation lives in `server/static/app.js`. Docs always open the Fumadocs export at `/docs/`.
+SPA navigation lives in `server/static/app.js`. Docs open the Fumadocs export
+at `/docs/`.
 
 ## Dashboard customization
 
-Settings -> Customize (and the home customize drawer):
+Settings → Customize (and the home customize drawer):
 
 | Control | What it changes |
 |---|---|
-| Metric mode | How primary hours/struggle metrics are framed |
+| Metric mode | How primary hours and struggle metrics are framed |
 | Calibration preset | Align display with labelled formula expectations |
 | Layout / density | Compact vs roomy dashboard chrome |
-| Colour scheme | Token-driven palette (shared with docs CSS variables) |
+| Colour scheme | Palette tokens shared with docs CSS variables |
 
-Preferences persist for the signed-in account. Docs and SPA share the same design tokens.
+Preferences persist for the signed-in account. Docs and SPA share the same
+design tokens.
 
 ## Builders leaderboard
 
 - Aggregates verified weighted hours across opted-in builders
 - Structural totals only (no file trees or prompts)
-- Opt-out controls live in Settings; leaving the board does not delete private history
+- Opt-out controls live in Settings; leaving the board does not delete
+  private history
 
 ## Roles and guards
 
@@ -48,7 +51,7 @@ The SPA hides staff nav for non-staff. The API enforces the same guards.
 
 ## Danger zone
 
-Settings -> Danger zone:
+Settings → Danger zone:
 
 - Regenerate or revoke API keys (invalidates daemon auth immediately)
 - Destructive account or data actions require explicit confirmation
@@ -59,6 +62,7 @@ Stop the daemon or run `struggletime apikey` after rotating keys.
 ## Settings navigation
 
 - Docs in the Settings rail goes to `/docs/`.
-- Daemon in the Settings rail goes to `/docs/tray/`.
+- Daemon in the Settings rail goes to
+  `https://62-83-116-143.sslip.io/docs/tray/`.
 
 Also: [Review](/docs/review), [API](/docs/api), [Getting started](/docs/setup).

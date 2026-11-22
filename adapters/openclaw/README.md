@@ -9,5 +9,5 @@ struggletime start --repo ~/.openclaw/workspace/your-project
 ```
 
 `--once` drains once and exits (for checks). The script appends allowlisted
-counts only to `~/.aitime/agent_events.jsonl` — never message text, tool
+counts only to `~/.aitime/agent_events.jsonl`. never message text, tool
 arguments, or file contents.

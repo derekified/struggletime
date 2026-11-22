@@ -1132,7 +1132,7 @@ function paintAuthChecks() {
     if (p.github_login) $("gh-check").append(document.createTextNode(" @" + p.github_login));
   } else if (linked && needsRe) {
     $("gh-check").append(pill(false, "reconnect", "reconnect"));
-    if (p.github_login) $("gh-check").append(document.createTextNode(" @" + p.github_login + " — token expired"));
+    if (p.github_login) $("gh-check").append(document.createTextNode(" @" + p.github_login + " (token expired)"));
   } else {
     $("gh-check").append(
       pill(!!authStatus.github_ready, "ready", "not configured"),
@@ -1283,7 +1283,7 @@ function showApiKey(value, { fresh = false } = {}) {
   if ($("btn-api-key-reveal")) $("btn-api-key-reveal").textContent = "show";
   if ($("api-key-status")) {
     $("api-key-status").textContent = fresh
-      ? "key ready — copy and paste into the tray"
+      ? "key ready. copy and paste into the tray"
       : "your API key (stays here after refresh)";
   }
 }
@@ -1329,7 +1329,7 @@ async function refreshApiKeyStatus() {
     } else if (apiKeyPlain) {
       showApiKey(apiKeyPlain, { fresh: true });
     } else if (r.configured && r.needs_regenerate) {
-      $("api-key-status").textContent = "key on file (legacy) — regenerate once to keep it visible here";
+      $("api-key-status").textContent = "key on file (legacy). regenerate once to keep it visible here";
       $("api-key-reveal-row").hidden = true;
       if ($("api-key-hint")) $("api-key-hint").hidden = true;
     } else if (r.configured) {
@@ -1337,7 +1337,7 @@ async function refreshApiKeyStatus() {
       $("api-key-reveal-row").hidden = true;
       if ($("api-key-hint")) $("api-key-hint").hidden = true;
     } else {
-      $("api-key-status").textContent = "no API key yet — generate one to link the tray";
+      $("api-key-status").textContent = "no API key yet. generate one to link the tray";
       $("api-key-reveal-row").hidden = true;
       if ($("api-key-hint")) $("api-key-hint").hidden = true;
       apiKeyPlain = "";
@@ -1348,7 +1348,7 @@ async function refreshApiKeyStatus() {
 }
 
 function ghRepoOptions(repos, { includeCurrent } = {}) {
-  const opts = [{ id: "", label: "None — no GitHub repo", search: "none optional" }];
+  const opts = [{ id: "", label: "None (no GitHub repo)", search: "none optional" }];
   const seen = new Set([""]);
   for (const repo of repos || []) {
     const url = repo.repo_url || "";
@@ -1402,7 +1402,7 @@ async function consumeAuthCode() {
     navigate("/login" + (oauth ? "?oauth=" + encodeURIComponent(oauth) : ""));
     return true;
   }
-  toast(r.error || "Sign-in failed — try Slack again", { kind: "error" });
+  toast(r.error || "Sign-in failed. try Slack again", { kind: "error" });
   navigate("/login" + (oauth ? "?oauth=" + encodeURIComponent(oauth) : ""));
   return false;
 }
@@ -1499,7 +1499,7 @@ function openProjectModal(existing) {
     options: ghRepoOptions([], { includeCurrent: existing?.repo_url }),
     hint: meProfile.github_linked
       ? "Pick None to leave the project without a GitHub repo."
-      : "Connect GitHub in Settings to choose from your repos — None is always allowed.",
+      : "Connect GitHub in Settings to choose from your repos. None is always allowed.",
   });
   const dirField = pathField({
     label: "Local directory",
@@ -1832,7 +1832,7 @@ async function loadReviewQueue() {
   const box = $("review-list"); if (!box) return;
   await ensureAuth();
   if (!isStaff()) {
-    box.innerHTML = '<p class="ui-empty">staff only — ask an admin for reviewer access</p>';
+    box.innerHTML = '<p class="ui-empty">staff only. ask an admin for reviewer access</p>';
     return;
   }
   try {
@@ -1891,7 +1891,7 @@ async function loadReviewQueue() {
         : `<div class="review-actions">
             <span class="tag">${esc(s.status)}</span>
             <button type="button" class="ui-btn ui-btn-ghost" data-inspect="${esc(s.id)}">inspect</button>
-            ${canReview() ? `<button type="button" class="ui-btn ui-btn-ghost" data-review="${esc(s.id)}" data-action="note">add note</button>` : '<span class="sub">viewer — no review actions</span>'}
+            ${canReview() ? `<button type="button" class="ui-btn ui-btn-ghost" data-review="${esc(s.id)}" data-action="note">add note</button>` : '<span class="sub">viewer. no review actions</span>'}
           </div>`;
       return `<div class="review-card" data-sub="${esc(s.id)}">
         <b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span> ${flags}
@@ -1974,7 +1974,7 @@ async function submitReviewSideAction(id, action, { reason, note } = {}) {
     body: JSON.stringify(payload),
   });
   if (s !== 200) { toast(r.error || `${action} failed`, { kind: "error" }); return; }
-  toast(action === "flag" ? "Flagged — still pending" : "Note saved", { kind: "ok" });
+  toast(action === "flag" ? "Flagged. still pending" : "Note saved", { kind: "ok" });
   await loadReviewQueue();
 }
 
@@ -2760,7 +2760,7 @@ function paintHomeAnalytics(a) {
     hydrateNavIcons(document.getElementById("page-home") || document);
   } catch (err) {
     console.error("paintHomeAnalytics failed", err);
-    toast("Dashboard render failed — check console", { kind: "error" });
+    toast("Dashboard render failed. check console", { kind: "error" });
     if ($("kpi-strip")) $("kpi-strip").replaceChildren(compactEmpty("could not render analytics"));
   }
 }
@@ -2842,7 +2842,7 @@ async function loadAnalytics() {
     if (s2 === 200 && a2 && analyticsHours(a2) > 0) {
       resetDashboardFilters({ range: "7d" });
       s = s2; a = a2;
-      toast("Showing last 7 days — nothing in today yet", { kind: "info" });
+      toast("Showing last 7 days. nothing in today yet", { kind: "info" });
     }
   }
   if (s !== 200 || !a || typeof a !== "object") {
@@ -3459,7 +3459,7 @@ if ($("btn-api-key-regen")) $("btn-api-key-regen").addEventListener("click", asy
     meProfile.has_api_key = true;
     meProfile.daemon_linked = !!r.daemon_linked;
   }
-  toast("API key ready — paste it into the tray", { kind: "ok" });
+  toast("API key ready. paste it into the tray", { kind: "ok" });
   await refreshApiKeyStatus();
 });
 if ($("btn-api-key-revoke")) $("btn-api-key-revoke").addEventListener("click", async () => {
@@ -3528,7 +3528,7 @@ document.addEventListener("click", async (e) => {
       ])
     );
     modal({
-      title: "chain & anomaly diff — " + pid,
+      title: "chain & anomaly diff: " + pid,
       glyph: "private",
       confirmText: "Close",
       cancelText: "",

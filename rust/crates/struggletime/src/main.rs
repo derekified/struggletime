@@ -12,7 +12,7 @@ use std::path::PathBuf;
 #[derive(Parser, Debug)]
 #[command(
     name = "struggletime",
-    about = "StruggleTime — track struggle-weighted coding time (tray + CLI + daemon + server)",
+    about = "StruggleTime: track struggle-weighted coding time (tray + CLI + daemon + server)",
     version
 )]
 struct Cli {

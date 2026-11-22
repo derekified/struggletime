@@ -9,8 +9,8 @@ make check    # before you open a PR
 Rules of the repo, in order:
 
 1. **Privacy is the product.** A change that lets raw text, paths, prompts,
-   command arguments, or pixels reach the server is rejected on sight —
-   including in tests and logs. The allowlist check is not negotiable.
+   command arguments, or pixels reach the server is rejected, including in
+   tests and logs. The allowlist check is not negotiable.
 2. **Weights are versioned, never silently edited.** Changing the formula
    means a new `formula_version` and calibration notes in `weighting/`.
 3. **Tests first for trust paths.** Chain verification, allowlist, weighting

@@ -391,7 +391,7 @@ fn print_status() -> Result<()> {
         }
     } else {
         for p in &s.projects {
-            println!("  {} — {}", p.id, p.path);
+            println!("  {}: {}", p.id, p.path);
         }
     }
     Ok(())

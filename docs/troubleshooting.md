@@ -10,7 +10,7 @@ see pending buckets locally.
 your ledger and the server disagree, usually because the server db was
 reset, or the same project id is tracked from two machines. use a
 fresh project id per machine, or reset both sides together. this error
-is the tamper evidence working as intended — don't silence it.
+is the tamper evidence working as intended. don't silence it.
 
 **422 tampered / 400 allowlist**
 a bucket was modified after sealing, or something tried to send a field
@@ -36,7 +36,7 @@ no `SLACK_WEBHOOK_URL` → they are queued, by design. read them at
 that's the silent-debug decay (5–12 min), documented in
 [architecture.md](architecture.md). run or edit something and it
 resets instantly. if real work is being undercounted for you, that is
-calibration data — say so, with an inspect dump, instead of working
+calibration data. say so, with an inspect dump, instead of working
 around it.
 
 **windows: hook does nothing**

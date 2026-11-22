@@ -1,19 +1,19 @@
 # StruggleTime
 
-Tracks coding time, but weights it toward actually fixing things — fail →
-fix → pass loops get more credit than idle time or dumping a huge AI paste
-you never ran. The server only gets small allowlisted metadata (scrambled
-file IDs, counts, hashes). No screenshots, prompts, or source.
+Tracks coding time, with more weight on fixing things. Fail → fix → pass
+loops score higher than idle time or a big AI paste you never ran. The
+server only stores allowlisted metadata: salted file IDs, counts, and
+hashes. No screenshots, prompts, or source.
 
-AGPLv3. Aimed at Hack Club projects.
+AGPLv3. Built for Hack Club projects.
 
 https://github.com/derekified/struggletime
 
 ## Releases & prebuilt binaries
 
-Grab a single OS binary from
+Download a single OS binary from
 [GitHub Releases](https://github.com/derekified/struggletime/releases)
-(`v*` tags). One `struggletime` / `struggletime.exe` includes:
+(built on `v*` tags). One `struggletime` / `struggletime.exe` includes:
 
 | Built-in | Command |
 |---|---|
@@ -35,13 +35,13 @@ chmod +x struggletime-macos-universal/struggletime
 sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
 ```
 
-**macOS Intel** — same steps with `struggletime-macos-intel.tar.gz`.
+**macOS Intel:** same steps with `struggletime-macos-intel.tar.gz`.
 
-**Windows x64** — download `struggletime-windows-x64.exe`, verify against
-`SHA256SUMS.txt` / the `.sha256` file, and put it on your PATH as
+**Windows x64:** download `struggletime-windows-x64.exe`, check it against
+`SHA256SUMS.txt` or the `.sha256` file, then put it on your PATH as
 `struggletime.exe`.
 
-Each release ships `SHA256SUMS.txt`. See
+Every release includes `SHA256SUMS.txt`. More detail:
 [docs/installation](https://62-83-116-143.sslip.io/docs/installation/).
 
 ## Install from source
@@ -57,7 +57,7 @@ struggletime start --repo ~/my-project
 struggletime status
 ```
 
-No scripting-language runtime required.
+You do not need a scripting-language runtime.
 
 ## What it does
 
@@ -65,7 +65,7 @@ A local tracker watches file saves in linked project folders. Paths leave as
 `sha256(salt:path)`. Each sealed bucket points at the previous one with
 `prev_hash`. Scoring lives in `rust/crates/st-core`.
 
-Optional IDE/agent adapters live under `adapters/`.
+Optional IDE and agent adapters live under `adapters/`.
 
 ## Layout
 
@@ -92,4 +92,4 @@ make docs              # build /docs
 
 ## License
 
-AGPLv3 — see `LICENSE`.
+AGPLv3. See `LICENSE`.

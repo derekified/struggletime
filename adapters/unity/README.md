@@ -3,7 +3,7 @@
 Optional Layer-2 enrichment. Layer 1 already labels `unity` when the
 editor process is active over a linked project.
 
-Drop `Editor/StruggleTimeTracker.cs` into any `Assets/.../Editor/` folder
+Drop `Editor/StruggleTimeTracker.cs` into any `Assets/../Editor/` folder
 (or symlink this tree). On load it hooks focus pulses, asset saves, and
 play-mode enter/exit into `~/.aitime/agent_events.jsonl`.
 

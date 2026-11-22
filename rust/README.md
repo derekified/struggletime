@@ -17,7 +17,7 @@ cargo build --release -p struggletime
 | (shared) | `st-core` | scoring, ledger, privacy |
 
 Legacy thin binaries (`struggletime-daemon`, …) still build from the same libs
-for local debugging; releases ship only `struggletime`.
+for local debugging. Releases ship only `struggletime`.
 
 ```bash
 cargo test --workspace
@@ -26,5 +26,5 @@ cargo build --release -p struggletime
 make install-binaries
 ```
 
-Privacy: buckets are allowlisted metadata only; file identities are
-`sha256(salt:path)` hex ids — never raw paths, prompts, or contents.
+Privacy: buckets are allowlisted metadata only. File identities are
+`sha256(salt:path)` hex ids. Never raw paths, prompts, or contents.
