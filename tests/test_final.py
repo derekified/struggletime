@@ -31,7 +31,7 @@ class TestFinal(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18801; cls.db = f"{cls.tmp}/t.db"
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": ""}
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
@@ -79,7 +79,7 @@ class TestFinal(unittest.TestCase):
         for b in buckets: b["prev_hash"] = prev; b["hash"] = verify.bucket_hash(b); prev = b["hash"]
         s, _ = req("POST", self.port, "/v1/buckets/batch", {"buckets": buckets, "user_id": "rowan"}, token=self.token)
         self.assertEqual(s, 201)
-        s, sse = req("GET", self.port, "/v1/projects/cs2-browser/stream?once=1")
+        s, sse = req("GET", self.port, "/v1/projects/cs2-browser/stream?once=1", token=self.token)
         self.assertIn("data:", sse); self.assertIn('"weighted_hours": 0.25', sse)
         s, p = req("GET", self.port, "/v1/users/rowan")
         self.assertAlmostEqual(p["weighted_hours"], 0.25)
@@ -91,7 +91,7 @@ class TestFinal(unittest.TestCase):
         (repo/"main.py").write_text("print(2)\n")
         execlog = pathlib.Path(self.tmp) / "exec.jsonl"
         execlog.write_text(json.dumps({"category": "test_runner", "exit_code": 1}) + "\n" + json.dumps({"category": "test_runner", "exit_code": 0}) + "\n")
-        env = {**os.environ, "AITIME_EXEC_LOG": str(execlog)}
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "AITIME_EXEC_LOG": str(execlog)}
         # Isolate daemon config from the host machine; pass the test session token so sync hits this server.
         env = {
             **env,
@@ -116,7 +116,7 @@ class TestFinal(unittest.TestCase):
         b["prev_hash"] = verify.GENESIS; b["hash"] = verify.bucket_hash(b)
         s, r = req("POST", self.port, "/v1/buckets/batch", {"user_id": "mallory", "buckets": [b]})
         self.assertEqual(s, 400); self.assertIn("allowlist", r["error"])
-        s, fr = req("GET", self.port, "/v1/projects/cs2-browser/friction")
+        s, fr = req("GET", self.port, "/v1/projects/cs2-browser/friction", token=self.token)
         self.assertEqual(s, 200); self.assertEqual(len(fr["timeline"]), 3)
         self.assertTrue(fr["commit_anchors"]); self.assertLess(fr["evidence_bytes"], 50 * 1024)
         self.assertTrue(all(0 <= t["friction"] <= 1 for t in fr["timeline"]))

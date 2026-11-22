@@ -137,11 +137,11 @@ def billable_secs(bucket):
     return max(0, min(secs, active))
 
 def friction(bucket):
-    c = bucket["counts"]
+    c = bucket.get("counts") or {}
     struggle = (
         0.12 * min(c.get("same_file_reedit_count", 0), 5) / 5
         + 0.12 * min(c.get("ai_retry_loops", 0), 4) / 4
-        + 0.12 * min(c.get("test_fail_to_pass_transitions", 0) or c.get("cache_fail_to_pass", 0), 3) / 3
+        + 0.12 * min(int(c.get("test_fail_to_pass_transitions", 0) or 0) + int(c.get("cache_fail_to_pass", 0) or 0), 3) / 3
         + 0.08 * min(c.get("human_recovery_edits", 0), 4) / 4
         + 0.08 * min(c.get("agent_turn_churn", 0), 5) / 5
         + 0.08 * min(c.get("atomic_agent_writes", 0), 4) / 4
@@ -159,10 +159,33 @@ def friction(bucket):
 
 def friction_timeline(buckets):
     seq = weight_sequence(buckets)
-    return [{"bucket_id": b["bucket_id"], "start": b["bucket_start_wall"], "state": seq[i][1],
-             "weight": seq[i][0], "friction": friction(b), "head_commit": b["git"].get("head_commit"),
-             "commits": b["counts"]["commits"], "exec_failures": b["counts"]["exec_failures"],
-             "files": b.get("files", [])} for i, b in enumerate(buckets)]
+    out = []
+    for i, b in enumerate(buckets):
+        c = b.get("counts") or {}
+        g = b.get("git") or {}
+        out.append({
+            "bucket_id": b.get("bucket_id"),
+            "start": b.get("bucket_start_wall"),
+            "state": seq[i][1],
+            "weight": seq[i][0],
+            "friction": friction(b) if c else 0.0,
+            "head_commit": g.get("head_commit"),
+            "commits": int(c.get("commits") or 0),
+            "exec_failures": int(c.get("exec_failures") or 0),
+            "active_secs": int(c.get("active_secs") or 0),
+            "idle_secs": int(c.get("idle_secs") or 0),
+            "reedits": int(c.get("same_file_reedit_count") or 0),
+            "fail_to_pass": int(c.get("test_fail_to_pass_transitions") or 0) + int(c.get("cache_fail_to_pass") or 0),
+            "git_pulses": int(c.get("git_plumbing_pulses") or 0),
+            "build_cycles": int(c.get("build_test_cycles") or 0),
+            "recovery_edits": int(c.get("human_recovery_edits") or 0),
+            "files": [
+                {"file_id": f.get("file_id"), "op": f.get("op"), "language": f.get("language")}
+                for f in (b.get("files") or [])[:12]
+                if isinstance(f, dict) and f.get("file_id")
+            ],
+        })
+    return out
 
 def canonical(bucket):
     b = {k: v for k, v in bucket.items() if k not in ("hash", "signature")}
@@ -172,16 +195,109 @@ def bucket_hash(bucket):
     return hashlib.sha256(canonical(bucket) + bucket["prev_hash"].encode()).hexdigest()
 
 def verify_chain(buckets):
-    errors, prev, last_mono = [], GENESIS, None
+    errors, prev, last_mono, last_wall = [], GENESIS, None, None
     for i, b in enumerate(buckets):
-        if b["prev_hash"] != prev:
+        if b.get("prev_hash") != prev:
             errors.append(f"bucket {i}: prev_hash mismatch (chain broken)")
-        if bucket_hash(b) != b["hash"]:
+        try:
+            if bucket_hash(b) != b.get("hash"):
+                errors.append(f"bucket {i}: hash mismatch (tampered)")
+        except Exception:
             errors.append(f"bucket {i}: hash mismatch (tampered)")
-        if last_mono is not None and b["mono_delta_ms"] < 0:
+        mono = b.get("mono_delta_ms")
+        if last_mono is not None and mono is not None and mono < 0:
             errors.append(f"bucket {i}: monotonic clock regression")
-        prev, last_mono = b["hash"], b["mono_delta_ms"]
+        wall = b.get("bucket_start_wall")
+        if last_wall is not None and wall is not None:
+            jump = int(wall) - int(last_wall)
+            if jump < -60:
+                errors.append(f"bucket {i}: wall clock jumped backward ({jump}s)")
+            elif jump > 6 * 3600:
+                errors.append(f"bucket {i}: wall clock jumped forward ({jump}s)")
+        prev = b.get("hash") or prev
+        last_mono = mono if mono is not None else last_mono
+        last_wall = wall if wall is not None else last_wall
     return errors
+
+
+def anomaly_pairs(buckets, wall_jump_secs=3600, burst_files=20):
+    """Side-by-side normal vs anomalous adjacent buckets (metadata only)."""
+    pairs, prev = [], None
+    chain_errs = set()
+    for err in verify_chain(buckets):
+        m = err.split(":")[0]
+        if m.startswith("bucket "):
+            try:
+                chain_errs.add(int(m.split()[1]))
+            except ValueError:
+                pass
+    for i, b in enumerate(buckets):
+        c = b.get("counts") or {}
+        reasons = []
+        if i in chain_errs:
+            reasons.append("chain_break")
+        if prev is not None:
+            jump = int(b.get("bucket_start_wall") or 0) - int(prev.get("bucket_start_wall") or 0)
+            if abs(jump) > wall_jump_secs:
+                reasons.append("clock_jump")
+        files = b.get("files") or []
+        if len(files) >= burst_files and int(c.get("human_edits") or 0) == 0 and int(c.get("executions") or 0) == 0:
+            reasons.append("burst_dump")
+        if int(c.get("ai_writes") or 0) > 5 * max(1, int(c.get("human_edits") or 0)) and int(c.get("executions") or 0) == 0:
+            reasons.append("ai_ratio")
+        if not b.get("signature"):
+            reasons.append("unsigned")
+        if reasons:
+            pairs.append({
+                "index": i,
+                "reasons": reasons,
+                "bucket": _bucket_chip(b),
+                "neighbor": _bucket_chip(prev) if prev is not None else None,
+            })
+        prev = b
+    return pairs
+
+
+def _bucket_chip(b):
+    if not b:
+        return None
+    c = b.get("counts") or {}
+    return {
+        "bucket_id": (b.get("bucket_id") or "")[:12],
+        "start": b.get("bucket_start_wall"),
+        "secs": b.get("bucket_secs"),
+        "prev_hash": (b.get("prev_hash") or "")[:12],
+        "hash": (b.get("hash") or "")[:12],
+        "active_secs": int(c.get("active_secs") or 0),
+        "idle_secs": int(c.get("idle_secs") or 0),
+        "ai_writes": int(c.get("ai_writes") or 0),
+        "human_edits": int(c.get("human_edits") or 0),
+        "commits": int(c.get("commits") or 0),
+        "files": len(b.get("files") or []),
+        "signed": bool(b.get("signature")),
+    }
+
+
+def struggle_to_ship(buckets):
+    """Weighted productive-struggle hours vs commit/ship anchors."""
+    struggle_states = {"AI_STRUGGLE", "STRUGGLE_LOOP", "CLOSED_LOOP"}
+    struggle_secs = 0.0
+    commits = 0
+    for b, (w, state) in zip(buckets, weight_sequence(buckets)):
+        c = b.get("counts") or {}
+        commits += int(c.get("commits") or 0)
+        if state in struggle_states or state.startswith("AI_STRUGGLE") or state.startswith("STRUGGLE_LOOP"):
+            struggle_secs += billable_secs(b) * w
+    struggle_h = round(struggle_secs / 3600, 4)
+    ship = max(commits, 0)
+    ratio = round(struggle_h / ship, 4) if ship else None
+    return {
+        "struggle_hours": struggle_h,
+        "ship_units": ship,
+        "commits": commits,
+        "velocity_ratio": ratio,
+        "label": "struggle_hours_per_commit" if ship else "no_ship_anchors",
+    }
 
 def _idle_decay_factor(idle_secs):
     """Within-bucket quiet after last event: gradual 5–12m curve, not a 240s cliff."""
@@ -237,7 +353,7 @@ def is_ai_struggle(c):
 
 def weight(bucket):
     """Causal weight from fused passive signals — not raw file-count heuristics."""
-    c = bucket["counts"]
+    c = bucket.get("counts") or {}
     cats = bucket.get("exec_categories") or {}
     followup = c.get("human_edits", 0) > 0 or c.get("commits", 0) > 0 or c.get("human_recovery_edits", 0) > 0
     steering = c.get("prompts", 0) > 0 or c.get("human_edits", 0) > 0 or c.get("agent_turn_churn", 0) > 0
@@ -308,8 +424,11 @@ def weight(bucket):
     return w, state
 
 def flags(buckets, weighted_hours):
-    total = lambda k: sum(b["counts"].get(k, 0) for b in buckets)
-    lines = sum(b["git"]["lines_added"] + b["git"]["lines_deleted"] for b in buckets)
+    total = lambda k: sum((b.get("counts") or {}).get(k, 0) for b in buckets)
+    lines = sum(
+        int((b.get("git") or {}).get("lines_added") or 0) + int((b.get("git") or {}).get("lines_deleted") or 0)
+        for b in buckets
+    )
     out = []
     if lines and weighted_hours / (lines / 1000) > 10:
         out.append(f"hours_per_kloc={weighted_hours/(lines/1000):.1f} (>10)")
@@ -323,7 +442,8 @@ def score(buckets):
     rows, weighted = [], 0.0
     for b, (w, state) in zip(buckets, weight_sequence(buckets)):
         weighted += billable_secs(b) * w
-        rows.append({"bucket": b["bucket_id"][:8], "state": state, "weight": w, "friction": friction(b)})
+        bid = str(b.get("bucket_id") or "")[:8]
+        rows.append({"bucket": bid, "state": state, "weight": w, "friction": friction(b) if b.get("counts") else 0.0})
     return rows, weighted / 3600
 
 def main(path):

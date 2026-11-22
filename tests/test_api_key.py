@@ -16,7 +16,7 @@ class TestApiKey(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18831; cls.db = f"{cls.tmp}/t.db"
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": "",
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": "",
                "OAUTH_REDIRECT_BASE": f"http://127.0.0.1:{cls.port}"}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT / "server/server.py")], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

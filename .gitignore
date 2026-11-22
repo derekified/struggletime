@@ -6,3 +6,9 @@ server.db
 .aitime-ledger.json
 *.bak
 dist/
+docs-site/node_modules/
+docs-site/.next/
+docs-site/out/
+docs-site/tsconfig.tsbuildinfo
+~/
+*.tar.gz

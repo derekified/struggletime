@@ -52,7 +52,7 @@ Raw events, commands, prompts, and code are classified on-device and never
 sent. Wire payload matches `schemas/heartbeat.schema.json`. Public profiles
 show aggregates only. Logged ≠ submitted.
 
-## Budget (~$40–60/mo at StruggleTime scale)
+## Budget (~$40–60/mo at community scale)
 
 - Client rollup: 109,759 h/mo ÷ 5-min buckets ≈ **0.5 writes/sec**.
 - Single VPS (Python + SQLite today; `schemas/server.sql` for Postgres) —

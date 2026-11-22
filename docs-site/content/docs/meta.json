@@ -1,0 +1,17 @@
+{
+  "title": "StruggleTime",
+  "pages": [
+    "index",
+    "setup",
+    "tray",
+    "daemon",
+    "architecture",
+    "privacy",
+    "web-app",
+    "review",
+    "api",
+    "integrations",
+    "deployment",
+    "troubleshooting"
+  ]
+}

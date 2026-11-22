@@ -49,7 +49,7 @@ class TestOAuth(unittest.TestCase):
         threading.Thread(target=cls.stub.serve_forever, daemon=True).start()
         cls.tmp = tempfile.mkdtemp(); cls.port = 18813; cls.db = f"{cls.tmp}/t.db"
         stub = f"http://127.0.0.1:{cls.stub_port}"
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db,
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": cls.db,
                "GITHUB_CLIENT_ID": "ghcid", "GITHUB_CLIENT_SECRET": "ghsec", "GITHUB_OAUTH_BASE": stub, "GITHUB_API_BASE": stub,
                "SLACK_CLIENT_ID": "slcid", "SLACK_CLIENT_SECRET": "slsec", "SLACK_OAUTH_BASE": stub,
                "OAUTH_REDIRECT_BASE": f"http://127.0.0.1:{cls.port}", "SLACK_WEBHOOK_URL": ""}

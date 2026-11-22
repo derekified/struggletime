@@ -17,7 +17,7 @@ class TestDashboard(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18805
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db", "SLACK_WEBHOOK_URL": ""}
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db", "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
@@ -31,17 +31,32 @@ class TestDashboard(unittest.TestCase):
         self.assertEqual(s, 200)
         low = html.lower()
         for needle in ("struggletime", "page-landing", "count the loops that fixed the code", "styles.css", "ui.js", "app.js",
-                       "fake-stats-preview", "hero-preview", "hero-features", "struggle scoring", "tamper-evident ledger"):
+                       "fake-stats-preview", "hero-preview", "hero-features", "struggle scoring", "privacy first"):
             self.assertIn(needle, low)
+        css0 = req(self.port, "GET", "/styles.css")[1]
+        app_boot = req(self.port, "GET", "/app.js")[1]
+        self.assertIn("guest-mode", css0)
+        self.assertIn("#top-auth", css0)
+        self.assertIn("topAuth.hidden", app_boot)
+        self.assertIn('shell.classList.toggle("guest-mode"', app_boot)
         self.assertNotIn("bounty", low)
         self.assertNotIn("hack club's ai", low)
-        self.assertNotIn("site-foot", html)
+        self.assertIn("site-foot", html)
+        self.assertIn("site-foot-ico", html)
+        self.assertIn('aria-label="Docs"', html)
+        self.assertIn('data-glyph="docs"', html)
+        self.assertIn("docs/tray", html.lower())
+        self.assertNotIn("struggletime-style", html.lower())
+        self.assertNotIn("package-managers", html.lower())
+        self.assertNotIn("high seas", html.lower())
+        self.assertNotIn("stardance", html.lower())
         s, home = req(self.port, "GET", "/home")
         self.assertEqual(s, 200)
         home_l = home.lower()
         for needle in ("friction", "dashboard", "kpi-strip", "rhythm-grid", "filter-strip", "mode-pie", "bento",
                        "terminal", "briefcase", "waveform", "diagram-3", "break-editor", "break-os", "laptop",
-                       "fake-stats-badge"):
+                       "fake-stats-badge", "dash-customize", "velocity-panel", "classifier-panel", "decay-panel",
+                       "afternoon-panel", "chain-panel", "summary-card", "btn-dash-share", "metric-mode-sel"):
             self.assertIn(needle, home_l)
         self.assertNotIn("duo-break", home_l)
         self.assertIn('data-auth="required"', home)
@@ -60,7 +75,8 @@ class TestDashboard(unittest.TestCase):
         self.assertEqual(s, 200)
         for needle in ("sign in with slack", "connect github", "btn-github-disconnect", "settings-rail", "set-country",
                        "btn-delete-account", "daemon-banner-dismiss",
-                       "data-settings-tab=\"docs\"", "st-docs-template", "settings-docs-mount"):
+                       'href="/docs/"', "open docs", "settings-docs",
+                       "62-83-116-143.sslip.io/docs/tray"):
             self.assertIn(needle, settings.lower())
         app_js = req(self.port, "GET", "/app.js")[1]
         self.assertIn("/v1/me/github/disconnect", app_js)
@@ -70,28 +86,53 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("load: false", app_js)
         self.assertNotIn('id="side"', settings)
         self.assertNotIn("attach-project", settings)
-        s, docs = req(self.port, "GET", "/docs")
+        s, docs = req(self.port, "GET", "/docs/")
         self.assertEqual(s, 200)
         docs_l = docs.lower()
-        for needle in ("page-docs", "st-docs-template", "settings-layout", "settings-rail", "settings-panels",
-                       "ui-panel", "ui-table", "ui-list",
-                       "repository layout", "weighting formula", "contributing", "agpl", "ed25519",
-                       "makefile targets", "setup-banner", "kpi-strip", "data-lang"):
+        for needle in ("struggletime", "docs-app", "nd-docs-layout", "tray", "productive struggle", "stdlib"):
             self.assertIn(needle, docs_l)
-        self.assertNotIn("copy clone url", docs_l)
-        self.assertNotIn("open source · agplv3", docs_l)
-        self.assertNotIn("data-docs-copy", docs_l)
+        self.assertNotIn("theme-switch", docs_l)
+        self.assertNotIn("toggle theme", docs_l)
+        s, tray_docs = req(self.port, "GET", "/docs/tray/")
+        self.assertEqual(s, 200)
+        tray_l = tray_docs.lower()
+        for needle in ("pause", "seal", "weighted", "api key", "struggletime-helper"):
+            self.assertIn(needle, tray_l)
+        s, privacy_docs = req(self.port, "GET", "/docs/privacy/")
+        self.assertEqual(s, 200)
+        privacy_l = privacy_docs.lower()
+        for needle in ("sha256", "prev_hash", "stdlib", "allowlist"):
+            self.assertIn(needle, privacy_l)
+        s, web_docs = req(self.port, "GET", "/docs/web-app/")
+        self.assertEqual(s, 200)
+        self.assertIn("leaderboard", web_docs.lower())
+        s, review_docs = req(self.port, "GET", "/docs/review/")
+        self.assertEqual(s, 200)
+        self.assertIn("chain_broken", review_docs.lower())
         app_js = req(self.port, "GET", "/app.js")[1]
-        self.assertIn("mountDocs", app_js)
-        self.assertIn("ui-code", app_js)
+        self.assertNotIn("mountDocs", app_js)
+        self.assertIn("/docs/", app_js)
+        self.assertIn('location.href = "/docs/"', app_js)
         self.assertNotIn("data-docs-copy", app_js)
+        self.assertNotIn("st-docs-template", settings)
         css = req(self.port, "GET", "/styles.css")[1]
-        self.assertIn(".ui-code", css)
         self.assertIn(".ui-table", css)
         self.assertNotIn("docs-hero", css)
         self.assertNotIn(".docs-code", css)
         self.assertNotIn(".docs-table", css)
         self.assertNotIn("color-mix", css)
+        self.assertNotIn("hero-fade-up", css)
+        css_compact = "".join(css.split())
+        self.assertIn("lb-row:hover{background:transparent}", css_compact)
+        self.assertIn("prefers-reduced-motion:reduce", css)
+        self.assertIn("dash-customize-close", home)
+        self.assertIn("dash-customize-head", home)
+        self.assertIn('aria-expanded="false"', home)
+        self.assertIn("setDashCustomizeOpen", app_js)
+        self.assertIn("drawer.hidden", app_js)
+        self.assertNotIn("hover:text-", css)
+        self.assertIn("scale(.99)", css)
+        self.assertIn("dash-drawer-in", css)
         s, projects = req(self.port, "GET", "/projects")
         self.assertIn("proj-status", projects)
         self.assertIn("deleted repos", projects.lower())
@@ -114,12 +155,19 @@ class TestDashboard(unittest.TestCase):
         self.assertIn("paintTopUser", app)
         self.assertIn("flagEmoji", app)
         self.assertIn("paintSettingsForm", app)
+        self.assertIn("shareDashboardSummary", app)
+        self.assertIn("persistMetricMode", app)
+        self.assertIn("renderVelocity", app)
+        self.assertIn("renderAfternoons", app)
         s, css = req(self.port, "GET", "/styles.css")
         self.assertEqual(s, 200)
         self.assertIn("ui-toast", css)
         self.assertIn("hc-icon", css)
         self.assertIn("nav-stats", css)
         self.assertIn("settings-layout", css)
+        self.assertIn("dash-drawer", css)
+        self.assertIn("wrap-text", css)
+        self.assertIn("summary-pre", css)
 
     def test_analytics_endpoint(self):
         # /v1/me/analytics requires a session or API key

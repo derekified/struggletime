@@ -1,0 +1,64 @@
+---
+title: Web app and customization
+description: Dashboard metric modes, calibration presets, layout density, colour schemes, builders leaderboard, and role guards.
+---
+
+## Surfaces
+
+| Route / page | Who | Purpose |
+|---|---|---|
+| Landing `/` | Public | Brand, docs link, sign-in |
+| Home `/home` | Signed-in | Personal struggle summary |
+| Stats | Signed-in | Breakdowns, projects, ranges |
+| Builders | Signed-in | Leaderboard (opt-in) |
+| Settings | Signed-in | Profile, customize, danger zone |
+| Review / fraud | Staff roles | Submission queue and anomalies |
+| `/docs/` | Public | Fumadocs site |
+
+SPA navigation lives in `server/static/app.js`. Docs always open the Fumadocs export at `/docs/`.
+
+## Dashboard customization
+
+Settings -> Customize (and the home customize drawer):
+
+| Control | What it changes |
+|---|---|
+| Metric mode | How primary hours/struggle metrics are framed |
+| Calibration preset | Align display with labelled formula expectations |
+| Layout / density | Compact vs roomy dashboard chrome |
+| Colour scheme | Token-driven palette (shared with docs CSS variables) |
+
+Preferences persist for the signed-in account. Docs and SPA share the same design tokens.
+
+## Builders leaderboard
+
+- Aggregates verified weighted hours across opted-in builders
+- Structural totals only (no file trees or prompts)
+- Opt-out controls live in Settings; leaving the board does not delete private history
+
+## Roles and guards
+
+| Role | Capabilities |
+|---|---|
+| User | Own projects, keys, stats, customize, opt-out |
+| Reviewer / staff | Review queue, reason codes, deflations |
+| Admin | Elevated fraud tools, dangerous account ops |
+
+The SPA hides staff nav for non-staff. `server/server.py` enforces the same guards.
+
+## Danger zone
+
+Settings -> Danger zone:
+
+- Regenerate or revoke API keys (invalidates daemon auth immediately)
+- Destructive account or data actions require explicit confirmation
+- Soft-delete paths keep analytics filters from resurfacing PII
+
+Stop the daemon or run `struggletime-helper apikey` after rotating keys.
+
+## Settings navigation
+
+- Docs in the Settings rail goes to `/docs/`.
+- Daemon in the Settings rail goes to `https://62-83-116-143.sslip.io/docs/tray/`.
+
+Also: [Review](/docs/review), [API](/docs/api), [Getting started](/docs/setup).

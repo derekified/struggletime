@@ -16,7 +16,7 @@ class TestServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18799; cls.db = f"{cls.tmp}/t.db"
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db,
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": cls.db,
                "STRUGGLETIME_ADMINS": "staff:admin"}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env,
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

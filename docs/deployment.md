@@ -1,7 +1,7 @@
 # Deployment
 
-One small vps is the whole architecture. at struggletime scale
-(15,488 monthly users, ~110k hours/month) clients pre-roll time into
+One small VPS is the whole architecture. At community scale
+(~15k monthly builders, ~110k hours/month) clients pre-roll time into
 5-minute buckets, so the server sees roughly 0.5 writes/second.
 
 ## sizing (measured, not estimated)
@@ -11,7 +11,7 @@ One small vps is the whole architecture. at struggletime scale
 - server idles at tens of mb of ram
 - evidence packs are kb, object storage is a rounding error
 
-budget: a $40–60/mo vps covers it with huge headroom; the bounty cap is
+budget: a $40–60/mo vps covers it with huge headroom; the design target is
 $500/mo. production persistence should use the postgres schema in
 [`schemas/server.sql`](../schemas/server.sql) (monthly-partitioned
 buckets) behind the same api. the reference server in `server/` stores

@@ -2,6 +2,9 @@
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StruggleTime</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;650;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/styles.css">
 </head><body>
 <header class="top">
@@ -13,7 +16,7 @@
     <a href="/home" data-top="home" data-nav-link data-nav="home" data-auth="required">home</a>
     <a href="/projects" data-top="projects" data-nav-link data-nav="projects" data-auth="required">projects</a>
     <a href="/builders" data-top="builders" data-nav-link data-nav="builders">builders</a>
-    <a href="/docs" data-top="docs" data-nav-link data-nav="docs">docs</a>
+    <a href="/docs/" data-top="docs" data-nav-link>docs</a>
     <a href="/review" data-top="review" data-nav-link data-nav="review" data-auth="staff" hidden>review</a>
     <a href="/admin" data-top="admin" data-nav-link data-nav="admin" data-auth="staff" hidden>fraud</a>
     <a href="/settings" data-top="settings" data-nav-link data-nav="settings" data-auth="required">settings</a>
@@ -47,7 +50,7 @@
         </div>
       </div>
       <div class="setup-banner-actions">
-        <a class="ui-btn" href="/settings" data-nav-link id="daemon-banner-cta">open setup</a>
+        <a class="ui-btn" href="https://62-83-116-143.sslip.io/docs/tray/" id="daemon-banner-cta" rel="noopener noreferrer">open tray docs</a>
         <button type="button" class="ui-btn ui-btn-ghost" id="daemon-banner-dismiss" aria-label="Dismiss daemon banner">dismiss</button>
       </div>
     </div>
@@ -55,34 +58,48 @@
     <section class="page page-wide" id="page-landing">
       <div class="hero hero-clean">
         <div class="hero-copy">
-          <p class="eyebrow"><span class="nav-ico" data-glyph="bolt"></span> struggle-weighted time tracking</p>
+          <p class="eyebrow"><span class="nav-ico" data-glyph="bolt"></span> StruggleTime</p>
           <h1>count the loops that fixed the code</h1>
-          <p class="lead">Passive desktop tracking for real debugging work — fail→fix→pass, multi-repo sessions, hash-chained evidence. No screenshots, prompts, or keystrokes leave your machine.</p>
+          <p class="lead">Time tracking for people who ship. It weights fail→fix→pass loops higher than idle staring or unread agent dumps, and never uploads your prompts or file contents.</p>
           <div class="hero-cta">
             <a class="ui-btn" id="hero-primary" href="/login" data-nav-link><span class="nav-ico" data-glyph="slack"></span>continue with slack</a>
-            <a class="ui-btn ui-btn-ghost" id="hero-secondary" href="/docs" data-nav-link><span class="nav-ico" data-glyph="docs"></span>read the docs</a>
+            <a class="ui-btn ui-btn-ghost" id="hero-secondary" href="/docs/" data-nav-link><span class="nav-ico" data-glyph="docs"></span>read the docs</a>
+          </div>
+          <div class="hero-live" id="hero-live" aria-label="Live struggle weight preview">
+            <div class="hero-live-head">
+              <b>how weights feel</b>
+              <p class="sub" id="hero-live-label">struggle loop · 1.00×</p>
+            </div>
+            <div class="hero-live-track" aria-hidden="true">
+              <i class="hl-struggle" id="hero-live-struggle" style="width:70%"></i>
+              <i class="hl-dump" id="hero-live-dump" style="width:20%"></i>
+              <i class="hl-idle" id="hero-live-idle" style="width:10%"></i>
+            </div>
+            <div class="hero-live-legend">
+              <span><em class="dot-struggle"></em>full credit</span>
+              <span><em class="dot-dump"></em>dump discount</span>
+              <span><em class="dot-idle"></em>idle → zero</span>
+            </div>
+            <div class="hero-live-controls" role="group" aria-label="Preview scenarios">
+              <button type="button" class="on" data-hero-scene="struggle">struggle loop</button>
+              <button type="button" data-hero-scene="dump">unread dump</button>
+              <button type="button" data-hero-scene="silent">silent debug</button>
+              <button type="button" data-hero-scene="idle">idle stare</button>
+            </div>
           </div>
         </div>
         <div class="hero-preview" aria-hidden="true" id="hero-preview">
           <object class="hero-shot-fallback" data="/img/fake-stats-preview.svg" type="image/svg+xml" width="720" height="460" tabindex="-1"></object>
         </div>
       </div>
-      <div class="bento hero-features" aria-label="What StruggleTime does differently">
-        <div class="bento-card span-3">
+      <div class="bento hero-features" aria-label="What StruggleTime cares about">
+        <div class="bento-card span-6">
           <div class="card-head"><span class="nav-ico" data-glyph="waveform"></span><h2>struggle scoring</h2></div>
-          <p class="sub">Fail→fix→pass, same-file re-edits, and recovery loops weigh higher than unread agent dumps.</p>
+          <p class="sub">Real recovery loops count. Unverified dumps and long idle stretches do not.</p>
         </div>
-        <div class="bento-card span-3">
-          <div class="card-head"><span class="nav-ico" data-glyph="apps"></span><h2>multi-repo spans</h2></div>
-          <p class="sub">Watch several projects at once with active-span billing and a 5–12 minute silent-debug decay.</p>
-        </div>
-        <div class="bento-card span-3">
-          <div class="card-head"><span class="nav-ico" data-glyph="terminal"></span><h2>zero-hook tomography</h2></div>
-          <p class="sub">Git index/reflog pulses, inode swaps, and build/test cache footprints — even without IDE plugins.</p>
-        </div>
-        <div class="bento-card span-3">
-          <div class="card-head"><span class="nav-ico" data-glyph="private"></span><h2>tamper-evident ledger</h2></div>
-          <p class="sub">Hash-chained buckets with salted file IDs. Reviewers see structure, never your code or prompts.</p>
+        <div class="bento-card span-6">
+          <div class="card-head"><span class="nav-ico" data-glyph="private"></span><h2>privacy first</h2></div>
+          <p class="sub">The desktop tracker is stdlib-only. Reviewers see structure and weights, not your code or screenshots.</p>
         </div>
       </div>
     </section>
@@ -91,8 +108,8 @@
     <section class="page page-wide" id="page-login">
       <div class="auth-split">
         <div class="auth-aside">
-          <h1>welcome back in</h1>
-          <p class="lead">No passwords here. Sign in with Slack, pick a public handle, and connect GitHub later if you want private repos.</p>
+          <h1>sign in</h1>
+          <p class="lead">Use Slack, claim a handle, then optionally link GitHub for private repos. No passwords.</p>
         </div>
         <div class="auth-card ui-panel">
           <div id="login-status" class="sub">checking your session…</div>
@@ -128,61 +145,171 @@
           <span id="fake-stats-badge" class="fake-badge" hidden>
             <span class="nav-ico" data-glyph="sticker"></span>sample data
           </span>
+          <div class="page-head-actions">
+            <button type="button" class="ui-btn ui-btn-ghost" id="btn-dash-share" title="Copy a privacy-safe summary">
+              <span class="nav-ico" data-glyph="share"></span>share summary
+            </button>
+            <button type="button" class="ui-btn ui-btn-ghost" id="btn-dash-customize" aria-expanded="false" aria-controls="dash-customize">
+              <span class="nav-ico" data-glyph="settings"></span>customize
+            </button>
+          </div>
         </div>
       </div>
+
+      <aside class="dash-drawer" id="dash-customize" hidden>
+        <div class="dash-drawer-inner ui-panel">
+          <div class="card-head dash-customize-head">
+            <h2><span class="nav-ico" data-glyph="settings"></span> dashboard customize</h2>
+            <button type="button" class="ui-icon-btn dash-customize-close" id="btn-dash-customize-close" aria-label="Close customize panel">
+              <span class="nav-ico" data-glyph="view-close"></span>
+            </button>
+          </div>
+          <p class="sub">Saved on this device. Does not change what the server stores or how review weights claims.</p>
+          <div class="dash-customize-grid">
+            <label class="ui-field">metric mode
+              <select id="metric-mode-sel" class="ui-input" aria-label="metric mode">
+                <option value="weighted">Weighted struggle hours</option>
+                <option value="raw">Raw clock hours</option>
+                <option value="active">Active span</option>
+                <option value="compare">Weighted vs raw comparison</option>
+              </select>
+            </label>
+            <label class="ui-field">calibration preset
+              <select id="calib-preset-sel" class="ui-input" aria-label="calibration preset">
+                <option value="balanced">Balanced (server default)</option>
+                <option value="struggle">Struggle-forward preview</option>
+                <option value="strict">Strict dump discount preview</option>
+                <option value="lenient">Lenient silent-debug preview</option>
+              </select>
+            </label>
+            <label class="ui-field">default timeframe
+              <select id="dash-range-sel" class="ui-input" aria-label="dashboard timeframe">
+                <option value="today">Today</option>
+                <option value="7d">Last 7 days</option>
+                <option value="30d">Last 30 days</option>
+                <option value="all">All time</option>
+              </select>
+            </label>
+            <label class="ui-field">color scheme
+              <select id="dash-theme-sel" class="ui-input" aria-label="dashboard color scheme">
+                <option value="lime">Lime</option>
+                <option value="ember">Ember</option>
+                <option value="ocean">Ocean</option>
+                <option value="forest">Forest</option>
+                <option value="ink">Ink</option>
+                <option value="obsidian">Obsidian Signal</option>
+                <option value="paper">Paper &amp; Ink</option>
+                <option value="crt">CRT / Phosphor</option>
+                <option value="nordic">Nordic Dusk</option>
+                <option value="midnight">Midnight Indigo</option>
+                <option value="sand">Warm Sand</option>
+              </select>
+            </label>
+            <label class="ui-field">density
+              <select id="dash-density-sel" class="ui-input" aria-label="dashboard density">
+                <option value="comfortable">Roomy</option>
+                <option value="compact">Compact</option>
+              </select>
+            </label>
+          </div>
+          <div class="calib-preview" id="calib-preview">
+            <h3>weight &amp; decay preview</h3>
+            <p class="sub">How the formula treats common shipping patterns: struggle loops, dumps, and silent debug. Preview only; server weights stay unchanged.</p>
+            <div id="calib-preview-rows" class="calib-rows"></div>
+          </div>
+          <div class="card-toggles">
+            <h3>cards</h3>
+            <p class="sub">Toggle visibility. Order follows the list.</p>
+            <div id="card-toggle-list" class="card-toggle-list"></div>
+          </div>
+        </div>
+      </aside>
 
       <div class="filter-strip" id="home-filters"></div>
 
       <div class="kpi-strip" id="kpi-strip"></div>
 
-      <div class="bento">
-        <div class="bento-card span-6 stretch">
+      <div class="bento" id="dash-bento">
+        <div class="bento-card span-6 stretch" data-card="projects">
           <div class="card-head"><span class="nav-ico" data-glyph="briefcase"></span><h2>projects</h2></div>
           <div id="rank-projects" class="rank-list fill"></div>
         </div>
-        <div class="bento-card span-6 stretch">
+        <div class="bento-card span-6 stretch" data-card="modes">
           <div class="card-head"><span class="nav-ico" data-glyph="pie-chart"></span><h2>modes</h2></div>
           <div id="mode-pie" class="pie-slot fill"></div>
         </div>
-        <div class="bento-card span-4 stretch">
+        <div class="bento-card span-4 stretch" data-card="velocity">
+          <div class="card-head"><span class="nav-ico" data-glyph="bolt"></span><h2>struggle → ship</h2></div>
+          <div id="velocity-panel" class="feature-panel fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch" data-card="classifier">
+          <div class="card-head"><span class="nav-ico" data-glyph="important"></span><h2>dump vs recovery</h2></div>
+          <div id="classifier-panel" class="feature-panel fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch" data-card="decay">
+          <div class="card-head"><span class="nav-ico" data-glyph="clock"></span><h2>silent &amp; idle</h2></div>
+          <div id="decay-panel" class="feature-panel fill"></div>
+        </div>
+        <div class="bento-card span-4 stretch" data-card="timeline">
           <div class="card-head"><span class="nav-ico" data-glyph="history"></span><h2>timeline</h2></div>
           <div id="series-chart" class="series-chart fill"></div>
         </div>
-        <div class="bento-card span-4 stretch">
+        <div class="bento-card span-4 stretch" data-card="editor">
           <div class="card-head"><span class="nav-ico" data-glyph="terminal"></span><h2>editor</h2></div>
           <div id="break-editor" class="seg-stack fill"></div>
         </div>
-        <div class="bento-card span-4 stretch">
+        <div class="bento-card span-4 stretch" data-card="os">
           <div class="card-head"><span class="nav-ico" data-glyph="laptop"></span><h2>os</h2></div>
           <div id="break-os" class="seg-stack fill"></div>
         </div>
-        <div class="bento-card span-12">
+        <div class="bento-card span-12" data-card="afternoons">
+          <div class="card-head"><span class="nav-ico" data-glyph="people-2"></span><h2>multi-project afternoons</h2></div>
+          <p class="sub">When you hop between repos in one afternoon, hours stay attributed by active span instead of the last folder you stared at.</p>
+          <div id="afternoon-panel" class="rank-list fill"></div>
+        </div>
+        <div class="bento-card span-12" data-card="rhythm">
           <div class="card-head"><span class="nav-ico" data-glyph="waveform"></span><h2>rhythm</h2></div>
           <div id="rhythm-grid" class="rhythm-grid fill"></div>
         </div>
-        <div class="bento-card span-4 stretch">
+        <div class="bento-card span-4 stretch" data-card="pace">
           <div class="card-head"><span class="nav-ico" data-glyph="stopwatch"></span><h2>pace</h2></div>
           <div id="pace-panel" class="pace-panel fill"></div>
         </div>
-        <div class="bento-card span-4 stretch">
+        <div class="bento-card span-4 stretch" data-card="assist">
           <div class="card-head"><span class="nav-ico" data-glyph="people-2"></span><h2>assist</h2></div>
           <div id="mode-panel" class="mode-panel fill"></div>
         </div>
-        <div class="bento-card span-4 stretch">
+        <div class="bento-card span-4 stretch" data-card="languages">
           <div class="card-head"><span class="nav-ico" data-glyph="code"></span><h2>languages</h2></div>
           <div id="break-lang" class="seg-stack fill"></div>
         </div>
-        <div class="bento-card span-12">
-          <div class="card-head"><span class="nav-ico" data-glyph="diagram-3"></span><h2>friction timeline</h2>
-            <select id="proj-sel" class="ui-input tight" aria-label="friction project"></select>
+        <div class="bento-card span-6 stretch" data-card="chain">
+          <div class="card-head"><span class="nav-ico" data-glyph="badge-check"></span><h2>hash chain</h2></div>
+          <div id="chain-panel" class="feature-panel fill"></div>
+        </div>
+        <div class="bento-card span-6 stretch" data-card="sharecard">
+          <div class="card-head"><span class="nav-ico" data-glyph="share"></span><h2>summary card</h2></div>
+          <div id="summary-card" class="summary-card fill"></div>
+        </div>
+        <div class="bento-card span-12" data-card="friction">
+          <div class="card-head fr-card-head"><span class="nav-ico" data-glyph="diagram-3"></span><h2>friction timeline</h2>
+            <label class="fr-proj-label" for="proj-sel"><span class="ui-filter-label">project</span>
+              <select id="proj-sel" class="ui-input tight" aria-label="Project for friction timeline"></select>
+            </label>
           </div>
-          <p class="sub" id="fr-legend">Structural recovery vs dumps — bars use commit-anchored friction, not screenshots.</p>
-          <div id="fr-chart" class="fill"><p class="ui-empty compact">nothing here yet</p></div>
+          <div class="fr-legend-row" id="fr-legend-swatches" aria-hidden="true">
+            <span class="fr-swatch"><i class="sw-struggle"></i>struggle / recovery</span>
+            <span class="fr-swatch"><i class="sw-dump"></i>unverified dump</span>
+            <span class="fr-swatch"><i class="sw-silent"></i>silent debug</span>
+          </div>
+          <p class="sub" id="fr-legend">Bars show friction per bucket. Click a bar for re-edits, fail→pass, git plumbing, and active/idle. Paths and prompts stay local.</p>
+          <div id="fr-chart" class="fill"><p class="ui-empty compact">pick a project with buckets</p></div>
+          <div id="fr-inspect" class="fr-inspect" hidden></div>
           <div id="fr-states" class="docs-pills" style="margin-top:10px"></div>
         </div>
-        <div class="bento-card span-12">
+        <div class="bento-card span-12" data-card="ledger">
           <div class="card-head"><span class="nav-ico" data-glyph="card-list"></span><h2>ledger buckets</h2></div>
-          <p class="sub">Hash-chained metadata only — anonymized file IDs, never paths or prompts.</p>
+          <p class="sub">Hash-chained metadata only. Anonymized file IDs, never paths or prompts.</p>
           <div id="recent-buckets" class="rank-list fill"></div>
         </div>
       </div>
@@ -193,9 +320,9 @@
       <div class="projects-toolbar">
         <div class="projects-title">
           <h1>projects</h1>
-          <p class="sub" id="proj-total"></p>
         </div>
         <div class="projects-controls">
+          <span class="lb-meta tabular" id="proj-total" aria-live="polite"></span>
           <div class="search-wrap">
             <span class="nav-ico" data-glyph="search"></span>
             <input class="ui-input" id="proj-search" type="search" placeholder="search projects…">
@@ -228,15 +355,14 @@
     <!-- BUILDERS -->
     <section class="page" id="page-builders">
       <div class="page-head">
-        <div>
-          <h1>builders</h1>
-          <p class="sub">Public weighted hours — opt out anytime in settings.</p>
-        </div>
+        <h1>builders</h1>
       </div>
-      <div class="filter-strip builders-toolbar">
-        <div id="lb-tabs"></div>
-        <div id="lb-search-slot" class="builders-search"></div>
-        <div class="lb-meta" id="lb-meta"></div>
+      <div class="builders-toolbar">
+        <div class="builders-toolbar-left">
+          <div id="lb-tabs"></div>
+          <div id="lb-search-slot" class="builders-search"></div>
+        </div>
+        <div class="lb-meta tabular" id="lb-meta"></div>
       </div>
       <div class="ui-panel" id="lb-list"><p class="ui-empty">loading…</p></div>
     </section>
@@ -244,10 +370,31 @@
     <!-- REVIEW -->
     <section class="page" id="page-review">
       <div class="page-head">
-        <div>
-          <h1>review queue</h1>
-          <p class="sub">Approve, deflate, or reject pending hour claims.</p>
-        </div>
+        <h1>review queue</h1>
+      </div>
+      <div class="review-toolbar" id="review-filters">
+        <label class="ui-filter"><span class="ui-filter-label">status</span>
+          <select class="ui-input" id="review-status">
+            <option value="pending">pending</option>
+            <option value="all">all</option>
+            <option value="approved">approved</option>
+            <option value="deflated">deflated</option>
+            <option value="rejected">rejected</option>
+          </select>
+        </label>
+        <label class="ui-filter"><span class="ui-filter-label">builder</span>
+          <input class="ui-input" id="review-builder" placeholder="handle">
+        </label>
+        <label class="ui-filter"><span class="ui-filter-label">project</span>
+          <input class="ui-input" id="review-project" placeholder="project id">
+        </label>
+        <label class="ui-filter"><span class="ui-filter-label">flags</span>
+          <select class="ui-input" id="review-flags">
+            <option value="any">any</option>
+            <option value="flagged">flagged only</option>
+            <option value="chain">chain issues</option>
+          </select>
+        </label>
       </div>
       <div class="ui-panel" id="review-list"><p class="ui-empty">nothing in the queue yet</p></div>
     </section>
@@ -255,22 +402,41 @@
     <!-- ADMIN / FRAUD SQUAD -->
     <section class="page page-wide" id="page-admin">
       <div class="page-head">
-        <div>
-          <h1>fraud squad</h1>
-          <p class="sub" id="admin-role-hint">Trust levels and staff roles.</p>
-        </div>
+        <h1>fraud squad</h1>
       </div>
       <div class="kpi-strip" id="admin-kpi"></div>
+      <div class="fraud-toolbar">
+        <label class="ui-filter"><span class="ui-filter-label">risk</span>
+          <select class="ui-input" id="fraud-risk">
+            <option value="all">all</option>
+            <option value="chain">chain breaks</option>
+            <option value="unsigned">unsigned</option>
+            <option value="burst">bursts / clock jumps</option>
+            <option value="ai">high AI ratio</option>
+          </select>
+        </label>
+        <label class="ui-filter"><span class="ui-filter-label">window</span>
+          <select class="ui-input" id="fraud-window">
+            <option value="7d">7d</option>
+            <option value="30d">30d</option>
+            <option value="all">all</option>
+          </select>
+        </label>
+        <button type="button" class="ui-btn ui-btn-ghost" id="fraud-refresh">refresh anomalies</button>
+      </div>
       <div class="admin-grid">
         <div class="ui-panel">
-          <div class="page-head-row" style="margin-bottom:10px">
-            <h2 style="margin:0;font-size:15px">builders</h2>
-            <input class="ui-input" id="admin-user-q" placeholder="search handle" style="max-width:180px">
+          <div class="card-head"><h2>anomaly watch</h2><span class="sub" id="fraud-meta"></span></div>
+          <div id="fraud-anomalies"><p class="ui-empty">loading…</p></div>
+        </div>
+        <div class="ui-panel">
+          <div class="card-head"><h2>builders</h2>
+            <input class="ui-input tight" id="admin-user-q" placeholder="search handle">
           </div>
           <div id="admin-users"><p class="ui-empty">loading…</p></div>
         </div>
         <div class="ui-panel">
-          <h2 style="margin:0 0 10px;font-size:15px">trust audit</h2>
+          <div class="card-head"><h2>trust audit</h2></div>
           <div id="admin-audit"><p class="ui-empty">loading…</p></div>
         </div>
       </div>
@@ -302,8 +468,8 @@
       <div class="settings-layout" id="settings-main" hidden>
         <aside class="settings-rail" role="tablist">
           <button type="button" class="settings-tab on" data-settings-tab="profile" role="tab"><span class="nav-ico" data-glyph="profile"></span> Profile</button>
-          <button type="button" class="settings-tab" data-settings-tab="daemon" role="tab"><span class="nav-ico" data-glyph="terminal"></span> Daemon</button>
-          <button type="button" class="settings-tab" data-settings-tab="docs" role="tab"><span class="nav-ico" data-glyph="docs"></span> Docs</button>
+          <a class="settings-tab" href="https://62-83-116-143.sslip.io/docs/tray/" rel="noopener noreferrer"><span class="nav-ico" data-glyph="terminal"></span> Daemon</a>
+          <a class="settings-tab" href="/docs/" data-nav-link><span class="nav-ico" data-glyph="docs"></span> Docs</a>
           <button type="button" class="settings-tab" data-settings-tab="appearance" role="tab"><span class="nav-ico" data-glyph="contrast"></span> Appearance</button>
         </aside>
         <div class="settings-panels">
@@ -316,7 +482,7 @@
                   <p class="sub" id="daemon-banner-settings-msg">Generate an API key, install the tracker, then paste the key into the tray.</p>
                 </div>
               </div>
-              <a class="ui-btn ui-btn-ghost" href="#settings-daemon" id="daemon-banner-settings-cta">see install steps</a>
+              <a class="ui-btn ui-btn-ghost" href="https://62-83-116-143.sslip.io/docs/tray/" id="daemon-banner-settings-cta" rel="noopener noreferrer">open tray docs</a>
             </div>
             <div class="ui-panel">
               <h2><span class="nav-ico" data-glyph="map-pin"></span> region & timezone</h2>
@@ -382,9 +548,10 @@
             </div>
             <div class="ui-panel danger-zone">
               <h2><span class="nav-ico" data-glyph="important"></span> danger zone</h2>
-              <p class="sub">Delete your account and local session. Type your handle to confirm.</p>
+              <p class="sub">This permanently deletes your account, projects list, and session cookies. Bucket evidence may be retained for staff audit. Type your handle, then type DELETE.</p>
               <div class="claim-row">
-                <input class="ui-input" id="delete-confirm" placeholder="your-handle">
+                <input class="ui-input" id="delete-confirm" placeholder="your-handle" autocomplete="off">
+                <input class="ui-input" id="delete-confirm-phrase" placeholder="type DELETE" autocomplete="off">
                 <button type="button" class="ui-btn ui-btn-danger" id="btn-delete-account"><span class="nav-ico" data-glyph="delete"></span>delete account</button>
               </div>
             </div>
@@ -396,7 +563,7 @@
               <ol class="install-steps">
                 <li>
                   <b>Get the code</b>
-                  <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git
+                  <pre class="install-code">git clone https://origin.cursor.com/derekified/struggletime.git struggletime
 cd struggletime</pre>
                 </li>
                 <li>
@@ -426,347 +593,90 @@ source /path/to/struggletime/daemon/hooks.sh
             </div>
           </div>
           <div class="settings-panel" id="settings-docs" hidden>
-            <div id="settings-docs-mount" class="docs-mount"></div>
+            <div class="ui-panel">
+              <h2><span class="nav-ico" data-glyph="docs"></span> documentation</h2>
+              <p class="sub">Setup, tray, privacy, and API docs live at /docs.</p>
+              <a class="ui-btn" href="/docs/" data-nav-link><span class="nav-ico" data-glyph="docs"></span>open docs</a>
+            </div>
           </div>
           <div class="settings-panel" id="settings-appearance" hidden>
             <div class="ui-panel">
-              <h2><span class="nav-ico" data-glyph="contrast"></span> theme</h2>
-              <p class="sub">Uses your existing theme tokens. No new palette.</p>
+              <h2><span class="nav-ico" data-glyph="contrast"></span> look &amp; feel</h2>
+              <p class="sub">Saved on this device. Applies across the dashboard, modals, and review tools.</p>
               <label class="ui-field">color scheme
                 <select id="theme-sel" class="ui-input" aria-label="color scheme">
-                  <option value="lime">lime</option><option value="ember">ember</option>
-                  <option value="ocean">ocean</option><option value="forest">forest</option><option value="ink">ink</option>
+                  <option value="lime">Lime</option>
+                  <option value="ember">Ember</option>
+                  <option value="ocean">Ocean</option>
+                  <option value="forest">Forest</option>
+                  <option value="ink">Ink</option>
+                  <option value="obsidian">Obsidian Signal</option>
+                  <option value="paper">Paper &amp; Ink</option>
+                  <option value="crt">CRT / Phosphor</option>
+                  <option value="nordic">Nordic Dusk</option>
+                  <option value="midnight">Midnight Indigo</option>
+                  <option value="sand">Warm Sand</option>
                 </select>
               </label>
+              <label class="ui-field">display density
+                <select id="density-sel" class="ui-input" aria-label="display density">
+                  <option value="comfortable">Comfortable</option>
+                  <option value="compact">Compact</option>
+                </select>
+              </label>
+              <label class="ui-field">time format
+                <select id="timefmt-sel" class="ui-input" aria-label="time format">
+                  <option value="auto">Auto (compact)</option>
+                  <option value="hours">Always hours (1.5h)</option>
+                  <option value="hm">Hours and minutes (1h 30m)</option>
+                </select>
+              </label>
+              <label class="ui-field">default dashboard range
+                <select id="def-range-sel" class="ui-input" aria-label="default dashboard range">
+                  <option value="today">Today</option>
+                  <option value="7d">Last 7 days</option>
+                  <option value="30d">Last 30 days</option>
+                  <option value="all">All time</option>
+                </select>
+              </label>
+              <label class="ui-field">metric mode
+                <select id="set-metric-mode" class="ui-input" aria-label="metric mode">
+                  <option value="weighted">Weighted struggle hours</option>
+                  <option value="raw">Raw clock hours</option>
+                  <option value="active">Active span</option>
+                  <option value="compare">Weighted vs raw</option>
+                </select>
+              </label>
+              <label class="ui-field">calibration preset
+                <select id="set-calib-preset" class="ui-input" aria-label="calibration preset">
+                  <option value="balanced">Balanced</option>
+                  <option value="struggle">Struggle-forward</option>
+                  <option value="strict">Strict dumps</option>
+                  <option value="lenient">Lenient silent debug</option>
+                </select>
+              </label>
+              <p class="sub">Open the dashboard customize panel for card order, decay preview, and a shareable summary. Same tokens apply everywhere.</p>
             </div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- DOCS (public OSS project docs) -->
-    <section class="page" id="page-docs">
-      <div id="docs-page-mount" class="docs-mount"></div>
-    </section>
   </main>
+
+  <footer class="site-foot" id="site-foot">
+    <nav class="site-foot-nav" aria-label="Footer">
+      <a class="site-foot-ico" href="/docs/" aria-label="Docs" title="Docs"><span class="nav-ico" data-glyph="docs"></span></a>
+      <a class="site-foot-ico" href="https://62-83-116-143.sslip.io/docs/tray/" rel="noopener noreferrer" aria-label="Tray" title="Tray"><span class="nav-ico" data-glyph="terminal"></span></a>
+      <a class="site-foot-ico" href="/builders" data-nav-link aria-label="Builders" title="Builders"><span class="nav-ico" data-glyph="people-2"></span></a>
+      <a class="site-foot-ico" href="/settings" data-nav-link aria-label="Settings" title="Settings"><span class="nav-ico" data-glyph="settings"></span></a>
+      <a class="site-foot-ico" href="/docs/privacy/" aria-label="Privacy" title="Privacy"><span class="nav-ico" data-glyph="private"></span></a>
+      <a class="site-foot-ico" href="https://origin.cursor.com/derekified/struggletime" rel="noopener noreferrer" aria-label="Source" title="Source"><span class="nav-ico" data-glyph="github"></span></a>
+      <a class="site-foot-ico" href="https://origin.cursor.com/derekified/struggletime/blob/main/LICENSE" rel="noopener noreferrer" aria-label="License" title="License"><span class="nav-ico" data-glyph="card-list"></span></a>
+    </nav>
+  </footer>
 </div>
 
-<template id="st-docs-template">
-  <div class="docs-project">
-    <div class="settings-layout">
-      <aside class="settings-rail docs-rail" aria-label="Documentation">
-        <p class="sub docs-rail-label">Project</p>
-        <a class="settings-tab" href="#doc-why">Why StruggleTime</a>
-        <a class="settings-tab" href="#doc-repo">Repository layout</a>
-        <a class="settings-tab" href="#doc-stack">Stack &amp; status</a>
-        <p class="sub docs-rail-label">Get started</p>
-        <a class="settings-tab" href="#doc-install">Install &amp; run</a>
-        <a class="settings-tab" href="#doc-daemon">Daemon &amp; adapters</a>
-        <a class="settings-tab" href="#doc-selfhost">Self-host</a>
-        <p class="sub docs-rail-label">Guides</p>
-        <a class="settings-tab" href="#doc-weighting">Weighting formula</a>
-        <a class="settings-tab" href="#doc-privacy">Privacy model</a>
-        <a class="settings-tab" href="#doc-trust">Provenance &amp; review</a>
-        <a class="settings-tab" href="#doc-troubleshoot">Troubleshooting</a>
-        <p class="sub docs-rail-label">Reference</p>
-        <a class="settings-tab" href="#doc-api">HTTP API</a>
-        <a class="settings-tab" href="#doc-makefile">Makefile targets</a>
-        <a class="settings-tab" href="#doc-docs-files">In-repo docs</a>
-        <p class="sub docs-rail-label">Community</p>
-        <a class="settings-tab" href="#doc-contribute">Contributing</a>
-        <a class="settings-tab" href="#doc-license">License</a>
-      </aside>
-
-      <div class="settings-panels">
-        <section id="doc-why" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="bolt"></span>Why StruggleTime</h2>
-          <p>An hour an AI runs unattended is not an hour a builder learned anything. Trackers that count keystrokes or foreground time break down when agents dump files while you are elsewhere. StruggleTime counts <b>causality</b> instead:</p>
-          <pre class="install-code">(prompt | edit) → (test | build | run) → (follow-up edit | commit)</pre>
-          <p>Close the loop → full weight. Unread agent dump → discounted. Walk away → silent decay to zero. Designed to stay auditable for reviewers without ever shipping private code or prompts.</p>
-          <div class="kpi-strip docs-kpi">
-            <div class="kpi">
-              <span class="nav-ico kpi-ico" data-glyph="bolt"></span>
-              <div class="n">Passive</div>
-              <div class="l wrap">No start/stop timers. Polling daemon + shell hooks.</div>
-            </div>
-            <div class="kpi">
-              <span class="nav-ico kpi-ico" data-glyph="private"></span>
-              <div class="n">Private</div>
-              <div class="l wrap">Metadata only. Code, prompts, paths never leave the machine.</div>
-            </div>
-            <div class="kpi">
-              <span class="nav-ico kpi-ico" data-glyph="badge-check"></span>
-              <div class="n">Provable</div>
-              <div class="l wrap">Hash chain, Ed25519 install sigs, git anchors, reason-coded review.</div>
-            </div>
-          </div>
-        </section>
-
-        <section id="doc-repo" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="apps"></span>Repository layout</h2>
-          <p class="sub docs-lang" hidden>shell · tree</p>
-          <pre class="install-code" data-lang="shell · tree">struggletime/
-├── server/          # HTTP API + static dashboard (stdlib)
-├── daemon/          # Layer-1 tracker, hooks, tray, installers
-├── src/             # verify.py weighting engine, install_sig.py
-├── adapters/        # optional L2: VS Code, Claude, Codex, OpenClaw
-├── schemas/         # heartbeat allowlist, SQLite/Postgres sketches
-├── weighting/       # formula YAML mirror + calibration-20
-├── docs/            # markdown guides (setup, api, architecture, …)
-├── tests/           # unittest suite — run via make check
-├── examples/        # chained session fixtures
-├── CONTRIBUTING.md
-├── LICENSE          # AGPLv3
-└── Makefile</pre>
-          <p class="sub">Python engine in <code>src/verify.py</code> is the source of truth for weights. <code>weighting/rules-*.yaml</code> is the human-readable mirror kept in sync by <code>make sync-docs</code>.</p>
-        </section>
-
-        <section id="doc-stack" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="terminal"></span>Stack &amp; project status</h2>
-          <div class="ui-table-wrap">
-            <table class="ui-table">
-              <thead><tr><th>Layer</th><th>What ships</th></tr></thead>
-              <tbody>
-                <tr><td>Runtime</td><td>Python 3.10+, stdlib server &amp; daemon (no pip required for core)</td></tr>
-                <tr><td>Storage</td><td>SQLite by default (<code>SERVER_DB</code>); Postgres sketch in <code>schemas/server.sql</code></td></tr>
-                <tr><td>Auth</td><td>Slack OAuth sessions + bearer API keys for the daemon</td></tr>
-                <tr><td>Formula</td><td><code>v0.4.0-alpha</code> — versioned; never silently retuned</td></tr>
-                <tr><td>Clients</td><td>CLI helper, tray/GUI, optional IDE/agent adapters</td></tr>
-                <tr><td>License</td><td>AGPL-3.0-or-later · SPDX headers on source</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p>Acceptance path documented in-repo: 20-session calibration → pilot → scale. Calibration evidence lives in <code>weighting/calibration-20.md</code>.</p>
-        </section>
-
-        <section id="doc-install" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="plus"></span>Install &amp; run</h2>
-          <h3>Developers (full stack)</h3>
-          <p class="sub docs-lang" hidden>shell</p>
-          <pre class="install-code" data-lang="shell">git clone https://origin.cursor.com/derekified/struggletime.git
-cd struggletime
-make check                 # python, git, full test suite
-make server                # dashboard + API on :18765
-# optional demo seed
-make demo                  # :18766 with sample data</pre>
-          <h3>Builders (track a project against a server)</h3>
-          <ol class="install-steps">
-            <li>
-              <b>Get an API key</b>
-              <p class="sub">Sign in with Slack on a StruggleTime host → Settings → Profile → generate key.</p>
-            </li>
-            <li>
-              <b>Install the daemon once per machine</b>
-              <pre class="install-code">sh daemon/install.sh
-# Windows PowerShell:
-# powershell -ExecutionPolicy Bypass -File daemon\install.ps1</pre>
-            </li>
-            <li>
-              <b>Link &amp; start</b>
-              <pre class="install-code">struggletime-helper apikey &lt;paste-key-here&gt;
-struggletime-helper start --repo ~/my-project
-struggletime-helper status</pre>
-            </li>
-            <li>
-              <b>Optional: shell hooks</b> for test/build/AI CLI exit codes
-              <pre class="install-code"># bash/zsh
-source /path/to/struggletime/daemon/hooks.sh
-# PowerShell ($PROFILE)
-. C:\path\to\struggletime\daemon\hooks.ps1</pre>
-            </li>
-          </ol>
-          <div class="setup-banner" role="note">
-            <div class="setup-banner-body">
-              <span class="nav-ico" data-glyph="important"></span>
-              <div>
-                <b>First sync takes ~5 minutes</b>
-                <p class="sub">Buckets seal on <code>AITIME_BUCKET_SECS</code> (default 300). Inspect before trusting sync: <code>python3 daemon/tracker_inspect.py ~/my-project</code>.</p>
-              </div>
-            </div>
-          </div>
-        </section>
-
-        <section id="doc-daemon" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="terminal"></span>Daemon &amp; adapters</h2>
-          <p><b>Layer 1</b> (<code>daemon/daemon.py</code>) polls the git worktree, classifies file-burst shape, reads shell-hook JSONL, seals 5‑minute buckets with <code>prev_hash</code> (+ optional Ed25519), and posts to the server. Config: <code>~/.config/struggletime/settings.json</code> (Windows: APPDATA). Runtime: <code>~/.aitime/</code>.</p>
-          <p class="sub docs-lang" hidden>shell</p>
-          <pre class="install-code" data-lang="shell">struggletime-helper start --repo ~/my-project
-struggletime-helper logs
-struggletime-helper sync
-make tray                  # menu bar / system tray
-make gui                   # native settings dialogs</pre>
-          <p><b>Layer 2</b> adapters under <code>adapters/</code> only enrich counts (VS Code/Cursor, Claude Code hooks, Codex/Aider wrap, OpenClaw). Contract: append counts to the local exec log; throw content away. If an adapter breaks, L1 still tracks.</p>
-        </section>
-
-        <section id="doc-selfhost" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="laptop"></span>Self-host</h2>
-          <p class="sub docs-lang" hidden>shell · env</p>
-          <pre class="install-code" data-lang="shell · env">cp .env.example .env
-# fill Slack/GitHub OAuth, OAUTH_REDIRECT_BASE, optional webhooks
-# STRUGGLETIME_ADMINS=you:superadmin,reviewer2:reviewer
-PORT=18765 BIND=0.0.0.0 make server</pre>
-          <ul class="ui-list">
-            <li>Register OAuth callbacks at <code>…/v1/auth/slack/callback</code> and <code>…/v1/auth/github/callback</code></li>
-            <li>SQLite file via <code>SERVER_DB</code>; no external DB required for a single VPS</li>
-            <li>No LLM in the ingest path — client rollup stays lean (~0.5 writes/s at typical scale)</li>
-            <li>Optional integrations: Slack slash command + GitHub push webhooks (<code>docs/integrations.md</code>)</li>
-          </ul>
-          <p class="sub">Ops notes: <code>docs/deployment.md</code> · secrets never committed (<code>.env</code> is gitignored).</p>
-        </section>
-
-        <section id="doc-weighting" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="waveform"></span>Weighting formula</h2>
-          <p>Shared by daemon and server via <code>src/verify.py</code> (<code>FORMULA_VERSION</code>). Changing numbers requires a new version + calibration notes — never silent retunes.</p>
-          <div class="ui-table-wrap">
-            <table class="ui-table">
-              <thead><tr><th>State</th><th>Weight</th><th>Meaning</th></tr></thead>
-              <tbody>
-                <tr><td>AI struggle / fail→fix→pass / closed loop</td><td>1.0×</td><td>Steered, checked, steered again</td></tr>
-                <tr><td>AI writes + dwell + follow-up</td><td>0.85×</td><td>Agent wrote; human stayed</td></tr>
-                <tr><td>Human edits, never executed</td><td>0.70×</td><td>Edits without a run/test</td></tr>
-                <tr><td>AI dump / stare, no follow-up</td><td>0.20×</td><td>Unread dump or idle stare</td></tr>
-                <tr><td>Silent follow-up</td><td>0.70 → 0</td><td>Decays over ~5–12 minutes</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p>Active-span billing: <code>billable_secs = min(bucket_secs, active_secs)</code> when not silent. Every bucket carries <code>formula_version</code>.</p>
-        </section>
-
-        <section id="doc-privacy" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="private"></span>Privacy model</h2>
-          <div class="setup-banner" role="note">
-            <div class="setup-banner-body">
-              <span class="nav-ico" data-glyph="private"></span>
-              <div>
-                <b>Privacy is the product</b>
-                <p class="sub">Classification is on-device. The wire format is an allowlist (<code>schemas/heartbeat.schema.json</code>). Prompt text, commands, source, absolute paths, and screenshots are rejected before chain verification.</p>
-              </div>
-            </div>
-          </div>
-          <ul class="ui-list">
-            <li>Paths → <code>sha256(local_salt:path)</code> file ids</li>
-            <li>Shell → category, duration, exit code only</li>
-            <li>Git → HEAD, dirty count, line totals (not messages or diffs)</li>
-            <li><b>Logged ≠ submitted</b> — local ledger is inspectable anytime</li>
-          </ul>
-          <p class="sub docs-lang" hidden>shell</p>
-          <pre class="install-code" data-lang="shell">python3 daemon/tracker_inspect.py ~/my-project
-# or: make inspect REPO=~/my-project</pre>
-        </section>
-
-        <section id="doc-trust" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="badge-check"></span>Provenance &amp; review</h2>
-          <ul class="ui-list">
-            <li><b>Hash chain</b> — <code>SHA256(canonical_bucket ‖ prev_hash)</code> + monotonic clock</li>
-            <li><b>Ed25519</b> — per-install key under config dir; server pins first pubkey per <code>install_id</code></li>
-            <li><b>Git anchors</b> — claimed hours sit next to HEAD / dirty / diff totals</li>
-            <li><b>Submissions</b> — freeze an evidence pack with a required AI declaration</li>
-            <li><b>Review</b> — staff approve / deflate / reject with reason codes</li>
-          </ul>
-          <p class="sub docs-lang" hidden>reason codes</p>
-          <pre class="install-code" data-lang="reason codes">NONE · UNATTENDED_AGENT_DUMP · IDLE_INFLATION · NO_TEST_ITERATION
-BOILERPLATE_HEAVY · CHAIN_BROKEN · GIT_MISMATCH · UNSIGNED_INSTALL</pre>
-          <p>Trust levels: <span class="trust-dot trust-blue"></span>blue → <span class="trust-dot trust-green"></span>green → <span class="trust-dot trust-yellow"></span>yellow → <span class="trust-dot trust-red"></span>red. Staff roles: user → viewer → reviewer → admin → superadmin (<code>STRUGGLETIME_ADMINS</code> bootstrap).</p>
-        </section>
-
-        <section id="doc-troubleshoot" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="important"></span>Troubleshooting</h2>
-          <ul class="ui-list">
-            <li><b>Empty dashboard</b> — wait for first bucket; confirm API key + server URL; <code>struggletime-helper status</code></li>
-            <li><b>422 chain broken</b> — ledger/server diverge (reset or two machines, same project id). Use a fresh project id per machine.</li>
-            <li><b>422 / 400 allowlist</b> — post-seal edit or non-allowlisted fields; inspect locally</li>
-            <li><b>Silent decay</b> — intended; run or edit to reset. Undercounts are calibration signal — file an issue with an inspect dump</li>
-            <li><b>Windows hook</b> — dot-source <code>hooks.ps1</code> each session; filesystem tracking still works without it</li>
-            <li><b>Port busy</b> — <code>PORT=18766 make server</code> and point the daemon at the same host</li>
-          </ul>
-        </section>
-
-        <section id="doc-api" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="link"></span>HTTP API</h2>
-          <p>JSON. Auth: Slack session cookie or <code>Authorization: Bearer &lt;api-key&gt;</code>.</p>
-          <div class="ui-table-wrap">
-            <table class="ui-table">
-              <thead><tr><th>Method / path</th><th>Purpose</th></tr></thead>
-              <tbody>
-                <tr><td><code>POST /v1/buckets/batch</code></td><td>Ingest sealed buckets</td></tr>
-                <tr><td><code>GET /v1/me/analytics</code></td><td>Dashboard series</td></tr>
-                <tr><td><code>GET|POST /v1/projects</code></td><td>List / create projects</td></tr>
-                <tr><td><code>POST /v1/submissions</code></td><td>Freeze evidence pack</td></tr>
-                <tr><td><code>POST /v1/submissions/:id/review</code></td><td>Staff review decision</td></tr>
-                <tr><td><code>GET /v1/admin/*</code></td><td>Staff overview / users / audit</td></tr>
-                <tr><td><code>POST /v1/admin/trust|role</code></td><td>Set trust or staff role</td></tr>
-              </tbody>
-            </table>
-          </div>
-          <p class="sub">Errors: <code>{ "error": "…" }</code> with 400 allowlist, 401 auth, 403 private/staff, 409 duplicate, 422 chain/tamper. Full table: <code>docs/api.md</code>.</p>
-        </section>
-
-        <section id="doc-makefile" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="terminal"></span>Makefile targets</h2>
-          <div class="ui-table-wrap">
-            <table class="ui-table">
-              <thead><tr><th>Target</th><th>Does</th></tr></thead>
-              <tbody>
-                <tr><td><code>make check</code></td><td>Tooling + full test suite</td></tr>
-                <tr><td><code>make test</code></td><td>Unittests + formula/docs sync assert</td></tr>
-                <tr><td><code>make server</code></td><td>API + dashboard on <code>:PORT</code></td></tr>
-                <tr><td><code>make tray</code> / <code>gui</code></td><td>Desktop UI helpers</td></tr>
-                <tr><td><code>make daemon REPO=…</code></td><td>Track a repo once/configured</td></tr>
-                <tr><td><code>make inspect REPO=…</code></td><td>Show what would be sent</td></tr>
-                <tr><td><code>make package</code></td><td>Build release tarball under <code>dist/</code></td></tr>
-                <tr><td><code>make calibrate</code></td><td>20-session calibration report</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section id="doc-docs-files" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="docs"></span>In-repo documentation</h2>
-          <div class="ui-table-wrap">
-            <table class="ui-table">
-              <thead><tr><th>Path</th><th>Contents</th></tr></thead>
-              <tbody>
-                <tr><td><code>README.md</code></td><td>Project entry and quickstart</td></tr>
-                <tr><td><code>PITCH.md</code></td><td>Product narrative</td></tr>
-                <tr><td><code>CONTRIBUTING.md</code></td><td>Ground rules for PRs</td></tr>
-                <tr><td><code>docs/setup.md</code></td><td>Local setup walkthrough</td></tr>
-                <tr><td><code>docs/architecture.md</code></td><td>Telemetry + provenance design</td></tr>
-                <tr><td><code>docs/daemon.md</code></td><td>Watcher, tray, hooks deep dive</td></tr>
-                <tr><td><code>docs/api.md</code></td><td>Full HTTP reference</td></tr>
-                <tr><td><code>docs/integrations.md</code></td><td>Slack / GitHub</td></tr>
-                <tr><td><code>docs/deployment.md</code></td><td>Hosting notes</td></tr>
-                <tr><td><code>docs/troubleshooting.md</code></td><td>Common failures</td></tr>
-              </tbody>
-            </table>
-          </div>
-        </section>
-
-        <section id="doc-contribute" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="person"></span>Contributing</h2>
-          <p class="sub docs-lang" hidden>shell</p>
-          <pre class="install-code" data-lang="shell">make check    # before anything, and before you open a PR</pre>
-          <ol class="install-steps">
-            <li><b>Privacy is the product</b> — raw text, paths, prompts, commands, or pixels reaching the server are rejected on sight (including tests and logs).</li>
-            <li><b>Weights are versioned</b> — new <code>formula_version</code> + calibration notes; no silent number changes.</li>
-            <li><b>Tests first for trust paths</b> — chain verification, allowlist, weighting states, signatures.</li>
-            <li><b>Stdlib only</b> in <code>server/</code>, <code>daemon/</code>, <code>src/</code> unless a dependency earns its keep on a 10-year-old laptop.</li>
-          </ol>
-          <p>Good first issues: new harness adapters under <code>adapters/</code>, calibration sessions per <code>weighting/calibration-20.md</code>, and adversarial “fake hours” reports against your own self-hosted server.</p>
-        </section>
-
-        <section id="doc-license" class="ui-panel docs-section">
-          <h2><span class="nav-ico" data-glyph="sticker"></span>License</h2>
-          <p>StruggleTime is licensed under the <b>GNU Affero General Public License v3.0 or later</b>. See <code>LICENSE</code>. Network use of a modified server requires offering corresponding source under AGPL.</p>
-          <div class="hero-cta">
-            <a class="ui-btn" href="https://origin.cursor.com/derekified/struggletime" target="_blank" rel="noopener"><span class="nav-ico" data-glyph="github"></span>open the repository</a>
-            <a class="ui-btn ui-btn-ghost" href="/builders" data-nav-link><span class="nav-ico" data-glyph="trophy"></span>builders board</a>
-          </div>
-          <p class="sub">Copyright retained by contributors · SPDX-License-Identifier: AGPL-3.0-or-later</p>
-        </section>
-      </div>
-    </div>
-  </div>
-</template>
 <script src="/ui.js"></script>
 <script src="/app.js"></script>
 </body></html>

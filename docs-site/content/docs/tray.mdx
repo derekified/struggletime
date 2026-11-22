@@ -1,0 +1,91 @@
+---
+title: CLI helper and tray
+description: Start, stop, pause, link repos, and read weighted hours from the terminal or menu bar.
+---
+
+## CLI helper
+
+`daemon/helper.py` ships as `struggletime-helper` after `daemon/install.sh` or `install.ps1`. The TTY banner uses a stopwatch mark.
+
+```bash
+struggletime-helper help
+struggletime-helper doctor          # python, git, settings, API key, server
+struggletime-helper apikey st_...   # store StruggleTime API key
+struggletime-helper link            # pick/create project + path
+struggletime-helper start --repo ~/code/app
+struggletime-helper stop
+struggletime-helper pause           # soft pause: loop stays up, no billable spans
+struggletime-helper resume
+struggletime-helper status          # daemon PID, linked roots, last sync
+struggletime-helper hours           # weighted hours (local ledger / last sync)
+struggletime-helper logs            # tail runtime JSONL
+```
+
+### Typical day
+
+```bash
+struggletime-helper doctor
+struggletime-helper start --repo ~/hackclub/site
+struggletime-helper link            # add another repo later
+struggletime-helper hours
+struggletime-helper stop
+```
+
+### Exit codes
+
+| Code | Meaning |
+|---|---|
+| 0 | Success |
+| 1 | Usage / user error (missing key, bad path) |
+| 2 | Daemon not running when expected |
+| 3 | Server unreachable / auth rejected |
+
+## Tray
+
+Menu-bar control for the same actions when you do not want a terminal open.
+
+```bash
+pip install -r daemon/tray-requirements.txt
+make tray
+# or: python3 daemon/tray.py
+```
+
+### Menu items
+
+| Item | Effect |
+|---|---|
+| Start / Stop | Launch or terminate `daemon/daemon.py` |
+| Pause / Resume | Soft-pause active-span accounting without killing the process |
+| Link / create project | Register another repo root |
+| Open dashboard | Opens the configured StruggleTime server |
+| Weighted hours | Recent verified hours from local state |
+| API key | Paste or update `st_...` |
+| Quit | Exit tray only (daemon may keep running) |
+
+After `daemon.py` seals a bucket, tray status shows the last seal/sync time. Weighted hours come from the local ledger and the last successful flush, not wall-clock uptime.
+
+The tray only starts the stdlib daemon and reads settings/status files. It does not read prompts, file contents, or screenshots.
+
+## Settings file
+
+```json
+{
+  "api_key": "st_...",
+  "server": "https://struggletime.example",
+  "linked_projects": [
+    { "project_id": "...", "path": "/home/you/app" }
+  ],
+  "paused": false
+}
+```
+
+Paths are absolute. `daemon.py` refuses to watch a path that is not a directory.
+
+## Windows
+
+- Installer: `daemon/install.ps1`
+- Hooks: `daemon/hooks.ps1`
+- Settings under `%APPDATA%\struggletime\`
+- Same `daemon/tray.py` when Python and tray requirements are installed
+
+Also: [Getting started](/docs/setup), [Daemon](/docs/daemon), [Troubleshooting](/docs/troubleshooting).

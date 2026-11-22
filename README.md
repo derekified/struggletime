@@ -1,63 +1,48 @@
 # StruggleTime
 
-**AI time tracking that counts productive struggle, not activity.**
-Built for Hack Club's $10,000 AI time-tracking bounty. AGPLv3.
-Pitch: [`PITCH.md`](PITCH.md) · Architecture: [`docs/architecture.md`](docs/architecture.md)
+Time tracking that counts **productive struggle**, not raw activity.
+Built for Hack Club builders shipping open source. Reviewers see structure
+and weights — not screenshots or prompts. AGPLv3.
 
-An hour an AI runs unattended is not an hour a teenager learned
-anything. StruggleTime passively detects the causal loop of real work —
-`(prompt|edit) → (test|build) → (follow-up edit|commit)` — weights it,
-hash-chains it so it can't be quietly rewritten, anchors it to git, and
-shows it back as streaks and weighted hours worth chasing.
+Pitch: [`PITCH.md`](PITCH.md) · Docs: `/docs` after `make docs`
 
-## Run it (60 seconds)
+An unattended agent hour is not a learning hour. StruggleTime watches the
+loop `(edit|prompt) → (test|build) → (follow-up|commit)`, weights it, and
+hash-chains it so quiet rewrites are obvious.
 
-```bash
-make check                                   # python, git, test suite
-make server                                  # dashboard + API on :18765
-sh daemon/install.sh   # once, per machine
-struggletime-helper start --repo ~/my-project --user you
-struggletime-helper status                   # logs: struggletime-helper logs
-```
-
-Open http://127.0.0.1:18765 — projects, weighted hours, streaks, and
-flags update live. No dependencies beyond Python 3.10+ (stdlib only).
-Just looking? `make demo` starts a seeded server on :18766.
-
-**docs:** [setup](docs/setup.md) · [daemon](docs/daemon.md) ·
-[api](docs/api.md) · [integrations](docs/integrations.md) ·
-[deployment](docs/deployment.md) · [architecture](docs/architecture.md) ·
-[troubleshooting](docs/troubleshooting.md) ·
-[contributing](CONTRIBUTING.md) · env vars: [`.env.example`](.env.example)
-
-## How each bounty requirement is met
-
-| # | Requirement | Implementation |
-|---|---|---|
-| 1 | AGPLv3 | `LICENSE`, SPDX headers |
-| 2 | Accurate struggle hours | Causal state machine in `src/verify.py` (`v0.4.0-alpha`); mirror `weighting/rules-v0.4.0.yaml`; calibration in `weighting/calibration-20.md` |
-| 3 | Motivating, not anti-fraud | Live dashboard: weighted h, streaks, **weekly goal**, public builder profiles |
-| 4 | Passive | Daemon + shell hook; no timers or start/stop |
-| 5 | Central server | Accounts (token auth), public-by-default profiles, projects + git linking, live stats (15s poll + SSE keepalive), github/slack integrations |
-| 6 | Privacy-friendly | metadata-only buckets; schema allowlist; `daemon/tracker_inspect.py`; logged ≠ submitted |
-| 7 | All models/harnesses | L1 terminal+fs core; L2 adapters in `adapters/` (VS Code, Claude Code, Codex wrap, OpenClaw) |
-| 8 | Win/Mac/Linux, low-spec | Polling daemon, stdlib core; `daemon/install.sh` + `install.ps1`; `scripts/package.sh` tarball |
-| 9 | Trustworthy | Hash-chain + **Ed25519 per-install signatures** + git anchors + outlier flags + reason-coded review |
-| 10 | Auditable | Submission freezes evidence pack; reviewers approve/deflate with reason codes |
-| 11 | ≤$500/mo | Client rollup ≈0.5 writes/s; single VPS ~$40–60/mo; no LLM hot path |
-
-Acceptance path: 20-session calibration (**95% agreement**, `weighting/calibration-20.md`)
-→ 100-project pilot → 1,000 weighted projects. Postgres schema ready in
-`schemas/server.sql`.
-
-## Test
+## Run it
 
 ```bash
-python3 -m unittest discover -s tests   # 51 tests: verifier, metadata/privacy, server api, daemon end-to-end, malformed/edge cases, openclaw
-python3 src/verify.py examples/session-closed-loop.json
+make check
+make server                                  # :18765
+sh daemon/install.sh                         # once per machine
+struggletime-helper apikey <st_…>            # from Settings
+struggletime-helper start --repo ~/my-project
+struggletime-helper status
 ```
 
-Layout: `server/` API+dashboard · `daemon/` Layer-1 + hooks ·
-`adapters/` L2 enrichment · `schemas/` SQLite/Postgres/wire v1 ·
-`weighting/` formula + calibration · `src/verify.py` reference engine ·
-`examples/` chained session fixtures.
+Open http://127.0.0.1:18765. Python 3.10+ stdlib for core. Demo seed:
+`make demo` on :18766.
+
+## Repo layout
+
+| Path | What |
+|---|---|
+| `daemon/` | Stdlib tracker, helper CLI, tray, installers, hooks |
+| `server/` | HTTP API + dashboard SPA (`server/static/`) |
+| `src/` | Shared `verify.py` formula |
+| `weighting/` | Rules YAML + calibration notes |
+| `docs-site/` | Fumadocs source → `docs-site/out` (`make docs`) |
+| `docs/` | Short markdown mirrors / pointers |
+| `schemas/` | Allowlist + SQL |
+| `scripts/` | Demo, package, formula sync |
+| `adapters/` | Optional IDE/agent helpers |
+| `tests/` | Unittest suite (`make check`) |
+
+## Docs
+
+Fumadocs at `/docs` (`make docs`). Plain mirrors under `docs/`.
+
+## License
+
+AGPLv3 — see `LICENSE`.

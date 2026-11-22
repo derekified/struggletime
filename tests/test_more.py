@@ -29,7 +29,7 @@ class TestMore(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18803; cls.db = f"{cls.tmp}/t.db"
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": "",
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": cls.db, "SLACK_WEBHOOK_URL": "",
                "STRUGGLETIME_ADMINS": "staff:admin"}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
@@ -98,8 +98,10 @@ class TestMore(unittest.TestCase):
         self.assertEqual(req(self.port, "GET", "/v1/projects/proj-y/stats")[1]["buckets"], 1)
 
     def test_07_submission_without_git_link_flagged(self):
+        # Batch ingest auto-registers a project row (no repo) for the bucket owner.
         req(self.port, "POST", "/v1/buckets/batch", {"user_id": "u9", "buckets": chain("nogit", [ACTIVE])})
-        self.assertEqual(req(self.port, "POST", "/v1/projects", {"id": "nogit", "name": "nogit"}, token=self.token)[0], 201)
+        s_proj, _ = req(self.port, "POST", "/v1/projects", {"id": "nogit", "name": "nogit"}, token=self.token)
+        self.assertIn(s_proj, (201, 409))  # 409 if ingest already created it
         b = chain("nogit", [ACTIVE])[0]
         s, sub = req(self.port, "POST", "/v1/submissions", {"user_id": "u9", "project_id": "nogit", "from_bucket": b["bucket_id"], "to_bucket": b["bucket_id"], "ai_declaration": "pair programmed with claude"})
         self.assertEqual(s, 201); self.assertTrue(any("git_mismatch" in f for f in sub["flags"]), sub)
@@ -110,7 +112,7 @@ class TestMore(unittest.TestCase):
         for cmd in (["git","init","-q",str(repo)], ["git","-C",str(repo),"config","user.email","t@t.t"], ["git","-C",str(repo),"config","user.name","t"]): subprocess.run(cmd)
         (repo/"secret_project.py").write_text("x=1\n"); subprocess.run(["git","-C",str(repo),"add","."]); subprocess.run(["git","-C",str(repo),"commit","-qm","i"])
         (repo/"secret_project.py").write_text("x=2\n")
-        env = {**os.environ, "AITIME_EXEC_LOG": str(pathlib.Path(self.tmp)/"nope.jsonl")}
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "AITIME_EXEC_LOG": str(pathlib.Path(self.tmp)/"nope.jsonl")}
         r = subprocess.run([sys.executable, str(ROOT/"daemon/daemon.py"), "--repo", str(repo), "--project", "leakcheck", "--bucket-secs", "1", "--once"], capture_output=True, text=True, env=env, timeout=30)
         self.assertEqual(r.returncode, 0, r.stderr)
         ledger = json.loads((repo/".aitime-ledger.json").read_text()); payload = json.dumps(ledger["pending"])

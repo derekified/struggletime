@@ -1,0 +1,128 @@
+---
+title: HTTP API
+description: Auth, bucket batch ingestion, chain sync, sign-out, and review endpoints.
+---
+
+## Base URL
+
+Local default: `http://127.0.0.1:18765`
+
+Production: your configured StruggleTime host. `daemon.py` rejects ephemeral tunnel URLs.
+
+Authenticate machine clients with:
+
+```http
+Authorization: Bearer st_...
+```
+
+Generate keys in Settings -> Profile. Rotate in the danger zone when compromised.
+
+## Auth and session
+
+| Method | Path | Notes |
+|---|---|---|
+| Browser | Slack / GitHub OAuth start + callback | Dashboard session |
+| POST | `/v1/auth/claim-handle` | Claim public handle after Slack |
+| SPA sign-out | (dashboard) | Clears session cookie; daemon keys stay until revoked |
+| Bearer | `st_...` API key | Daemon batch / sync |
+
+Signing out of the dashboard does not stop a running daemon. Revoke or regenerate the API key to cut machine access.
+
+## Accounts and profiles
+
+| Route | What |
+|---|---|
+| `POST /v1/users` `{handle, is_public?}` | Create account (legacy/test); prefer Slack claim |
+| `GET /v1/users` | Public builders with totals, streaks, GitHub links |
+| `GET /v1/users/{handle}` | Public profile (403 if private and not you) |
+| `POST /v1/users/{handle}/github` `{github_login}` | Link GitHub (automation) |
+| `POST /v1/users/{handle}/slack` `{slack_user_id}` | Link Slack (automation) |
+
+## Projects and time
+
+| Route | What |
+|---|---|
+| `POST /v1/projects` `{id, name, repo_url?}` | Register a project |
+| `GET /v1/projects` | Projects with weighted/raw stats and flags |
+| `POST /v1/projects/{id}/git` `{repo_url, head_from, head_to}` | Link repo + anchor range |
+| `POST /v1/buckets/batch` `{user_id?, buckets:[...]}` | Ingest sealed buckets |
+| `GET /v1/projects/{id}/stats` | Buckets, raw vs weighted, per-state counts, streak |
+| `GET /v1/projects/{id}/buckets` | Stored metadata buckets + evidence size |
+| `GET /v1/projects/{id}/friction` | Friction timeline + commit anchors |
+| `GET /v1/projects/{id}/stream?once=1` | SSE stats snapshot (omit `once` for live) |
+| `GET /v1/projects/{id}/github` | Repo link + webhook anchors (`?fetch=1` live) |
+| `GET /v1/overview` | Instance-wide totals |
+
+### Bucket batch ingestion
+
+```http
+POST /v1/buckets/batch
+Authorization: Bearer st_...
+Content-Type: application/json
+```
+
+Allowlisted schema only (`schemas/heartbeat.schema.json`). Typical sealed unit stays in the ~25-50 KB metadata budget.
+
+| Status | Meaning |
+|---|---|
+| 200 | Accepted; chain advances |
+| 400 | Schema / allowlist violation |
+| 409 | Identical replay |
+| 422 | Tamper or broken `prev_hash` chain |
+| 401/403 | Auth |
+| 5xx | Retry from offline queue |
+
+Prompt text, commands, code, and raw paths are rejected before chain verification.
+
+## Chain and offline sync
+
+1. Seal locally and append `.aitime-ledger.json` with `prev_hash`.
+2. Enqueue offline if the server is unreachable.
+3. Flush ordered batches to `/v1/buckets/batch`.
+4. Adopt the server chain head after success.
+
+Broken links surface as `CHAIN_BROKEN` in review. See [Privacy](/docs/privacy).
+
+## Submissions and review
+
+| Route | What |
+|---|---|
+| `POST /v1/submissions` `{project_id, from_bucket, to_bucket, ai_declaration}` | Freeze an evidence pack |
+| `GET /v1/submissions` / `GET /v1/submissions/{id}` | List / fetch |
+| `POST /v1/submissions/{id}/review` | Approve, deflate, or reject |
+
+```json
+{
+  "approved_weighted_secs": 1200,
+  "reason_code": "IDLE_INFLATION",
+  "reviewer_id": "..."
+}
+```
+
+`reason_code` must be one of: `NONE`, `UNATTENDED_AGENT_DUMP`, `IDLE_INFLATION`, `NO_TEST_ITERATION`, `BOILERPLATE_HEAVY`, `CHAIN_BROKEN`, `GIT_MISMATCH`, `UNSIGNED_INSTALL`.
+
+Staff-only. See [Review](/docs/review).
+
+## Integrations
+
+| Route | What |
+|---|---|
+| `POST /v1/integrations/github/webhook` | Signed push events |
+| `POST /v1/integrations/slack/command` | Signed `/struggletime stats` |
+| `GET /v1/integrations/events` | Queued Slack notifications |
+
+Details: [Integrations](/docs/integrations).
+
+## Docs and static
+
+| Path | Content |
+|---|---|
+| `/` | SPA shell |
+| `/docs/` | Fumadocs static export |
+| `/_next/...` | Docs assets from export |
+
+## Errors
+
+Errors are `{ "error": "..." }` with 400 (malformed / allowlist), 401 (bad integration signature), 403 (private profile), 404, 409 (duplicate), 422 (chain broken / tampered). Do not retry 401/403 without rotating credentials. Retry 502/503 with backoff from the offline queue.
+
+Also: [Privacy](/docs/privacy), [Troubleshooting](/docs/troubleshooting).

@@ -37,7 +37,7 @@ class TestIntegrations(unittest.TestCase):
             s.bind(("127.0.0.1", 0))
             cls.port = s.getsockname()[1]
         cls.db = f"{cls.tmp}/t.db"
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": cls.db,
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": cls.db,
                "GITHUB_WEBHOOK_SECRET": "ghsecret", "SLACK_SIGNING_SECRET": "slsecret",
                "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)

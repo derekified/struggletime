@@ -1,0 +1,66 @@
+---
+title: Review and fraud
+description: Review queues, reason codes, chain anomalies, and staff safeguards.
+---
+
+## Why review exists
+
+`src/verify.py` catches most inflation automatically. Staff still catch edge cases: broken chains, git mismatches, and creative unattended dumps. Review decisions are reason-coded and stamped with `FORMULA_VERSION`.
+
+## Review queue
+
+Staff open Review from the signed-in nav (role-gated).
+
+1. Open a submission or bucket set.
+2. Inspect weighted seconds, formula version, project, chain status.
+3. Approve as-is, deflate weighted seconds, or reject.
+4. Attach a reason code (required for non-clean outcomes).
+
+```http
+POST /v1/submissions/{id}/review
+Content-Type: application/json
+
+{
+  "approved_weighted_secs": 1200,
+  "reason_code": "IDLE_INFLATION",
+  "reviewer_id": "..."
+}
+```
+
+## Reason codes
+
+| Code | Meaning |
+|---|---|
+| `NONE` | Clean approve / no defect |
+| `UNATTENDED_AGENT_DUMP` | Bulk AI write without human steering / verify loop |
+| `IDLE_INFLATION` | Quiet time billed as struggle |
+| `NO_TEST_ITERATION` | Edits without execute/test causality |
+| `BOILERPLATE_HEAVY` | Low-signal repetitive churn |
+| `CHAIN_BROKEN` | Ledger `prev_hash` discontinuity |
+| `GIT_MISMATCH` | Claimed git activity does not match plumbing |
+| `UNSIGNED_INSTALL` | Tracker provenance / install trust failure |
+
+Reason codes feed calibration notes for the next `FORMULA_VERSION`.
+
+## Fraud / anomaly workflows
+
+Elevated staff tools look for:
+
+- Repeated chain breaks after offline gaps that do not flush cleanly
+- Sudden unverified multi-file dumps with high wall time
+- Cross-project copy patterns that defeat salted-ID expectations
+- API key sharing anomalies when signals exist
+
+Prefer deflation plus a reason code over silent deletion when the data helps formula tuning.
+
+## Role guards
+
+- SPA hides Review / fraud for non-staff
+- `server/server.py` rejects unauthorized review POSTs
+- Reviewer identity is recorded with the decision
+
+## What reviewers never see
+
+Review payloads stay on the privacy allowlist: no prompts, no file contents, no screenshots. Staff work from structural summaries, weights, and chain integrity.
+
+Also: [Privacy](/docs/privacy), [Architecture](/docs/architecture), [API](/docs/api).

@@ -1,0 +1,394 @@
+@import 'tailwindcss';
+@import 'fumadocs-ui/css/neutral.css';
+@import 'fumadocs-ui/css/preset.css';
+
+/*
+ * StruggleTime docs theme
+ * Tokens mirror server/static/styles.css. Motions match dashboard (150ms).
+ */
+
+:root {
+  --st-bg: #0d0c0a;
+  --st-panel: #191817;
+  --st-panel2: #211f1d;
+  --st-line: #2e2b28;
+  --st-ink: #f2efe9;
+  --st-mut: #a39e93;
+  --st-accent: #d7ff6a;
+  --st-btn-ink: #111111;
+  --st-radius: 12px;
+  --st-rail: 180px;
+  --st-ease: 150ms ease-out;
+
+  --color-fd-background: var(--st-bg);
+  --color-fd-foreground: var(--st-ink);
+  --color-fd-muted: var(--st-panel);
+  --color-fd-muted-foreground: var(--st-mut);
+  --color-fd-popover: var(--st-panel);
+  --color-fd-popover-foreground: var(--st-ink);
+  --color-fd-card: var(--st-panel);
+  --color-fd-card-foreground: var(--st-ink);
+  --color-fd-border: var(--st-line);
+  --color-fd-primary: var(--st-accent);
+  --color-fd-primary-foreground: var(--st-btn-ink);
+  --color-fd-secondary: var(--st-panel2);
+  --color-fd-secondary-foreground: var(--st-ink);
+  --color-fd-accent: var(--st-panel2);
+  --color-fd-accent-foreground: var(--st-ink);
+  --color-fd-ring: var(--st-accent);
+}
+
+.dark {
+  --color-fd-background: var(--st-bg);
+  --color-fd-foreground: var(--st-ink);
+  --color-fd-muted: var(--st-panel);
+  --color-fd-muted-foreground: var(--st-mut);
+  --color-fd-popover: var(--st-panel);
+  --color-fd-popover-foreground: var(--st-ink);
+  --color-fd-card: var(--st-panel);
+  --color-fd-card-foreground: var(--st-ink);
+  --color-fd-border: var(--st-line);
+  --color-fd-primary: var(--st-accent);
+  --color-fd-primary-foreground: var(--st-btn-ink);
+  --color-fd-secondary: var(--st-panel2);
+  --color-fd-secondary-foreground: var(--st-ink);
+  --color-fd-accent: var(--st-panel2);
+  --color-fd-accent-foreground: var(--st-ink);
+  --color-fd-ring: var(--st-accent);
+}
+
+html {
+  scrollbar-gutter: stable;
+  color-scheme: dark;
+}
+
+html > body[data-scroll-locked] {
+  margin-right: 0px !important;
+  --removed-body-scroll-bar-size: 0px !important;
+}
+
+body {
+  font-family: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  background: var(--st-bg);
+  color: var(--st-ink);
+  letter-spacing: -0.01em;
+}
+
+/* Hide any leftover theme switch chrome */
+.docs-app [data-theme-toggle],
+.docs-app button[aria-label*="heme" i],
+.docs-app button[aria-label*="Toggle theme" i],
+.docs-app [class*="theme-switch"] {
+  display: none !important;
+}
+
+.docs-app #nd-docs-layout {
+  --fd-sidebar-width: var(--st-rail);
+}
+
+.docs-app #nd-sidebar,
+.docs-app [data-sidebar] {
+  background: var(--st-bg) !important;
+  border-color: var(--st-line) !important;
+  width: var(--st-rail) !important;
+  min-width: var(--st-rail) !important;
+  padding: 8px 6px !important;
+  transition: gap var(--st-ease);
+}
+
+.docs-app header {
+  border-color: var(--st-line) !important;
+  background: var(--st-bg) !important;
+}
+
+/* Sidebar items ≈ .settings-tab */
+.docs-app #nd-sidebar a,
+.docs-app [data-sidebar] a,
+.docs-app #nd-sidebar button,
+.docs-app [data-sidebar] button {
+  display: flex !important;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  box-sizing: border-box;
+  border: 1px solid transparent !important;
+  border-radius: 8px !important;
+  padding: 9px 12px !important;
+  margin: 2px 0 !important;
+  font-size: 14px !important;
+  font-weight: 400 !important;
+  color: var(--st-mut) !important;
+  background: transparent !important;
+  text-align: left;
+  text-decoration: none !important;
+  position: relative;
+  transition: background-color var(--st-ease), border-color var(--st-ease), color var(--st-ease), transform var(--st-ease);
+}
+
+.docs-app #nd-sidebar a::before,
+.docs-app [data-sidebar] a::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 8px;
+  bottom: 8px;
+  width: 2px;
+  border-radius: 2px;
+  background: transparent;
+  transition: background-color var(--st-ease);
+}
+
+.docs-app #nd-sidebar a:hover,
+.docs-app [data-sidebar] a:hover {
+  color: var(--st-ink) !important;
+  background: var(--st-panel2) !important;
+  text-decoration: none !important;
+}
+
+.docs-app #nd-sidebar a:active,
+.docs-app [data-sidebar] a:active {
+  transform: scale(0.99);
+}
+
+.docs-app #nd-sidebar a[data-active="true"],
+.docs-app #nd-sidebar [aria-current="page"],
+.docs-app [data-sidebar] a[data-active="true"],
+.docs-app [data-sidebar] [aria-current="page"] {
+  background: var(--st-panel) !important;
+  border-color: var(--st-line) !important;
+  color: var(--st-ink) !important;
+  font-weight: 700 !important;
+}
+
+.docs-app #nd-sidebar a[data-active="true"]::before,
+.docs-app #nd-sidebar [aria-current="page"]::before,
+.docs-app [data-sidebar] a[data-active="true"]::before,
+.docs-app [data-sidebar] [aria-current="page"]::before {
+  background: var(--st-accent);
+}
+
+.docs-app #nd-sidebar p,
+.docs-app [data-sidebar] p {
+  color: var(--st-mut) !important;
+  font-size: 11px !important;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  margin: 10px 8px 4px !important;
+}
+
+@media (max-width: 800px) {
+  .docs-app #nd-sidebar,
+  .docs-app [data-sidebar] {
+    width: 100% !important;
+    min-width: 0 !important;
+  }
+}
+
+/* Typography */
+.docs-app h1 {
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--st-ink);
+  margin: 0 0 0.35rem;
+}
+
+.docs-app h2 {
+  font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.015em;
+  color: var(--st-ink);
+  border-bottom: 1px solid var(--st-line);
+  padding-bottom: 0.35rem;
+  margin-top: 1.6rem;
+}
+
+.docs-app h3 {
+  font-size: 0.95rem;
+  font-weight: 650;
+  color: var(--st-ink);
+  margin-top: 1.15rem;
+}
+
+.docs-app p,
+.docs-app li {
+  color: var(--st-mut);
+  line-height: 1.55;
+  font-size: 0.95rem;
+}
+
+.docs-app strong {
+  color: var(--st-ink);
+  font-weight: 650;
+}
+
+.docs-app a {
+  color: var(--st-accent);
+  text-decoration: none;
+  transition: color var(--st-ease);
+}
+
+/* Cards ≈ dashboard panels */
+.docs-app [class*="card"],
+.docs-app .rounded-lg,
+.docs-app .rounded-xl,
+.docs-app [data-callout] {
+  background: var(--st-panel) !important;
+  border: 1px solid var(--st-line) !important;
+  border-radius: var(--st-radius) !important;
+  box-shadow: none !important;
+  transition: border-color var(--st-ease), background-color var(--st-ease), transform var(--st-ease), box-shadow var(--st-ease);
+}
+
+.docs-app [class*="card"]:hover,
+.docs-app .rounded-lg:hover,
+.docs-app .rounded-xl:hover {
+  border-color: var(--st-mut) !important;
+}
+
+/* Buttons / controls */
+.docs-app button:not([data-sidebar] button):not(#nd-sidebar button),
+.docs-app a[class*="button"],
+.docs-app [role="button"] {
+  transition: background-color var(--st-ease), border-color var(--st-ease), color var(--st-ease), transform var(--st-ease), opacity var(--st-ease);
+}
+
+.docs-app button:active:not(:disabled),
+.docs-app a[class*="button"]:active,
+.docs-app [role="button"]:active {
+  transform: scale(0.99);
+}
+
+.docs-app input,
+.docs-app select,
+.docs-app textarea {
+  transition: border-color var(--st-ease), box-shadow var(--st-ease), background-color var(--st-ease);
+}
+
+.docs-app input:hover,
+.docs-app select:hover,
+.docs-app textarea:hover {
+  border-color: var(--st-mut);
+}
+
+.docs-app input:focus,
+.docs-app select:focus,
+.docs-app textarea:focus {
+  outline: none;
+  border-color: var(--st-accent);
+  box-shadow: 0 0 0 3px rgba(215, 255, 106, 0.18);
+}
+
+/* Tables */
+.docs-app table {
+  width: 100%;
+  border: 1px solid var(--st-line);
+  border-radius: var(--st-radius);
+  overflow: hidden;
+  background: var(--st-bg);
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.docs-app th {
+  background: var(--st-panel2);
+  color: var(--st-mut);
+  font-weight: 650;
+  font-size: 12px;
+  text-align: left;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--st-line);
+}
+
+.docs-app td {
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--st-line);
+  color: var(--st-ink);
+  vertical-align: top;
+}
+
+.docs-app tr:last-child td {
+  border-bottom: 0;
+}
+
+.docs-app [class*="badge"],
+.docs-app [class*="pill"] {
+  border: 1px solid var(--st-line);
+  border-radius: 999px;
+  background: var(--st-panel2);
+  color: var(--st-mut);
+  font-size: 12px;
+  padding: 2px 8px;
+}
+
+.docs-app pre,
+.docs-app code,
+.docs-app kbd,
+.docs-app samp {
+  font-family: ui-monospace, Menlo, Monaco, "Cascadia Mono", "Segoe UI Mono", monospace;
+}
+
+.docs-app :not(pre) > code {
+  background: var(--st-panel2);
+  border: 1px solid var(--st-line);
+  border-radius: 6px;
+  color: var(--st-mut);
+  font-size: 0.82em;
+  padding: 0.12em 0.4em;
+}
+
+.docs-app pre {
+  background: var(--st-panel) !important;
+  border: 1px solid var(--st-line) !important;
+  border-radius: var(--st-radius) !important;
+  padding: 10px 12px !important;
+  color: var(--st-ink) !important;
+  font-size: 12.5px !important;
+  line-height: 1.45 !important;
+  overflow: auto;
+  max-width: 100%;
+}
+
+.docs-app pre code {
+  background: transparent !important;
+  border: 0 !important;
+  padding: 0 !important;
+  color: inherit !important;
+  font-size: inherit !important;
+}
+
+.docs-app pre,
+.docs-app code {
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.docs-app article,
+.docs-app main {
+  max-width: 46rem;
+}
+
+.docs-app hr {
+  border-color: var(--st-line);
+}
+
+.docs-app blockquote {
+  border-left: 3px solid var(--st-accent);
+  background: var(--st-panel);
+  color: var(--st-mut);
+  border-radius: 0 var(--st-radius) var(--st-radius) 0;
+  padding: 0.75rem 1rem;
+  margin: 1rem 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .docs-app,
+  .docs-app *,
+  .docs-app *::before,
+  .docs-app *::after {
+    animation: none !important;
+    transition: none !important;
+    transform: none !important;
+  }
+}

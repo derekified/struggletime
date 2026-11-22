@@ -1,7 +1,7 @@
 PY ?= python3
 PORT ?= 18765
 
-.PHONY: help check test test-cross server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs clean
+.PHONY: help check test test-cross server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs docs docs-dev clean
 help:
 	@echo "make check    verify python, git and the test suite"
 	@echo "make test     run all tests"
@@ -15,6 +15,8 @@ help:
 	@echo "make package  build dist/struggletime-*.tar.gz"
 	@echo "make calibrate run 20-session calibration report"
 	@echo "make sync-docs assert YAML/schema match verify.py"
+	@echo "make docs     build Fumadocs static site into docs-site/out"
+	@echo "make docs-dev run Fumadocs next dev"
 	@echo "make stress-smoke  acceptance smoke: 5 weighted projects"
 	@echo "make stress        acceptance: 1000 weighted projects (ephemeral server)"
 
@@ -62,6 +64,12 @@ calibrate:
 
 sync-docs:
 	$(PY) scripts/sync_formula_docs.py
+
+docs:
+	cd docs-site && npm run build
+
+docs-dev:
+	cd docs-site && npm run dev
 
 clean:
 	find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null; true

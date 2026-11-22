@@ -1,0 +1,83 @@
+---
+title: Troubleshooting
+description: Fixes for daemon, sync, fetch, tray, and docs issues.
+---
+
+## Quick triage
+
+```bash
+struggletime-helper doctor
+struggletime-helper status
+struggletime-helper logs
+make check
+```
+
+## Daemon will not start
+
+1. Confirm Python 3.10+: `python3 --version`
+2. Run foreground to see traceback: `python3 daemon/daemon.py --repo /path/to/repo`
+3. Ensure the path is a real directory with permission to read `.git` if present
+4. Re-install shim: `sh daemon/install.sh`
+5. On Windows, use `install.ps1` with a PowerShell policy that allows the install script
+
+## Pause vs stop
+
+| Action | Process | Billing |
+|---|---|---|
+| Pause | Daemon stays up | No new active spans |
+| Stop | Process exits | Nothing until Start |
+| Quit tray | Tray exits | Daemon may still run |
+
+Use Stop before uninstalling or rotating environments.
+
+## Sync / offline queue stuck
+
+1. Run `struggletime-helper doctor` (API key present? Server reachable?)
+2. Confirm key is `st_...` and not revoked in Settings -> Danger zone
+3. Reject ephemeral Cloudflare tunnel URLs; set the stable host in settings
+4. Inspect ledger chain: a local rewrite can desync `prev_hash`
+5. Retry flush after connectivity returns; do not delete the queue unless staff recovery says so
+
+## Dashboard fetch / blank home
+
+1. Hard-refresh once after a deploy (static assets change)
+2. Sign out and Slack sign-in again
+3. Open the browser network tab: 401 means session; 5xx means server
+4. Locally, ensure `make server` is bound to the port you open
+5. Claim a handle if the profile gate is blocking home paint
+
+## Weighted hours look wrong
+
+1. Confirm `FORMULA_VERSION` on recent buckets matches server expectations
+2. Silent-debug taper (5-12m) and idle decay mean wall clock is not weighted hours
+3. Multi-repo hours split per linked project
+4. Staff deflation with a reason code permanently adjusts accepted totals
+
+## Tray missing / will not open
+
+```bash
+pip install -r daemon/tray-requirements.txt
+python3 daemon/tray.py
+```
+
+Headless servers have no tray. Use `struggletime-helper` only.
+
+## Docs 404 or stale CSS
+
+1. Open `/docs/` (trailing slash), not a legacy SPA `#docs` route
+2. After editing MDX: `make docs`, then reload the server that serves `DOCS_OUT`
+3. Settings -> Docs goes to `/docs/`; Settings -> Daemon goes to `https://62-83-116-143.sslip.io/docs/tray/`
+4. Docs use the same 150ms control transitions as the dashboard, gated by `prefers-reduced-motion`
+
+## Tests failing
+
+```bash
+make check
+python3 -m unittest discover -s tests -v
+```
+
+Start with `tests/test_daemon_tracking.py` and `tests/test_dashboard.py`.
+
+## Still stuck
+
+Collect `doctor` output, OS, StruggleTime version or git SHA, and whether the failure is local daemon or server sync. Open an issue without pasting API keys, full ledger dumps, or source contents.

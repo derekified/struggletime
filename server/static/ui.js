@@ -52,9 +52,31 @@
   }
 
   /* ---- Modal ---- */
-  function modal({ title, body, confirmText = "Save", cancelText = "Cancel", glyph = "edit", confirmGlyph = "checkmark", cancelGlyph = "view-close", onConfirm, onCancel }) {
+  function modal({ title, body, confirmText = "Save", cancelText = "Cancel", glyph = "edit", confirmGlyph = "checkmark", cancelGlyph = "view-close", onConfirm, onCancel, wide = false }) {
     const backdrop = el("div", { className: "ui-modal-backdrop", role: "dialog", "aria-modal": "true" });
-    const card = el("div", { className: "ui-modal" }, [
+    function close() {
+      backdrop.remove();
+      onCancel?.();
+    }
+    const footKids = [];
+    if (cancelText) {
+      footKids.push(el("button", { className: "ui-btn ui-btn-ghost", type: "button", onClick: close }, [
+        icon(cancelGlyph, { size: 14 }),
+        cancelText,
+      ]));
+    }
+    if (confirmText) {
+      footKids.push(el("button", { className: "ui-btn", type: "button", onClick: async () => {
+        try {
+          const ok = await onConfirm?.();
+          if (ok !== false) close();
+        } catch (e) { toast(String(e.message || e), { kind: "error" }); }
+      } }, [
+        icon(confirmGlyph, { size: 14 }),
+        confirmText,
+      ]));
+    }
+    const card = el("div", { className: `ui-modal${wide ? " wide" : ""}` }, [
       el("div", { className: "ui-modal-head" }, [
         el("div", { className: "ui-modal-title" }, [
           icon(glyph, { size: 18, title }),
@@ -65,26 +87,8 @@
         ]),
       ]),
       el("div", { className: "ui-modal-body" }, [body]),
-      el("div", { className: "ui-modal-foot" }, [
-        el("button", { className: "ui-btn ui-btn-ghost", type: "button", onClick: close }, [
-          icon(cancelGlyph, { size: 14 }),
-          cancelText,
-        ]),
-        el("button", { className: "ui-btn", type: "button", onClick: async () => {
-          try {
-            const ok = await onConfirm?.();
-            if (ok !== false) close();
-          } catch (e) { toast(String(e.message || e), { kind: "error" }); }
-        } }, [
-          icon(confirmGlyph, { size: 14 }),
-          confirmText,
-        ]),
-      ]),
+      el("div", { className: "ui-modal-foot" }, footKids),
     ]);
-    function close() {
-      backdrop.remove();
-      onCancel?.();
-    }
     backdrop.addEventListener("click", (e) => { if (e.target === backdrop) close(); });
     backdrop.appendChild(card);
     document.body.appendChild(backdrop);

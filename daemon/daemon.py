@@ -409,18 +409,57 @@ def fetch_remote_projects(server, token):
             out.append({"id": pid, "path": path})
     return out
 
+def _rehash_pending_from(state, prev_hash):
+    """Rewrite pending window so bucket[0].prev_hash == prev_hash and hashes chain."""
+    pending = state.get("pending") or []
+    if not pending:
+        state["prev_hash"] = prev_hash
+        return
+    loaded = install_sig.load_or_create_keypair(dcfg.CONFIG_HOME)
+    out = []
+    tip = prev_hash
+    for b in pending:
+        nxt = dict(b)
+        nxt["prev_hash"] = tip
+        nxt.pop("signature", None)
+        nxt["hash"] = bucket_hash(nxt)
+        if loaded:
+            nxt["install_id"] = loaded[3]
+            nxt["install_pubkey"] = install_sig._b64(loaded[2])
+            nxt["sig_alg"] = install_sig.ALG
+            nxt["signature"] = install_sig.sign_hash(nxt["hash"], loaded[0])
+        out.append(nxt)
+        tip = nxt["hash"]
+    state["pending"] = out
+    state["prev_hash"] = tip
+
 def adopt_chain_head(state, server, token, project, ledger=None):
     head = fetch_chain_head(server, token, project)
     if head is None:
         return False
-    if state.get("prev_hash") == head:
+    if state.get("prev_hash") == head and not state.get("needs_rebase"):
         return False
     pending = state.get("pending") or []
-    if pending and pending[0].get("prev_hash") not in (GENESIS, head):
-        return False
+    first_prev = pending[0].get("prev_hash") if pending else None
+    if pending and first_prev not in (GENESIS, head):
+        # Cap/drop left a broken link — rebase kept window onto server head
+        _rehash_pending_from(state, head)
+        state["needs_rebase"] = False
+        if ledger is not None:
+            save_ledger(ledger, state)
+        print(f"rebased {len(state['pending'])} pending bucket(s) onto server head for {project}", flush=True)
+        return True
+    if pending and first_prev in (GENESIS, head) and state.get("needs_rebase"):
+        _rehash_pending_from(state, head)
+        state["needs_rebase"] = False
+        if ledger is not None:
+            save_ledger(ledger, state)
+        print(f"rebased {len(state['pending'])} pending bucket(s) onto server head for {project}", flush=True)
+        return True
     dropped = len(pending)
     state["pending"] = []
     state["prev_hash"] = head
+    state["needs_rebase"] = False
     if ledger is not None:
         save_ledger(ledger, state)
     print(
@@ -723,11 +762,9 @@ def seal_bucket(w, bucket_secs, install_id):
     if len(state["pending"]) > max_pending:
         drop = len(state["pending"]) - max_pending
         state["pending"] = state["pending"][drop:]
-        # Re-link first kept bucket to genesis-or-prev so flush can continue after adopt
-        if state["pending"]:
-            state["pending"][0] = dict(state["pending"][0])
-            # leave prev_hash as-is; server adopt_chain_head recovers on mismatch
-        print(f"pending capped at {max_pending} (dropped {drop} oldest)", flush=True)
+        # Dropping oldest breaks prev_hash continuity — mark for server-head rebase
+        state["needs_rebase"] = True
+        print(f"pending capped at {max_pending} (dropped {drop} oldest; rebase on next sync)", flush=True)
     return bucket
 
 def reset_window(w, now_wall=None, now_mono=None, keep_alive=False, after_active=False):

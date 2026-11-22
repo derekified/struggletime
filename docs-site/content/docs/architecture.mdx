@@ -1,0 +1,80 @@
+---
+title: Architecture
+description: Layers from passive tomography through shared verify.py to the review surface.
+---
+
+## Stack
+
+```text
++---------------------------------------------+
+|  StruggleTime Tray / struggletime-helper    |
++--------------------+------------------------+
+                     | starts / pauses / links
++--------------------v------------------------+
+|  daemon/daemon.py  (stdlib, ~1s loop)       |
+|  - git / inode / cache tomography           |
+|  - optional hooks and IDE adapters          |
+|  - seal -> .aitime-ledger.json              |
++--------------------+------------------------+
+                     | POST /v1/buckets/batch
++--------------------v------------------------+
+|  server/server.py  (stdlib HTTP)            |
+|  - auth, projects, stats, review, fraud     |
+|  - chain-head sync, allowlist schema        |
+|  - static SPA + Fumadocs under /docs        |
++--------------------+------------------------+
+                     | same formula
++--------------------v------------------------+
+|  src/verify.py + weighting/rules-*.yaml     |
++---------------------------------------------+
+```
+
+## L1: Passive tomography
+
+No OCR. No window titles as content. Structural footprints only:
+
+- `.git` object and index pulses
+- Salted file IDs (`sha256(salt:path)`)
+- Build/test cache directory presence/mtime classes
+- Exec category events from shell hooks (name/category, not argv)
+
+## L2: Causality weighting
+
+`src/verify.py` turns a sealed bucket into weighted seconds:
+
+| Concept | Role |
+|---|---|
+| Struggle / closed loop | Full weight |
+| Fail -> fix -> pass | Full weight |
+| Unverified dump | Heavy deflation |
+| Silent follow-up | 5-12 minute taper |
+| Idle after span | Gradual decay |
+
+`FORMULA_VERSION` is stamped on every accepted bucket so reviewers know which rule set applied.
+
+## Provenance
+
+- Local append-only ledger with `prev_hash`
+- Server stores chain heads per user/project
+- Offline queue flushes in order when connectivity returns
+- Review UI can flag `CHAIN_BROKEN` / `GIT_MISMATCH`
+
+## Surfaces
+
+| Surface | Tech | Notes |
+|---|---|---|
+| Dashboard SPA | `server/static/*` | Home, stats, settings, builders, review |
+| Docs | Fumadocs static export | Served at `/docs/` |
+| API | `server/server.py` | Bearer `st_...` keys |
+| Tracker | `daemon/*` | Stdlib daemon + helper + tray |
+
+## In-repo packages
+
+| Path | Purpose |
+|---|---|
+| `daemon/` | Tracker, installers, hooks, tray, helper |
+| `server/` | HTTP API + static UI |
+| `src/` | Shared verify / formula |
+| `weighting/` | YAML rules + calibration notes |
+| `docs-site/` | Fumadocs MDX source |
+| `tests/` | Unittest suite (`make check`) |

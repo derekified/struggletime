@@ -1,0 +1,77 @@
+---
+title: Daemon and tomography
+description: The 1-second stdlib loop, multi-project switching, silent-debug decay, and git/cache tomography.
+---
+
+## Process model
+
+`daemon/daemon.py` is a 100% Python standard-library background process. No third-party packages, browser automation, or accessibility APIs for screen content.
+
+```text
+every ~1s
+  |- poll linked project roots
+  |- sample .git / inode / mtime / cache footprints
+  |- optional adapter/exec events (hooks, IDE adapters)
+  |- update active span + idle clock
+  |- seal buckets -> append ledger -> offline queue -> sync
+```
+
+Start via tray, helper, or:
+
+```bash
+python3 daemon/daemon.py --repo /path/to/project
+```
+
+## Multi-project afternoons
+
+Link multiple repos with the tray or `struggletime-helper link`. The loop watches all linked roots. When you switch trees, active-span accounting follows the project that is receiving structural pulses. You do not need to stop and start for each repo.
+
+## Active-span accounting
+
+Billable time is the active span: contiguous seconds where tomography sees meaningful change (git plumbing, file identity churn, exec/test category events, adapter heartbeats). Daemon uptime alone does not bill.
+
+| Signal class | Examples (metadata only) |
+|---|---|
+| Git plumbing | `HEAD`, index, packed-refs, reflog mtime/inode |
+| Filesystem | Allowlisted path IDs, size class, mtime deltas |
+| Cache / build | Known tool cache footprints (compile, test, package) |
+| Adapter / exec | Category tags (`test`, `build`, `run`); never argv |
+
+## Silent debugging (5-12 minutes)
+
+After real struggle work you often stare at a stack trace without typing. `src/verify.py` applies a tapered weight (`SILENT_*` curve) instead of dropping to zero immediately:
+
+- Full credit while the within-bucket quiet window is short
+- Gradual scale-down between roughly 5 and 12 minutes of silent follow-up
+- Same curve on daemon and server
+
+This replaces the old hard cliff where `idle_secs >= 240` forced weight to zero. Rules YAML may still mention `idle_pause_secs: 240` as a reference threshold. Live weighting uses the gradual curve (`tests/test_daemon_tracking.py::test_no_idle_cliff_at_240`).
+
+## Idle cutoffs
+
+After the active span ends, remaining quiet time decays toward idle. `verify.py` labels `IDLE` when the silent curve has exhausted credit. Long unattended gaps do not accumulate struggle hours.
+
+## Sealing buckets
+
+1. Aggregate events into a time bucket.
+2. Run `verify.weight_bucket` and stamp `FORMULA_VERSION`.
+3. Append to the local ledger with `prev_hash`.
+4. Enqueue for `POST /v1/buckets/batch` when online.
+
+## What the daemon never does
+
+- Capture screens, keystrokes, clipboards, or microphones
+- Read or upload file contents or raw prompts
+- Store command-line arguments
+- Send unhashed absolute paths
+
+See [Privacy](/docs/privacy).
+
+## Local checks
+
+```bash
+python3 -m unittest tests.test_daemon_tracking -v
+python3 -c "from src import verify; print(verify.FORMULA_VERSION)"
+```
+
+Also: [Architecture](/docs/architecture), [Privacy](/docs/privacy), [API](/docs/api).

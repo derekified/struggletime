@@ -19,7 +19,11 @@ def _load_dotenv():
 _load_dotenv()
 
 sys.path.insert(0, str(Path(__file__).parent.parent / "src"))
-from verify import bucket_hash, weight, weight_sequence, flags, friction, friction_timeline, validate_allowlist, GENESIS, billable_secs, verify_chain
+from verify import (
+    bucket_hash, weight, weight_sequence, flags, friction, friction_timeline,
+    validate_allowlist, GENESIS, billable_secs, verify_chain,
+    anomaly_pairs, struggle_to_ship, FORMULA_VERSION,
+)
 import install_sig
 
 
@@ -213,6 +217,7 @@ def apply_admin_env(c):
     c.commit()
 DB = os.environ.get("SERVER_DB", "server.db")
 STATIC = Path(__file__).parent / "static"
+DOCS_OUT = Path(__file__).resolve().parent.parent / "docs-site" / "out"
 
 _LOCK = threading.RLock(); _CONN = None
 
@@ -265,6 +270,11 @@ def _ensure_indexes(c):
     CREATE INDEX IF NOT EXISTS idx_submission_user ON submission(user_id);
     CREATE INDEX IF NOT EXISTS idx_submission_status ON submission(status);
     CREATE INDEX IF NOT EXISTS idx_project_owner ON project(owner);
+    CREATE INDEX IF NOT EXISTS idx_link_slack ON link(slack_user_id);
+    CREATE INDEX IF NOT EXISTS idx_install_user ON install_key(user_id);
+    CREATE INDEX IF NOT EXISTS idx_github_event_project ON github_event(project_id);
+    CREATE INDEX IF NOT EXISTS idx_trust_audit_created ON trust_audit(created_at);
+    CREATE INDEX IF NOT EXISTS idx_receipt_expires ON receipt(expires_at);
     """)
 
 def chain_link_errors(rows):
@@ -337,6 +347,14 @@ def db():
       id TEXT PRIMARY KEY, handle TEXT NOT NULL, changed_by TEXT NOT NULL,
       prev_level TEXT, new_level TEXT, reason TEXT, notes TEXT, created_at INT)
     """)
+    c.execute("""
+    CREATE TABLE IF NOT EXISTS receipt(
+      token TEXT PRIMARY KEY, handle TEXT, project_id TEXT, payload TEXT NOT NULL,
+      created_at INT, expires_at INT)
+    """)
+    scols = {r[1] for r in c.execute("PRAGMA table_info(submission)")}
+    if "staff_notes" not in scols:
+        c.execute("ALTER TABLE submission ADD COLUMN staff_notes TEXT NOT NULL DEFAULT '[]'")
     pcols = {r[1] for r in c.execute("PRAGMA table_info(project)")}
     for col, spec in (
         ("archived", "INT NOT NULL DEFAULT 0"),
@@ -367,6 +385,66 @@ def has_min_role(c, handle, min_level):
 
 def is_staff(c, handle):
     return has_min_role(c, handle, "viewer")
+
+def project_owner(c, project_id):
+    row = c.execute("SELECT owner FROM project WHERE id=?", (project_id,)).fetchone()
+    return row["owner"] if row else None
+
+def can_read_project(c, who, project_id):
+    if not who:
+        return False
+    if is_staff(c, who):
+        return True
+    owner = project_owner(c, project_id)
+    if owner and owner == who:
+        return True
+    row = c.execute(
+        "SELECT 1 FROM bucket WHERE project_id=? AND user_id=? LIMIT 1",
+        (project_id, who),
+    ).fetchone()
+    return bool(row)
+
+def load_project_buckets(c, project_id, user_id=None, since_wall=None, limit=500):
+    q = "SELECT payload, bucket_start_wall, weighted_secs, state, weight FROM bucket WHERE project_id=?"
+    args = [project_id]
+    if user_id:
+        q += " AND user_id=?"
+        args.append(user_id)
+    if since_wall is not None:
+        q += " AND bucket_start_wall>=?"
+        args.append(int(since_wall))
+    q += " ORDER BY bucket_start_wall"
+    if limit:
+        q += f" LIMIT {int(limit)}"
+    rows = c.execute(q, args).fetchall()
+    buckets = []
+    for r in rows:
+        try:
+            buckets.append(json.loads(r["payload"]))
+        except Exception:
+            continue
+    return buckets, rows
+
+def receipt_summary(buckets, handle, project_id):
+    rows, hours = [], 0.0
+    struggle = struggle_to_ship(buckets)
+    by_state = {}
+    for b, (w, state) in zip(buckets, weight_sequence(buckets)):
+        secs = billable_secs(b) * w
+        hours += secs
+        by_state[state] = by_state.get(state, 0) + secs
+    cerrs = verify_chain(buckets)
+    return {
+        "handle": handle,
+        "project_id": project_id,
+        "verified_weighted_hours": round(hours / 3600, 4),
+        "buckets": len(buckets),
+        "chain_ok": not cerrs,
+        "struggle": struggle,
+        "states": {k: round(v / 3600, 4) for k, v in sorted(by_state.items(), key=lambda kv: -kv[1])[:8]},
+        "formula_version": FORMULA_VERSION,
+        "privacy": "metadata only — no code, prompts, or paths",
+    }
 
 def notify(c, text):
     eid = str(uuid.uuid4()); delivered = 0
@@ -519,24 +597,68 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
 
     proj_meta = {row["id"]: dict(row) for row in c.execute("SELECT * FROM project")}
     by_project, by_state, by_day = {}, {}, {}
+    by_project_raw, by_project_active = {}, {}
     by_language, by_os, by_editor = {}, {}, {}
     rhythm = [[0.0 for _ in range(24)] for _ in range(7)]
     human_w = ai_w = 0.0
-    total_w = 0.0
+    total_w = total_raw = total_active = 0.0
+    dump_w = struggle_w = silent_w = idle_w = recovery_w = 0.0
+    commits_total = fail_pass_total = reedit_total = git_pulse_total = 0
+    chain_breaks = 0
+    unsigned_n = 0
     today_s = _local_today(tz_offset).isoformat()
     today_w = 0.0
     day_totals = {}
+    # day → list of (hour, project_id, weighted_secs, active_secs) for afternoon grouping
+    day_spans = {}
+
+    STRUGGLE_STATES = {"AI_STRUGGLE", "STRUGGLE_LOOP", "CLOSED_LOOP"}
+    DUMP_PREFIX = "OPEN_LOOP_AGENT_DUMP"
+    SILENT_PREFIX = "SILENT_DEBUG"
+    IDLE_PREFIX = "IDLE"
 
     for r, day, wd, hour, payload, os_id in filtered:
         w = float(r["weighted_secs"] or 0)
+        raw = float(r["bucket_secs"] or 0)
+        counts = payload.get("counts") or {}
+        try:
+            active = float(counts.get("active_secs") if counts.get("active_secs") is not None else raw)
+        except (TypeError, ValueError):
+            active = raw
+        active = max(0.0, min(raw, active)) if raw else max(0.0, active)
         total_w += w
+        total_raw += raw
+        total_active += active
         by_project[r["project_id"]] = by_project.get(r["project_id"], 0) + w
+        by_project_raw[r["project_id"]] = by_project_raw.get(r["project_id"], 0) + raw
+        by_project_active[r["project_id"]] = by_project_active.get(r["project_id"], 0) + active
         by_state[r["state"]] = by_state.get(r["state"], 0) + w
         by_day[day] = by_day.get(day, 0) + w
         day_totals[day] = day_totals.get(day, 0) + w
         rhythm[wd][hour] += w / 3600
         if day == today_s:
             today_w += w
+        state = r["state"] or ""
+        if state in STRUGGLE_STATES or state.startswith("AI_STRUGGLE") or state.startswith("STRUGGLE_LOOP"):
+            struggle_w += w
+        if state.startswith(DUMP_PREFIX):
+            dump_w += w
+        if state.startswith(SILENT_PREFIX) or state.endswith("_DECAY"):
+            silent_w += w
+        if state.startswith(IDLE_PREFIX) or state == "FALLBACK":
+            idle_w += w
+        if int(counts.get("human_recovery_edits") or 0) > 0 or int(counts.get("test_fail_to_pass_transitions") or 0) > 0:
+            recovery_w += w
+        commits_total += int(counts.get("commits") or 0)
+        fail_pass_total += int(counts.get("test_fail_to_pass_transitions") or 0) + int(counts.get("cache_fail_to_pass") or 0)
+        reedit_total += int(counts.get("same_file_reedit_count") or 0)
+        git_pulse_total += int(counts.get("git_plumbing_pulses") or 0)
+        if not payload.get("signature"):
+            unsigned_n += 1
+        day_spans.setdefault(day, []).append({
+            "hour": hour, "project_id": r["project_id"], "weighted_secs": w,
+            "active_secs": active, "start": int(r["bucket_start_wall"] or 0),
+        })
         for k, share in _payload_share(payload.get("languages") or {}, w).items():
             by_language[k] = by_language.get(k, 0) + share
         for k, share in _payload_share(payload.get("editors") or {}, w).items():
@@ -544,7 +666,6 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         if os_id and os_id != "untracked":
             by_os[os_id] = by_os.get(os_id, 0) + w
         try:
-            counts = payload.get("counts") or {}
             he = float(counts.get("human_edits") or 0)
             aw = float(counts.get("ai_writes") or 0)
             split = he + aw
@@ -556,15 +677,43 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         except Exception:
             human_w += w
 
-    def ranked(mapping, name_fn):
+    # Chain integrity across filtered buckets (per project, chronological)
+    by_proj_rows = {}
+    for r, day, wd, hour, payload, os_id in filtered:
+        by_proj_rows.setdefault(r["project_id"], []).append(r)
+    for pid, brows in by_proj_rows.items():
+        brows = sorted(brows, key=lambda x: int(x["bucket_start_wall"] or 0))
+        prev = None
+        for br in brows:
+            ph = br["prev_hash"] or ""
+            h = br["hash"] or ""
+            if prev is not None and ph and ph != prev:
+                chain_breaks += 1
+            if h:
+                prev = h
+
+    def ranked(mapping, name_fn, denom=None):
         items = sorted(mapping.items(), key=lambda x: -x[1])
+        base = denom if denom is not None else total_w
         out = []
         for key, secs in items:
             out.append({"id": key, "label": name_fn(key), "secs": round(secs, 2), "hours": round(secs / 3600, 4),
-                        "pct": round(100 * secs / total_w, 1) if total_w else 0})
+                        "pct": round(100 * secs / base, 1) if base else 0})
         return out
 
-    projects = ranked(by_project, lambda pid: (proj_meta.get(pid) or {}).get("name") or pid)
+    def proj_label(pid):
+        return (proj_meta.get(pid) or {}).get("name") or pid
+
+    def is_deleted_project(pid):
+        meta = proj_meta.get(pid) or {}
+        return bool(meta.get("deleted"))
+
+    projects = [p for p in ranked(by_project, proj_label) if not is_deleted_project(p["id"])]
+    for p in projects:
+        pid = p["id"]
+        p["raw_hours"] = round(by_project_raw.get(pid, 0) / 3600, 4)
+        p["active_hours"] = round(by_project_active.get(pid, 0) / 3600, 4)
+        p["weighted_hours"] = p["hours"]
     categories = ranked(by_state, lambda s: STATE_LABELS.get(s, (s or "unknown").replace("_", " ").lower()))
     languages = ranked(by_language, lambda s: s)
     oses = ranked(by_os, lambda s: s)
@@ -587,10 +736,10 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
 
     filter_projects = [{"id": "all", "label": "all projects"}] + [
         {"id": p["id"], "label": p["name"] or p["id"]} for p in sorted(proj_meta.values(), key=lambda x: (x.get("name") or x["id"]))
-        if (not user) or p.get("owner") == user or p["id"] in by_project
+        if not p.get("deleted") and ((not user) or p.get("owner") == user or p["id"] in by_project)
     ]
     if user:
-        owned = [dict(r) for r in c.execute("SELECT * FROM project WHERE owner=?", (user,))]
+        owned = [dict(r) for r in c.execute("SELECT * FROM project WHERE owner=? AND COALESCE(deleted,0)=0", (user,))]
         seen = {x["id"] for x in filter_projects}
         for p in owned:
             if p["id"] not in seen:
@@ -605,36 +754,112 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         h = (r["hash"] or payload.get("hash") or "")[:10]
         ph = (r["prev_hash"] or payload.get("prev_hash") or "")[:10]
         counts = payload.get("counts") or {}
+        raw_s = int(r["bucket_secs"] or 0)
+        try:
+            act_s = int(counts.get("active_secs") if counts.get("active_secs") is not None else raw_s)
+        except (TypeError, ValueError):
+            act_s = raw_s
+        idle_s = int(counts.get("idle_secs") or max(0, raw_s - act_s))
         recent.append({
             "bucket_id": r["bucket_id"],
             "project_id": r["project_id"],
-            "project_label": (proj_meta.get(r["project_id"]) or {}).get("name") or r["project_id"],
+            "project_label": proj_label(r["project_id"]),
             "day": day,
             "state": r["state"],
             "state_label": STATE_LABELS.get(r["state"], (r["state"] or "unknown").replace("_", " ").lower()),
             "weighted_secs": round(float(r["weighted_secs"] or 0), 2),
             "weighted_hours": round(float(r["weighted_secs"] or 0) / 3600, 4),
-            "bucket_secs": int(r["bucket_secs"] or 0),
+            "bucket_secs": raw_s,
+            "raw_hours": round(raw_s / 3600, 4),
+            "active_secs": act_s,
+            "idle_secs": idle_s,
+            "weight": round(float(r["weight"] or 0), 4) if "weight" in r.keys() else None,
             "os": os_id or "unknown",
             "editor": next(iter(eds.keys()), "unknown"),
             "agent": next(iter(ags.keys()), "human"),
             "language": next(iter(langs.keys()), "unknown"),
             "hash_short": h or None,
             "prev_hash_short": ph or None,
+            "signed": bool(payload.get("signature")),
             "struggle": {
                 "reedits": int(counts.get("same_file_reedit_count") or 0),
-                "fail_to_pass": int(counts.get("test_fail_to_pass_transitions") or counts.get("cache_fail_to_pass") or 0),
+                "fail_to_pass": int(counts.get("test_fail_to_pass_transitions") or 0) + int(counts.get("cache_fail_to_pass") or 0),
                 "git_pulses": int(counts.get("git_plumbing_pulses") or 0),
                 "build_cycles": int(counts.get("build_test_cycles") or 0),
+                "recovery_edits": int(counts.get("human_recovery_edits") or 0),
+                "atomic_writes": int(counts.get("atomic_agent_writes") or 0),
             },
         })
+
+    afternoons = []
+    for day, spans in sorted(day_spans.items(), reverse=True):
+        aft = [s for s in spans if 12 <= int(s["hour"]) < 18]
+        use = aft if aft else spans
+        by_p = {}
+        for s in use:
+            by_p[s["project_id"]] = by_p.get(s["project_id"], 0) + s["weighted_secs"]
+        if len(by_p) < 2:
+            continue
+        total_day = sum(by_p.values()) or 1
+        projects_share = [
+            {"id": pid, "label": proj_label(pid), "hours": round(secs / 3600, 4),
+             "pct": round(100 * secs / total_day, 1)}
+            for pid, secs in sorted(by_p.items(), key=lambda x: -x[1])
+        ]
+        afternoons.append({
+            "day": day,
+            "project_count": len(by_p),
+            "weighted_hours": round(total_day / 3600, 4),
+            "projects": projects_share,
+            "window": "afternoon" if aft else "day",
+        })
+
+    ship = max(commits_total, 0)
+    struggle_h = round(struggle_w / 3600, 4)
+    velocity = {
+        "struggle_hours": struggle_h,
+        "ship_units": ship,
+        "commits": commits_total,
+        "fail_to_pass": fail_pass_total,
+        "reedits": reedit_total,
+        "git_pulses": git_pulse_total,
+        "velocity_ratio": round(struggle_h / ship, 4) if ship else None,
+        "label": "struggle_hours_per_commit" if ship else "no_ship_anchors",
+    }
+    classifier = {
+        "struggle_hours": struggle_h,
+        "dump_hours": round(dump_w / 3600, 4),
+        "recovery_hours": round(recovery_w / 3600, 4),
+        "silent_hours": round(silent_w / 3600, 4),
+        "idle_hours": round(idle_w / 3600, 4),
+        "dump_pct": round(100 * dump_w / total_w, 1) if total_w else 0,
+        "struggle_pct": round(100 * struggle_w / total_w, 1) if total_w else 0,
+    }
+    decay = {
+        "active_hours": round(total_active / 3600, 4),
+        "raw_hours": round(total_raw / 3600, 4),
+        "silent_hours": round(silent_w / 3600, 4),
+        "idle_hours": round(idle_w / 3600, 4),
+        "weighted_hours": round(total_w / 3600, 4),
+        "silent_full_secs": 300,
+        "silent_zero_secs": 720,
+        "note": "Quiet follow-up keeps partial credit for 5–12 minutes, then drops to zero. Idle staring is not rewarded.",
+    }
+    chain = {
+        "ok": chain_breaks == 0,
+        "break_count": chain_breaks,
+        "unsigned_buckets": unsigned_n,
+        "projects_checked": len(by_proj_rows),
+        "bucket_count": len(filtered),
+    }
 
     total_hours = round(total_w / 3600, 4)
     return {
         "range": range_key, "range_label": label, "tz_offset": int(tz_offset),
         "total_secs": round(total_w, 2), "total_hours": total_hours,
-        # Alias used by some clients / older UI copies that read weighted_hours
         "weighted_hours": total_hours,
+        "raw_hours": round(total_raw / 3600, 4),
+        "active_hours": round(total_active / 3600, 4),
         "bucket_count": len(filtered),
         "top_project": projects[0] if projects else None,
         "top_language": languages[0] if languages else None,
@@ -643,6 +868,8 @@ def build_analytics(c, user=None, range_key="7d", project=None, category=None, l
         "top_category": categories[0] if categories else None,
         "projects": projects, "languages": languages, "oses": oses, "editors": editors, "categories": categories,
         "series": series, "rhythm": rhythm, "pace": pace, "modes": modes, "recent": recent,
+        "velocity": velocity, "classifier": classifier, "decay": decay, "chain": chain,
+        "afternoons": afternoons[:14],
         "filters": {
             "projects": filter_projects,
             "categories": [{"id": "all", "label": "all modes"}] + [{"id": c["id"], "label": c["label"]} for c in categories],
@@ -805,10 +1032,74 @@ class H(BaseHTTPRequestHandler):
                 return self.send_json(500, {"error": f"internal: {type(e).__name__}"})
             finally:
                 self.wfile = real
+    def _serve_docs_out(self, rel_parts):
+        """Serve Fumadocs static export from docs-site/out (docs pages + /_next assets)."""
+        if not DOCS_OUT.is_dir():
+            return False
+        safe = []
+        for part in rel_parts:
+            if part in ("", ".", "..") or "/" in part or "\\" in part:
+                return False
+            safe.append(part)
+        root = DOCS_OUT.resolve()
+        candidate = (root.joinpath(*safe) if safe else root).resolve()
+        try:
+            candidate.relative_to(root)
+        except ValueError:
+            return False
+        targets = []
+        if candidate.is_file():
+            targets.append(candidate)
+        else:
+            targets.extend([
+                candidate / "index.html",
+                Path(str(candidate) + ".html"),
+            ])
+        f = next((t for t in targets if t and t.is_file()), None)
+        if not f:
+            return False
+        ext = f.suffix.lower()
+        ctype = {
+            ".html": "text/html; charset=utf-8",
+            ".js": "application/javascript; charset=utf-8",
+            ".css": "text/css; charset=utf-8",
+            ".json": "application/json; charset=utf-8",
+            ".svg": "image/svg+xml",
+            ".png": "image/png",
+            ".webp": "image/webp",
+            ".jpg": "image/jpeg",
+            ".jpeg": "image/jpeg",
+            ".woff": "font/woff",
+            ".woff2": "font/woff2",
+            ".txt": "text/plain; charset=utf-8",
+            ".map": "application/json; charset=utf-8",
+        }.get(ext, "application/octet-stream")
+        body = f.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", ctype)
+        self.send_header("Content-Length", str(len(body)))
+        self.send_header("Cache-Control", "no-store" if ext in (".html", ".js", ".css") else "public, max-age=3600")
+        self.end_headers()
+        self.wfile.write(body)
+        return True
+
     def _get(self):
         parsed = urlparse(self.path); p = parsed.path.strip("/").split("/") if parsed.path.strip("/") else []
         c = db()
-        pages = ("home", "dashboard", "projects", "builders", "review", "admin", "settings", "docs", "login", "signout", "logout")
+        pages = ("home", "dashboard", "projects", "builders", "review", "admin", "settings", "login", "signout", "logout")
+        # Fumadocs static export takes /docs and its /_next chunks
+        if p and p[0] == "_next":
+            if self._serve_docs_out(p):
+                return
+        if p and p[0] == "docs":
+            if self._serve_docs_out(p):
+                return
+            # Fallback: redirect into Fumadocs index when export missing a slug
+            if DOCS_OUT.is_dir():
+                self.send_response(302)
+                self.send_header("Location", "/docs/")
+                self.end_headers()
+                return
         if p == ["integrations"]:
             self.send_response(302); self.send_header("Location", "/settings"); self.end_headers(); return
         if p == ["dashboard"]:
@@ -1086,19 +1377,24 @@ class H(BaseHTTPRequestHandler):
             if not who:
                 # Empty list looks like "all projects deleted" — force the client to sign in
                 return self.send_json(401, {"error": "not signed in", "projects": []})
+            include_deleted = "include_deleted=1" in parsed.query
             out = []
+            known = set()  # all owned ids (incl. soft-deleted) so buckets don't resurrect them
             for r in c.execute("SELECT * FROM project WHERE owner=?", (who,)):
+                known.add(r["id"])
+                deleted = bool(_urow(r, "deleted", 0))
+                if deleted and not include_deleted:
+                    continue
                 out.append({
                     **dict(r),
                     "registered": True,
                     "archived": bool(_urow(r, "archived", 0)),
-                    "deleted": bool(_urow(r, "deleted", 0)),
+                    "deleted": deleted,
                     "last_repo_url": _urow(r, "last_repo_url"),
                     "local_path": _urow(r, "local_path"),
                     "repo_slug": repo_slug(r["repo_url"]) or repo_slug(_urow(r, "last_repo_url")),
                     **stats_for(c, project=r["id"]),
                 })
-            known = {x["id"] for x in out}
             # Promote bucket-only project ids into the project table so they don't look "gone"
             for r in c.execute("SELECT DISTINCT project_id FROM bucket WHERE user_id=?", (who,)):
                 pid = r[0]
@@ -1114,11 +1410,15 @@ class H(BaseHTTPRequestHandler):
                     pass
                 row = c.execute("SELECT * FROM project WHERE id=?", (pid,)).fetchone()
                 if row and row["owner"] == who:
+                    known.add(pid)
+                    deleted = bool(_urow(row, "deleted", 0))
+                    if deleted and not include_deleted:
+                        continue
                     out.append({
                         **dict(row),
                         "registered": True,
                         "archived": bool(_urow(row, "archived", 0)),
-                        "deleted": bool(_urow(row, "deleted", 0)),
+                        "deleted": deleted,
                         "last_repo_url": _urow(row, "last_repo_url"),
                         "local_path": _urow(row, "local_path"),
                         "repo_slug": repo_slug(row["repo_url"]) or repo_slug(_urow(row, "last_repo_url")),
@@ -1128,7 +1428,7 @@ class H(BaseHTTPRequestHandler):
                     out.append({"id": pid, "owner": who, "name": pid, "repo_url": None, "repo_slug": None,
                                 "archived": False, "deleted": False, "last_repo_url": None, "local_path": None,
                                 "registered": False, **stats_for(c, project=pid)})
-                known.add(pid)
+                    known.add(pid)
             return self.send_json(200, {"projects": out})
         if p == ["v1", "leaderboard"]:
             period = parse_qs(parsed.query).get("period", ["week"])[0]
@@ -1141,10 +1441,10 @@ class H(BaseHTTPRequestHandler):
                 label = "last 7 days"
             entries = []
             for u in c.execute("SELECT * FROM user WHERE is_public=1"):
+                if not int(_urow(u, "show_leaderboards", 1) or 0):
+                    continue
                 link = link_row(c, u["handle"])
                 st = stats_for(c, user=u["handle"])
-                hours = st["weighted_today_hours"] if period in ("today", "24h", "daily") else st["weighted_week_hours"]
-                # recompute period hours precisely from buckets
                 rows = c.execute("SELECT weighted_secs, bucket_start_wall FROM bucket WHERE user_id=?", (u["handle"],)).fetchall()
                 if period in ("today", "24h", "daily"):
                     hours = round(sum(r["weighted_secs"] for r in rows if date.fromtimestamp(r["bucket_start_wall"]).isoformat() == today.isoformat()) / 3600, 4)
@@ -1166,13 +1466,39 @@ class H(BaseHTTPRequestHandler):
             entries.sort(key=lambda e: -e["weighted_hours"])
             for i, e in enumerate(entries, 1): e["rank"] = i
             return self.send_json(200, {"period": period, "label": label, "entries": entries, "total": len(entries)})
-        if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] in ("buckets", "friction"):
-            rows = c.execute("SELECT payload FROM bucket WHERE project_id=? ORDER BY bucket_start_wall", (p[2],)).fetchall()
-            if not rows: return self.send_json(404, {"error": "project not found"})
-            buckets = [json.loads(r["payload"]) for r in rows]
+        if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] in ("buckets", "friction", "velocity", "chain-diff"):
+            who = self.auth_handle(c)
+            buckets, _rows = load_project_buckets(c, p[2], limit=800)
+            if not buckets: return self.send_json(404, {"error": "project not found"})
+            if not can_read_project(c, who, p[2]):
+                return self.send_json(401 if not who else 403, {"error": "sign in required" if not who else "not your project"})
             if p[3] == "buckets":
-                return self.send_json(200, {"project_id": p[2], "buckets": buckets,
-                                            "evidence_bytes": len(json.dumps(buckets).encode())})
+                # Scrub: return structural summary, not full payloads with file lists to guests
+                summary = []
+                for b, (w, state) in zip(buckets, weight_sequence(buckets)):
+                    cts = b.get("counts") or {}
+                    summary.append({
+                        "bucket_id": b.get("bucket_id"),
+                        "start": b.get("bucket_start_wall"),
+                        "secs": b.get("bucket_secs"),
+                        "state": state,
+                        "weight": w,
+                        "active_secs": int(cts.get("active_secs") or 0),
+                        "idle_secs": int(cts.get("idle_secs") or 0),
+                        "signed": bool(b.get("signature")),
+                        "prev_hash": (b.get("prev_hash") or "")[:16],
+                        "hash": (b.get("hash") or "")[:16],
+                    })
+                return self.send_json(200, {"project_id": p[2], "buckets": summary, "count": len(summary)})
+            if p[3] == "velocity":
+                return self.send_json(200, {"project_id": p[2], **struggle_to_ship(buckets)})
+            if p[3] == "chain-diff":
+                pairs = anomaly_pairs(buckets)
+                cerrs = verify_chain(buckets)
+                return self.send_json(200, {
+                    "project_id": p[2], "pairs": pairs[:40], "chain_ok": not cerrs,
+                    "chain_errors": cerrs[:12], "bucket_count": len(buckets),
+                })
             tl = friction_timeline(buckets)
             commits = [{"at_bucket": t["bucket_id"], "head_commit": t["head_commit"]} for t in tl if t["commits"]]
             chain_errs = verify_chain(buckets)
@@ -1181,6 +1507,7 @@ class H(BaseHTTPRequestHandler):
                                         "evidence_bytes": len(json.dumps(buckets).encode()),
                                         "budget": "target 25-50 kb per submitted session, hard cap 50 kb/hour of metadata"})
         if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "stats":
+            # Aggregate stats are public (no payloads); evidence routes stay auth-gated
             if not c.execute("SELECT 1 FROM bucket WHERE project_id=? LIMIT 1", (p[2],)).fetchone():
                 return self.send_json(404, {"error": "project not found"})
             return self.send_json(200, {"project_id": p[2], **stats_for(c, project=p[2])})
@@ -1198,8 +1525,11 @@ class H(BaseHTTPRequestHandler):
                 "genesis": GENESIS,
             })
         if len(p) == 4 and p[:2] == ["v1", "projects"] and p[3] == "stream":
+            who = self.auth_handle(c)
             if not c.execute("SELECT 1 FROM bucket WHERE project_id=? LIMIT 1", (p[2],)).fetchone():
                 return self.send_json(404, {"error": "project not found"})
+            if not can_read_project(c, who, p[2]):
+                return self.send_json(401 if not who else 403, {"error": "sign in required" if not who else "not your project"})
             payload = f"data: {json.dumps({'project_id': p[2], **stats_for(c, project=p[2])})}\n\n".encode()
             self.send_response(200); self.send_header("Content-Type", "text/event-stream")
             self.send_header("Cache-Control", "no-cache"); self.end_headers(); self.wfile.write(payload)
@@ -1210,6 +1540,54 @@ class H(BaseHTTPRequestHandler):
                 except (BrokenPipeError, ConnectionResetError): pass
                 finally: _LOCK.acquire()
             return
+        if len(p) == 3 and p[:2] == ["v1", "receipts"]:
+            row = c.execute("SELECT * FROM receipt WHERE token=?", (p[2],)).fetchone()
+            if not row: return self.send_json(404, {"error": "receipt not found"})
+            if row["expires_at"] and int(row["expires_at"]) < int(time.time()):
+                return self.send_json(410, {"error": "receipt expired"})
+            try:
+                payload = json.loads(row["payload"])
+            except Exception:
+                payload = {}
+            return self.send_json(200, {"token": p[2], "receipt": payload})
+        if p == ["v1", "admin", "anomalies"]:
+            who = self.auth_handle(c)
+            if not who or not is_staff(c, who):
+                return self.send_json(403, {"error": "staff only"})
+            qs = parse_qs(parsed.query)
+            risk = (qs.get("risk") or ["all"])[0]
+            window = (qs.get("window") or ["7d"])[0]
+            since = None
+            if window == "7d":
+                since = int(time.time()) - 7 * 86400
+            elif window == "30d":
+                since = int(time.time()) - 30 * 86400
+            projects = [r["project_id"] for r in c.execute(
+                "SELECT DISTINCT project_id FROM bucket" + (" WHERE bucket_start_wall>=?" if since else ""),
+                (since,) if since else (),
+            ).fetchall()]
+            findings = []
+            for pid in projects[:80]:
+                buckets, _ = load_project_buckets(c, pid, since_wall=since, limit=400)
+                if not buckets:
+                    continue
+                pairs = anomaly_pairs(buckets)
+                if risk != "all":
+                    key = {"chain": "chain_break", "unsigned": "unsigned", "burst": "burst_dump", "ai": "ai_ratio", "clock": "clock_jump"}.get(risk, risk)
+                    pairs = [x for x in pairs if key in (x.get("reasons") or []) or (risk == "burst" and ("burst_dump" in (x.get("reasons") or []) or "clock_jump" in (x.get("reasons") or [])))]
+                if not pairs:
+                    continue
+                owner = project_owner(c, pid)
+                findings.append({
+                    "project_id": pid,
+                    "owner": owner,
+                    "anomaly_count": len(pairs),
+                    "sample": pairs[:3],
+                    "velocity": struggle_to_ship(buckets),
+                    "chain_ok": not verify_chain(buckets),
+                })
+            findings.sort(key=lambda f: -f["anomaly_count"])
+            return self.send_json(200, {"window": window, "risk": risk, "findings": findings[:40], "total": len(findings)})
         if p == ["v1", "integrations", "events"]:
             rows = c.execute("SELECT id,kind,text,delivered,created_at FROM integration_event ORDER BY rowid DESC LIMIT 50").fetchall()
             return self.send_json(200, {"events": [dict(r) for r in rows]})
@@ -1245,7 +1623,10 @@ class H(BaseHTTPRequestHandler):
                 rows = c.execute("SELECT * FROM submission WHERE user_id=? ORDER BY rowid DESC LIMIT 100", (who,)).fetchall()
             out = []
             for r in rows:
+                try: notes = json.loads(_urow(r, "staff_notes") or "[]")
+                except Exception: notes = []
                 item = {**dict(r), "flags": json.loads(r["flags"]),
+                        "staff_notes": notes if isinstance(notes, list) else [],
                         "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4)}
                 # Cheap audit fields — COUNT + hash-link check (no full payload scan under the global lock)
                 n = c.execute(
@@ -1285,6 +1666,27 @@ class H(BaseHTTPRequestHandler):
                 "evidence_bytes": len(json.dumps(buckets).encode()) if buckets else 0,
                 "chain_ok": not cerrs if buckets else None,
                 "chain_errors": cerrs[:8],
+            })
+        if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] == "inspect":
+            who = self.auth_handle(c)
+            if not who: return self.send_json(401, {"error": "sign in required"})
+            r = c.execute("SELECT * FROM submission WHERE id=?", (p[2],)).fetchone()
+            if not r: return self.send_json(404, {"error": "submission not found"})
+            if r["user_id"] != who and not is_staff(c, who):
+                return self.send_json(403, {"error": "staff only"})
+            buckets, _ = load_project_buckets(c, r["project_id"], user_id=r["user_id"], limit=800)
+            tl = friction_timeline(buckets)
+            pairs = anomaly_pairs(buckets)
+            try: notes = json.loads(_urow(r, "staff_notes") or "[]")
+            except Exception: notes = []
+            return self.send_json(200, {
+                "id": r["id"], "project_id": r["project_id"], "user_id": r["user_id"],
+                "status": r["status"], "flags": json.loads(r["flags"]),
+                "staff_notes": notes if isinstance(notes, list) else [],
+                "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4),
+                "timeline": tl[-80:], "anomalies": pairs[:30],
+                "velocity": struggle_to_ship(buckets),
+                "chain_ok": not verify_chain(buckets),
             })
         if p == ["v1", "admin", "overview"]:
             who = self.auth_handle(c)
@@ -1648,7 +2050,10 @@ class H(BaseHTTPRequestHandler):
             # default: delete/unlink repo from project
             last = row["repo_url"] or _urow(row, "last_repo_url")
             if not last and not row["repo_url"]:
-                return self.send_json(400, {"error": "no repo linked"})
+                return self.send_json(400, {
+                    "error": "no repo linked — pass mode=project and confirm=<project id> to soft-delete the project",
+                    "hint": {"mode": "project", "confirm": p[2]},
+                })
             c.execute(
                 "UPDATE project SET repo_url=NULL, last_repo_url=? WHERE id=?",
                 (last, p[2]),
@@ -1705,7 +2110,17 @@ class H(BaseHTTPRequestHandler):
                 if not isinstance(b, dict) or not isinstance(b.get("counts"), dict) or not isinstance(b.get("git"), dict) \
                    or not all(k in b for k in ("bucket_id","project_id","prev_hash","hash","bucket_secs","bucket_start_wall","mono_delta_ms")):
                     return self.send_json(400, {"error": f"bucket {i}: missing required fields"})
+            user = self.auth_handle(c)
+            if not user and os.environ.get("STRUGGLETIME_DEV_INGEST") == "1":
+                user = (d.get("user_id") or "").strip() or None
+            if not user:
+                return self.send_json(401, {"error": "API key or session required"})
             project = buckets[0]["project_id"]
+            if any(b.get("project_id") != project for b in buckets):
+                return self.send_json(400, {"error": "mixed project_id in one batch — flush per project"})
+            owner = project_owner(c, project)
+            if owner and owner != user and not is_staff(c, user):
+                return self.send_json(403, {"error": "not your project"})
             row = c.execute("SELECT last_hash FROM chain_head WHERE project_id=?", (project,)).fetchone()
             prev = row["last_hash"] if row else GENESIS
             for i, b in enumerate(buckets):
@@ -1722,7 +2137,7 @@ class H(BaseHTTPRequestHandler):
                 if b["prev_hash"] != prev: return self.send_json(422, {"error": f"bucket {i}: prev_hash mismatch (chain broken)"})
                 if bucket_hash(b) != b["hash"]: return self.send_json(422, {"error": f"bucket {i}: hash mismatch (tampered)"})
                 prev = b["hash"]
-            total = 0.0; user = self.auth_handle(c) or d.get("user_id")
+            total = 0.0
             unsigned = 0
             for i, b in enumerate(fresh):
                 iid = (b.get("install_id") or "").strip()
@@ -1760,7 +2175,16 @@ class H(BaseHTTPRequestHandler):
                 ws = billable_secs(b) * w; total += ws
                 c.execute("INSERT INTO bucket VALUES (?,?,?,?,?,?,?,?,?,?,?)",
                     (b["bucket_id"], user, project, b["bucket_start_wall"], b["bucket_secs"], state, w, ws, b["hash"], b["prev_hash"], json.dumps(b)))
-            c.execute("INSERT INTO chain_head VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET last_hash=excluded.last_hash", (project, prev)); c.commit()
+            c.execute("INSERT INTO chain_head VALUES (?,?) ON CONFLICT(project_id) DO UPDATE SET last_hash=excluded.last_hash", (project, prev))
+            # Ensure a project row exists so list/delete/edit work without a separate create call
+            if not c.execute("SELECT 1 FROM project WHERE id=?", (project,)).fetchone():
+                c.execute(
+                    "INSERT INTO project(id, owner, name, repo_url, head_from, head_to) VALUES (?,?,?,?,?,?)",
+                    (project, user, project, None, None, None),
+                )
+            elif not owner:
+                c.execute("UPDATE project SET owner=? WHERE id=? AND (owner IS NULL OR owner='')", (user, project))
+            c.commit()
             return self.send_json(201, {
                 "accepted": len(fresh),
                 "weighted_secs_added": total,
@@ -1768,37 +2192,184 @@ class H(BaseHTTPRequestHandler):
                 "unsigned_buckets": unsigned,
             })
         if p == ["v1", "submissions"]:
+            who = self.auth_handle(c)
             d = self.body()
+            if not who and os.environ.get("STRUGGLETIME_DEV_INGEST") == "1":
+                who = (d.get("user_id") or "").strip() or None
+            if not who:
+                return self.send_json(401, {"error": "sign in required"})
             if not d.get("ai_declaration"): return self.send_json(400, {"error": "ai_declaration required"})
-            rows = c.execute("SELECT * FROM bucket WHERE project_id=? AND bucket_id BETWEEN ? AND ? ORDER BY bucket_start_wall",
-                             (d["project_id"], d["from_bucket"], d["to_bucket"])).fetchall()
+            project_id = d.get("project_id")
+            if not project_id:
+                return self.send_json(400, {"error": "project_id required"})
+            owner = project_owner(c, project_id)
+            if owner and owner != who and not is_staff(c, who):
+                has_buckets = c.execute(
+                    "SELECT 1 FROM bucket WHERE project_id=? AND user_id=? LIMIT 1",
+                    (project_id, who),
+                ).fetchone()
+                if not has_buckets:
+                    return self.send_json(403, {"error": "not your project"})
+            # Resolve range by wall time of from/to bucket ids (UUID BETWEEN is lexicographic garbage)
+            from_id, to_id = d.get("from_bucket"), d.get("to_bucket")
+            if not from_id or not to_id:
+                return self.send_json(400, {"error": "from_bucket and to_bucket required"})
+            ends = c.execute(
+                "SELECT bucket_id, bucket_start_wall FROM bucket WHERE project_id=? AND user_id=? AND bucket_id IN (?,?)",
+                (project_id, who, from_id, to_id),
+            ).fetchall()
+            by_id = {r["bucket_id"]: r["bucket_start_wall"] for r in ends}
+            if from_id not in by_id or to_id not in by_id:
+                return self.send_json(404, {"error": "from/to bucket not found for this project"})
+            lo, hi = sorted((by_id[from_id], by_id[to_id]))
+            rows = c.execute(
+                "SELECT * FROM bucket WHERE project_id=? AND user_id=? AND bucket_start_wall BETWEEN ? AND ? ORDER BY bucket_start_wall",
+                (project_id, who, lo, hi),
+            ).fetchall()
             if not rows: return self.send_json(404, {"error": "no buckets in range"})
+            payloads = []
+            for r in rows:
+                try: payloads.append(json.loads(r["payload"]))
+                except Exception: pass
             claimed = sum(r["weighted_secs"] for r in rows)
-            sid = str(uuid.uuid4()); fl = flags([json.loads(r["payload"]) for r in rows], claimed / 3600)
-            proj = c.execute("SELECT * FROM project WHERE id=?", (d["project_id"],)).fetchone()
+            sid = str(uuid.uuid4()); fl = flags(payloads, claimed / 3600)
+            proj = c.execute("SELECT * FROM project WHERE id=?", (project_id,)).fetchone()
             if proj and not proj["repo_url"]: fl.append("git_mismatch: no repo linked")
-            who = self.auth_handle(c) or d.get("user_id")
-            c.execute("INSERT INTO submission VALUES (?,?,?,?,?,?,?)",
-                      (sid, who, d["project_id"], claimed, d["ai_declaration"], "pending", json.dumps(fl)))
-            notify(c, f"new submission: {d['project_id']} · {round(claimed/3600, 2)} weighted h by {who} · pending review")
+            cerrs = verify_chain(payloads)
+            if cerrs: fl.append("chain_broken")
+            c.execute(
+                "INSERT INTO submission(id, user_id, project_id, claimed_weighted_secs, ai_declaration, status, flags, staff_notes) VALUES (?,?,?,?,?,?,?,?)",
+                (sid, who, project_id, claimed, d["ai_declaration"], "pending", json.dumps(fl), "[]"),
+            )
+            notify(c, f"new submission: {project_id} · {round(claimed/3600, 2)} weighted h by {who} · pending review")
             c.commit()
-            ev = len(json.dumps([json.loads(r["payload"]) for r in rows]).encode())
+            ev = len(json.dumps(payloads).encode())
             return self.send_json(201, {"id": sid, "claimed_weighted_secs": claimed, "claimed_weighted_hours": round(claimed / 3600, 4), "status": "pending", "flags": fl, "evidence_bytes": ev, "evidence_kb": round(ev / 1024, 1)})
-        if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] == "review":
+        if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] in ("review", "approve", "adjust", "resolve"):
             who = self.auth_handle(c)
             if not who or not has_min_role(c, who, "reviewer"):
                 return self.send_json(403, {"error": "reviewer role required"})
-            d = self.body()
-            if d.get("reason_code") not in REASONS: return self.send_json(400, {"error": "invalid reason_code", "allowed": sorted(REASONS)})
+            d = self.body() or {}
+            action = p[3]
             r = c.execute("SELECT * FROM submission WHERE id=?", (p[2],)).fetchone()
             if not r: return self.send_json(404, {"error": "submission not found"})
-            approved = float(d["approved_weighted_secs"])
-            status = "approved" if approved >= r["claimed_weighted_secs"] else ("rejected" if approved == 0 else "deflated")
-            c.execute("UPDATE submission SET status=? WHERE id=?", (status, p[2]))
-            c.execute("INSERT INTO review VALUES (?,?,?,?,?)", (str(uuid.uuid4()), p[2], who, approved, d["reason_code"]))
-            notify(c, f"submission {p[2][:8]} reviewed: {status} · {round(approved/3600, 2)} h approved · reason {d['reason_code']}")
+            if r["status"] != "pending":
+                return self.send_json(409, {"error": "already reviewed", "status": r["status"]})
+            claimed = float(r["claimed_weighted_secs"] or 0)
+            if action == "approve":
+                approved = float(d["approved_weighted_secs"]) if d.get("approved_weighted_secs") is not None else claimed
+                reason = d.get("reason_code") or "NONE"
+            elif action == "adjust":
+                if d.get("approved_weighted_secs") is None:
+                    return self.send_json(400, {"error": "approved_weighted_secs required for adjust"})
+                approved = float(d["approved_weighted_secs"])
+                reason = d.get("reason_code") or "NO_TEST_ITERATION"
+            elif action == "resolve":
+                approved = float(d["approved_weighted_secs"]) if d.get("approved_weighted_secs") is not None else claimed
+                reason = d.get("reason_code") or "NONE"
+            else:
+                if d.get("approved_weighted_secs") is None:
+                    return self.send_json(400, {"error": "approved_weighted_secs required"})
+                approved = float(d["approved_weighted_secs"])
+                reason = d.get("reason_code")
+            if reason not in REASONS:
+                return self.send_json(400, {"error": "invalid reason_code", "allowed": sorted(REASONS)})
+            status = "approved" if approved >= claimed else ("rejected" if approved == 0 else "deflated")
+            note = (d.get("note") or d.get("notes") or "").strip()
+            try: notes = json.loads(_urow(r, "staff_notes") or "[]")
+            except Exception: notes = []
+            if not isinstance(notes, list): notes = []
+            if note or action in ("approve", "adjust", "resolve"):
+                notes.append({
+                    "at": int(time.time()), "by": who, "text": note[:500],
+                    "action": action if action != "review" else status, "status": status,
+                })
+            c.execute(
+                "UPDATE submission SET status=?, staff_notes=? WHERE id=?",
+                (status, json.dumps(notes[-40:]), p[2]),
+            )
+            c.execute("INSERT INTO review VALUES (?,?,?,?,?)", (str(uuid.uuid4()), p[2], who, approved, reason))
+            notify(c, f"submission {p[2][:8]} reviewed: {status} · {round(approved/3600, 2)} h approved · reason {reason}")
             c.commit()
-            return self.send_json(200, {"id": p[2], "status": status, "approved_weighted_secs": approved, "reviewer_id": who})
+            return self.send_json(200, {
+                "id": p[2], "status": status, "approved_weighted_secs": approved,
+                "reviewer_id": who, "action": action, "reason_code": reason,
+            })
+        if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] in ("note", "flag"):
+            who = self.auth_handle(c)
+            if not who or not has_min_role(c, who, "reviewer"):
+                return self.send_json(403, {"error": "reviewer role required"})
+            d = self.body() or {}
+            r = c.execute("SELECT * FROM submission WHERE id=?", (p[2],)).fetchone()
+            if not r: return self.send_json(404, {"error": "submission not found"})
+            try: notes = json.loads(_urow(r, "staff_notes") or "[]")
+            except Exception: notes = []
+            if not isinstance(notes, list): notes = []
+            try: fl = json.loads(r["flags"] or "[]")
+            except Exception: fl = []
+            if not isinstance(fl, list): fl = []
+            if p[3] == "note":
+                text = (d.get("note") or d.get("text") or "").strip()
+                if not text: return self.send_json(400, {"error": "note required"})
+                notes.append({"at": int(time.time()), "by": who, "text": text[:500], "action": "note"})
+                c.execute("UPDATE submission SET staff_notes=? WHERE id=?", (json.dumps(notes[-40:]), p[2]))
+                c.commit()
+                return self.send_json(200, {"id": p[2], "notes": notes[-40:], "status": r["status"]})
+            # flag: add structural flag without resolving the queue item
+            label = (d.get("flag") or d.get("reason_code") or "staff_flag").strip()[:80]
+            if not label: return self.send_json(400, {"error": "flag required"})
+            if label not in fl: fl.append(label)
+            note = (d.get("note") or d.get("text") or "").strip()
+            if note:
+                notes.append({"at": int(time.time()), "by": who, "text": note[:500], "action": "flag", "flag": label})
+            c.execute(
+                "UPDATE submission SET flags=?, staff_notes=? WHERE id=?",
+                (json.dumps(fl), json.dumps(notes[-40:]), p[2]),
+            )
+            c.commit()
+            return self.send_json(200, {"id": p[2], "flags": fl, "notes": notes[-40:], "status": r["status"]})
+        if len(p) == 4 and p[:2] == ["v1", "submissions"] and p[3] == "inspect":
+            who = self.auth_handle(c)
+            if not who: return self.send_json(401, {"error": "sign in required"})
+            r = c.execute("SELECT * FROM submission WHERE id=?", (p[2],)).fetchone()
+            if not r: return self.send_json(404, {"error": "submission not found"})
+            if r["user_id"] != who and not is_staff(c, who):
+                return self.send_json(403, {"error": "staff only"})
+            buckets, _ = load_project_buckets(c, r["project_id"], user_id=r["user_id"], limit=800)
+            tl = friction_timeline(buckets)
+            pairs = anomaly_pairs(buckets)
+            try: notes = json.loads(_urow(r, "staff_notes") or "[]")
+            except Exception: notes = []
+            return self.send_json(200, {
+                "id": r["id"], "project_id": r["project_id"], "user_id": r["user_id"],
+                "status": r["status"], "flags": json.loads(r["flags"]),
+                "staff_notes": notes if isinstance(notes, list) else [],
+                "claimed_weighted_hours": round(r["claimed_weighted_secs"] / 3600, 4),
+                "timeline": tl[-80:], "anomalies": pairs[:30],
+                "velocity": struggle_to_ship(buckets),
+                "chain_ok": not verify_chain(buckets),
+            })
+        if p == ["v1", "receipts"]:
+            who = self.auth_handle(c)
+            if not who: return self.send_json(401, {"error": "sign in required"})
+            d = self.body() or {}
+            project_id = (d.get("project_id") or "").strip()
+            if not project_id:
+                return self.send_json(400, {"error": "project_id required"})
+            if not can_read_project(c, who, project_id):
+                return self.send_json(403, {"error": "not your project"})
+            buckets, _ = load_project_buckets(c, project_id, user_id=who, limit=800)
+            if not buckets:
+                return self.send_json(404, {"error": "no buckets for receipt"})
+            summary = receipt_summary(buckets, who, project_id)
+            token = secrets.token_urlsafe(18)
+            now = int(time.time())
+            c.execute(
+                "INSERT INTO receipt VALUES (?,?,?,?,?,?)",
+                (token, who, project_id, json.dumps(summary), now, now + 30 * 86400),
+            )
+            c.commit()
+            return self.send_json(201, {"token": token, "url": f"/v1/receipts/{token}", "receipt": summary})
         if p == ["v1", "admin", "trust"]:
             who = self.auth_handle(c)
             if not who or not has_min_role(c, who, "admin"):

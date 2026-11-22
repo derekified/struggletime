@@ -2,7 +2,7 @@
 
 ---
 
-hey :wave: so i've been building this thing for the ai time tracking bounty and it finally actually works end to end, so here's what i made so far
+hey :wave: so i've been building StruggleTime for Hack Club shipping culture (productive struggle) and it finally actually works end to end, so here's what i made so far
 
 it's called **struggletime**. the whole idea came from one thing that bugged me: trackers count activity, but ai makes activity meaningless. an agent can look "active" for 3 hours while you're off doing something else. so instead of counting activity, it counts whether you actually closed the loop:
 

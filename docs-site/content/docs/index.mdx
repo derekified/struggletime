@@ -1,0 +1,43 @@
+---
+title: Overview
+description: What StruggleTime measures and how weighting works.
+---
+
+StruggleTime tracks productive struggle: the loops where something breaks, you dig in, and it works again. Keystroke counters and unattended agent dumps do not get the same weight.
+
+## What gets credit
+
+```
+(edit | prompt) -> (test | build | run) -> (follow-up edit | commit)
+```
+
+| Pattern | Weight (v0.4.0-alpha) |
+|---|---|
+| Struggle / fail->fix->pass | 1.00x |
+| AI write + dwell + follow-up | 0.85x |
+| Human edits, never run | 0.70x |
+| Unverified multi-file dump | 0.20x |
+| Quiet follow-up after real work | 0.70 -> 0 over ~5-12 minutes |
+| Idle after the active span | Gradual decay (no hard 240s cliff) |
+
+## Trust model
+
+- Structural signals only: git pulses, salted file IDs, build/test footprints. No screenshots, prompts, or file contents.
+- Hash chain: each sealed bucket stores `prev_hash` of the prior entry. Quiet rewrites show up in review.
+- Shared formula: `daemon/daemon.py` and `server/server.py` both call `src/verify.py` with the same `FORMULA_VERSION`.
+
+## Privacy
+
+`daemon/daemon.py` is stdlib-only. Wire payloads are allowlisted metadata (~25-50 KB) with `sha256(salt:path)` file IDs. See [Privacy](/docs/privacy).
+
+## Pages
+
+<Cards>
+  <Card title="Getting started" href="/docs/setup" description="Clone, check, run server + daemon" />
+  <Card title="CLI and tray" href="/docs/tray" description="struggletime-helper and the menu bar" />
+  <Card title="Daemon" href="/docs/daemon" description="1s loop, multi-repo, silent decay" />
+  <Card title="Privacy" href="/docs/privacy" description="Ledger, allowlist, what never leaves" />
+  <Card title="Web app" href="/docs/web-app" description="Dashboard, builders, roles" />
+  <Card title="API" href="/docs/api" description="Batch ingest, chain, review" />
+  <Card title="Troubleshooting" href="/docs/troubleshooting" description="Daemon, sync, and fetch fixes" />
+</Cards>

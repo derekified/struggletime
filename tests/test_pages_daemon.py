@@ -17,7 +17,7 @@ class TestPagesDaemon(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.tmp = tempfile.mkdtemp(); cls.port = 18811
-        env = {**os.environ, "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db", "SLACK_WEBHOOK_URL": ""}
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "PORT": str(cls.port), "SERVER_DB": f"{cls.tmp}/t.db", "SLACK_WEBHOOK_URL": ""}
         cls.proc = subprocess.Popen([sys.executable, str(ROOT/"server/server.py")], env=env, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         for _ in range(50):
             try:
@@ -79,7 +79,7 @@ class TestPagesDaemon(unittest.TestCase):
         tmp = tempfile.mkdtemp(); repo = pathlib.Path(tmp) / "r"; repo.mkdir()
         subprocess.run(["git", "init", "-q", str(repo)])
         (repo / "a.py").write_text("x=1\n")
-        env = {**os.environ, "AITIME_HOME": f"{tmp}/aitime"}
+        env = {**os.environ, "STRUGGLETIME_DEV_INGEST": "1", "AITIME_HOME": f"{tmp}/aitime"}
         def helper(*args):
             return subprocess.run([sys.executable, str(ROOT/"daemon/helper.py"), *args], capture_output=True, text=True, env=env, timeout=30)
         r = helper("start", "--repo", str(repo), "--user", "t", "--bucket-secs", "2")
