@@ -31,8 +31,12 @@ class TestDashboard(unittest.TestCase):
         self.assertEqual(s, 200)
         low = html.lower()
         for needle in ("struggletime", "page-landing", "count the loops that fixed the code", "styles.css", "ui.js", "app.js",
-                       "fake-stats-preview", "hero-preview", "hero-features", "struggle scoring", "privacy first"):
+                       "fake-stats-preview", "hero-preview", "hero-features", "struggle scoring", "privacy first",
+                       "brand-mark", "/img/struggletime.svg"):
             self.assertIn(needle, low)
+        s_logo, logo = req(self.port, "GET", "/img/struggletime.svg")
+        self.assertEqual(s_logo, 200)
+        self.assertIn("currentColor", logo)
         css0 = req(self.port, "GET", "/styles.css")[1]
         app_boot = req(self.port, "GET", "/app.js")[1]
         self.assertIn("guest-mode", css0)

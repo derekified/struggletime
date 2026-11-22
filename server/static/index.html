@@ -2,6 +2,8 @@
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>StruggleTime</title>
+<link rel="icon" href="/img/struggletime.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="/img/struggletime.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;650;700&display=swap" rel="stylesheet">
@@ -9,7 +11,16 @@
 </head><body>
 <header class="top">
   <a class="brand" href="/" data-nav-link>
-    <span class="mark">s</span>
+    <span class="brand-mark" aria-hidden="true">
+      <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" fill="none" stroke="currentColor" width="30" height="30">
+        <circle cx="64" cy="64" r="48" stroke-width="8"/>
+        <path d="M64 24V30M64 98V104M24 64H30M98 64H104" stroke-width="5"/>
+        <path d="M64 64C59 59 54 53 48 53C43.5 53 41 56 41 59.5C41 65.5 53 65 53 72.5C53 76.5 49.5 79.5 45 79.5C40.5 79.5 37.5 77 35.5 74" stroke-width="6.5"/>
+        <path d="M64 64L86 42" stroke-width="6.5"/>
+        <path d="M77 33L95 51" stroke-width="6.5"/>
+        <circle cx="64" cy="64" r="4" fill="currentColor" stroke="none"/>
+      </svg>
+    </span>
     <span class="word">StruggleTime</span>
   </a>
   <nav class="top-nav" id="top-nav">

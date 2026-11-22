@@ -16,9 +16,17 @@ for d in daemon src server adapters schemas weighting examples docs; do
     cp -a "$ROOT/$d/." "$STAGE/$d/"
   fi
 done
-for f in LICENSE README.md PITCH.md CONTRIBUTING.md Makefile SLACK.md .env.example; do
+for f in LICENSE README.md CONTRIBUTING.md Makefile SLACK.md .env.example struggletime.svg; do
   [ -f "$ROOT/$f" ] && cp "$ROOT/$f" "$STAGE/"
 done
+if [ -f "$ROOT/daemon/assets/struggletime.svg" ]; then
+  mkdir -p "$STAGE/daemon/assets"
+  cp "$ROOT/daemon/assets/struggletime.svg" "$STAGE/daemon/assets/"
+fi
+if [ -f "$ROOT/server/static/img/struggletime.svg" ]; then
+  mkdir -p "$STAGE/server/static/img"
+  cp "$ROOT/server/static/img/struggletime.svg" "$STAGE/server/static/img/"
+fi
 # strip caches
 find "$STAGE" -type d -name __pycache__ -exec rm -rf {} + 2>/dev/null || true
 find "$STAGE" -name '*.pyc' -delete 2>/dev/null || true

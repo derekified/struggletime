@@ -4,7 +4,7 @@ Time tracking that counts **productive struggle**, not raw activity.
 Built for Hack Club builders shipping open source. Reviewers see structure
 and weights — not screenshots or prompts. AGPLv3.
 
-Pitch: [`PITCH.md`](PITCH.md) · Docs: `/docs` after `make docs`
+Docs: `/docs` after `make docs`
 
 An unattended agent hour is not a learning hour. StruggleTime watches the
 loop `(edit|prompt) → (test|build) → (follow-up|commit)`, weights it, and

@@ -8,6 +8,10 @@ export const metadata: Metadata = {
     template: '%s · StruggleTime Docs',
   },
   description: 'Setup, tray, daemon, API, and privacy docs for StruggleTime.',
+  icons: {
+    icon: [{ url: '/img/struggletime.svg', type: 'image/svg+xml' }],
+    apple: [{ url: '/img/struggletime.svg' }],
+  },
 };
 
 export default function Layout({ children }: LayoutProps<'/'>) {

@@ -72,6 +72,17 @@ a.ui-btn,button.ui-btn{justify-content:center;line-height:1.2;white-space:nowrap
 .top{display:flex;align-items:center;gap:14px;padding:12px 22px;border-bottom:1px solid var(--line);position:sticky;top:0;background:var(--bg);z-index:40}
 .brand{display:flex;align-items:center;gap:10px;color:var(--ink)}
 .mark{width:30px;height:30px;border-radius:50%;background:var(--accent);color:var(--btn-ink);display:grid;place-items:center;font-weight:900}
+.brand-mark{
+  width:30px;height:30px;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;
+  color:var(--accent);
+}
+.brand-mark svg{display:block;width:30px;height:30px}
+.brand-logo{
+  width:30px;height:30px;display:inline-block;flex-shrink:0;
+  background-color:var(--accent);
+  -webkit-mask:url(/img/struggletime.svg) center/contain no-repeat;
+  mask:url(/img/struggletime.svg) center/contain no-repeat;
+}
 .word{font-size:18px;font-weight:700}
 .top-nav{display:flex;gap:2px;flex-wrap:wrap;margin-left:12px;transition:gap 150ms ease-out}
 .top-nav a{

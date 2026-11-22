@@ -69,19 +69,90 @@ def format_duration(hours):
 def weighted_title(hours, tracking=None):
     return format_duration(hours)
 
-def make_icon(tracking, paused=False):
-    img = Image.new("RGBA", (64, 64), (0, 0, 0, 0))
-    d = ImageDraw.Draw(img)
-    d.rounded_rectangle([4, 4, 60, 60], radius=14, fill=(13, 12, 10, 255))
+def _icon_svg_path():
+    for p in (
+        HERE / "assets" / "struggletime.svg",
+        HERE.parent / "struggletime.svg",
+        HERE.parent / "server" / "static" / "img" / "struggletime.svg",
+    ):
+        if p.is_file():
+            return p
+    return None
+
+def _hex_rgb(hex_color):
+    h = hex_color.lstrip("#")
+    return tuple(int(h[i:i + 2], 16) for i in (0, 2, 4))
+
+def _theme_icon_colors(tracking, paused=False):
+    """Match dashboard lime tokens; accent shifts with tracking state."""
+    bg = "#0d0c0a"
     if paused:
-        ring = (255, 140, 55, 255)
+        fg = "#ff8c37"
     elif tracking:
-        ring = (215, 255, 106, 255)
+        fg = "#d7ff6a"
     else:
-        ring = (87, 83, 76, 255)
-    d.arc([16, 16, 48, 48], start=40, end=330, fill=ring, width=6)
-    d.ellipse([28, 28, 36, 36], fill=(255, 140, 55, 255) if tracking and not paused else (87, 83, 76, 255))
+        fg = "#a39e93"
+    return fg, bg
+
+def _render_svg_icon(fg_hex, bg_hex, size=64):
+    """Rasterize struggletime.svg with theme colors (rsvg-convert, else PIL fallback)."""
+    import tempfile
+    src = _icon_svg_path()
+    if src is not None:
+        body = src.read_text(encoding="utf-8")
+        # Strip outer <svg>...</svg> so we can nest on a rounded tile
+        inner = body
+        if "<svg" in inner:
+            inner = inner.split(">", 1)[-1]
+        if "</svg>" in inner:
+            inner = inner.rsplit("</svg>", 1)[0]
+        inner = inner.replace("currentColor", fg_hex)
+        wrapped = (
+            '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">'
+            f'<rect width="128" height="128" rx="28" fill="{bg_hex}"/>'
+            f'<g transform="translate(10 10) scale(0.84)" stroke="{fg_hex}" fill="none" color="{fg_hex}">'
+            f"{inner}"
+            "</g></svg>"
+        )
+        with tempfile.TemporaryDirectory() as td:
+            svg_path = Path(td) / "icon.svg"
+            png_path = Path(td) / "icon.png"
+            svg_path.write_text(wrapped, encoding="utf-8")
+            try:
+                subprocess.run(
+                    ["rsvg-convert", "-w", str(size), "-h", str(size), "-o", str(png_path), str(svg_path)],
+                    check=True, capture_output=True, timeout=8,
+                )
+                return Image.open(png_path).convert("RGBA").copy()
+            except Exception:
+                pass
+    img = Image.new("RGBA", (size, size), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    fg = _hex_rgb(fg_hex) + (255,)
+    bg = _hex_rgb(bg_hex) + (255,)
+    pad = max(2, size // 16)
+    d.rounded_rectangle([pad, pad, size - pad - 1, size - pad - 1], radius=size // 5, fill=bg)
+    m = pad + size // 10
+    d.ellipse([m, m, size - m - 1, size - m - 1], outline=fg, width=max(2, size // 12))
+    cx = cy = size // 2
+    tick = max(2, size // 14)
+    for x0, y0, x1, y1 in (
+        (cx, m + 2, cx, m + tick),
+        (cx, size - m - tick, cx, size - m - 2),
+        (m + 2, cy, m + tick, cy),
+        (size - m - tick, cy, size - m - 2, cy),
+    ):
+        d.line([(x0, y0), (x1, y1)], fill=fg, width=max(2, size // 28))
+    hand = max(2, size // 18)
+    d.line([(cx, cy), (cx + size // 5, cy - size // 5)], fill=fg, width=hand)
+    d.line([(cx + size // 8, cy - size // 4), (cx + size // 4, cy - size // 10)], fill=fg, width=hand)
+    r = max(2, size // 28)
+    d.ellipse([cx - r, cy - r, cx + r, cy + r], fill=fg)
     return img
+
+def make_icon(tracking, paused=False):
+    fg, bg = _theme_icon_colors(tracking, paused=paused)
+    return _render_svg_icon(fg, bg, size=64)
 
 def api_json(server, method, path, token=None, body=None, timeout=12):
     return browser_auth.api_json(server, method, path, token=token, body=body, timeout=timeout)
