@@ -24,21 +24,25 @@ Grab a single OS binary from
 
 ### Quick install
 
-**macOS (Apple Silicon)**
+**macOS Universal** (Apple Silicon + Intel)
 
 ```bash
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-aarch64.tar.gz
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-aarch64.tar.gz.sha256
-shasum -a 256 -c struggletime-macos-aarch64.tar.gz.sha256
-tar -xzf struggletime-macos-aarch64.tar.gz
-sudo install -m 755 struggletime-macos-aarch64/struggletime /usr/local/bin/struggletime
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
+shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
+tar -xzf struggletime-macos-universal.tar.gz
+chmod +x struggletime-macos-universal/struggletime
+sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
 ```
 
-**Windows** — download `struggletime-windows-x86_64.zip`, verify the SHA-256,
-unzip, and put `struggletime.exe` on your PATH.
+**macOS Intel** — same steps with `struggletime-macos-intel.tar.gz`.
 
-Each release also ships `SHA256SUMS.txt`. Intel macOS and Linux x86_64
-archives are published the same way. See [docs/installation](https://62-83-116-143.sslip.io/docs/installation/).
+**Windows x64** — download `struggletime-windows-x64.exe`, verify against
+`SHA256SUMS.txt` / the `.sha256` file, and put it on your PATH as
+`struggletime.exe`.
+
+Each release ships `SHA256SUMS.txt`. See
+[docs/installation](https://62-83-116-143.sslip.io/docs/installation/).
 
 ## Install from source
 

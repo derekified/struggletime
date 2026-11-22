@@ -207,11 +207,11 @@
             </label>
             <label class="ui-field">color scheme
               <select id="dash-theme-sel" class="ui-input" aria-label="dashboard color scheme">
-                <option value="classic">Classic</option>
+                <option value="classic">Classic (default)</option>
                 <option value="midnight">Midnight</option>
                 <option value="neon">Neon</option>
                 <option value="catppuccin-mocha">Catppuccin Mocha</option>
-                <option value="catppuccin-latte">Catppuccin Iced Latte</option>
+                <option value="catppuccin-iced-latte">Catppuccin Iced Latte</option>
                 <option value="gruvbox-dark">Gruvbox Dark</option>
                 <option value="github-dark">GitHub Dark</option>
                 <option value="github-light">GitHub Light</option>
@@ -630,11 +630,11 @@ source /path/to/struggletime/daemon/hooks.sh
               <p class="sub">Saved on this device. Applies across the dashboard, modals, and review tools.</p>
               <label class="ui-field">color scheme
                 <select id="theme-sel" class="ui-input" aria-label="color scheme">
-                  <option value="classic">Classic</option>
+                  <option value="classic">Classic (default)</option>
                   <option value="midnight">Midnight</option>
                   <option value="neon">Neon</option>
                   <option value="catppuccin-mocha">Catppuccin Mocha</option>
-                  <option value="catppuccin-latte">Catppuccin Iced Latte</option>
+                  <option value="catppuccin-iced-latte">Catppuccin Iced Latte</option>
                   <option value="gruvbox-dark">Gruvbox Dark</option>
                   <option value="github-dark">GitHub Dark</option>
                   <option value="github-light">GitHub Light</option>
@@ -646,18 +646,18 @@ source /path/to/struggletime/daemon/hooks.sh
               </label>
               
               <div class="theme-preview-grid" id="theme-preview-grid" role="listbox" aria-label="Theme previews">
-                <button type="button" class="theme-preview-card" data-theme-pick="classic" role="option" aria-label="Classic: Warm dark with coral accent"><span class="tp-swatch" data-theme="classic"></span><span class="tp-meta"><b>Classic</b><em>Warm dark with coral accent</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="midnight" role="option" aria-label="Midnight: Charcoal with coral accent"><span class="tp-swatch" data-theme="midnight"></span><span class="tp-meta"><b>Midnight</b><em>Charcoal with coral accent</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="neon" role="option" aria-label="Neon: Dark with bright lime accent"><span class="tp-swatch" data-theme="neon"></span><span class="tp-meta"><b>Neon</b><em>Dark with bright lime accent</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="catppuccin-mocha" role="option" aria-label="Catppuccin Mocha: Soft lavender dark"><span class="tp-swatch" data-theme="catppuccin-mocha"></span><span class="tp-meta"><b>Catppuccin Mocha</b><em>Soft lavender dark</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="catppuccin-latte" role="option" aria-label="Catppuccin Iced Latte: Cool light with blue accent"><span class="tp-swatch" data-theme="catppuccin-latte"></span><span class="tp-meta"><b>Catppuccin Iced Latte</b><em>Cool light with blue accent</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="gruvbox-dark" role="option" aria-label="Gruvbox Dark: Warm retro amber/gold"><span class="tp-swatch" data-theme="gruvbox-dark"></span><span class="tp-meta"><b>Gruvbox Dark</b><em>Warm retro amber/gold</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="github-dark" role="option" aria-label="GitHub Dark: Crisp blue on dark"><span class="tp-swatch" data-theme="github-dark"></span><span class="tp-meta"><b>GitHub Dark</b><em>Crisp blue on dark</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="github-light" role="option" aria-label="GitHub Light: Blue on light"><span class="tp-swatch" data-theme="github-light"></span><span class="tp-meta"><b>GitHub Light</b><em>Blue on light</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="nord" role="option" aria-label="Nord: Arctic slate and frost"><span class="tp-swatch" data-theme="nord"></span><span class="tp-meta"><b>Nord</b><em>Arctic slate and frost</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="rose-pine" role="option" aria-label="Rose Pine: Deep plum with rose accent"><span class="tp-swatch" data-theme="rose-pine"></span><span class="tp-meta"><b>Rose Pine</b><em>Deep plum with rose accent</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="rose-pine-dawn" role="option" aria-label="Rose Pine Dawn: Soft warm light rose"><span class="tp-swatch" data-theme="rose-pine-dawn"></span><span class="tp-meta"><b>Rose Pine Dawn</b><em>Soft warm light rose</em></span></button>
-                <button type="button" class="theme-preview-card" data-theme-pick="amoled" role="option" aria-label="AMOLED: Pure black with cyan accent"><span class="tp-swatch" data-theme="amoled"></span><span class="tp-meta"><b>AMOLED</b><em>Pure black with cyan accent</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="classic" role="option" aria-label="Classic: Classic warm dark palette."><span class="tp-swatch" data-theme="classic"></span><span class="tp-meta"><b>Classic</b><em>Classic warm dark palette.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="midnight" role="option" aria-label="Midnight: Neutral charcoal with classic red accents."><span class="tp-swatch" data-theme="midnight"></span><span class="tp-meta"><b>Midnight</b><em>Neutral charcoal with classic red accents.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="neon" role="option" aria-label="Neon: Dark mode with neon green primary."><span class="tp-swatch" data-theme="neon"></span><span class="tp-meta"><b>Neon</b><em>Dark mode with neon green primary.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="catppuccin-mocha" role="option" aria-label="Catppuccin Mocha: Warm purple-tinted dark palette."><span class="tp-swatch" data-theme="catppuccin-mocha"></span><span class="tp-meta"><b>Catppuccin Mocha</b><em>Warm purple-tinted dark palette.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="catppuccin-iced-latte" role="option" aria-label="Catppuccin Iced Latte: Cool light Catppuccin variant."><span class="tp-swatch" data-theme="catppuccin-iced-latte"></span><span class="tp-meta"><b>Catppuccin Iced Latte</b><em>Cool light Catppuccin variant.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="gruvbox-dark" role="option" aria-label="Gruvbox Dark: Retro warm dark tones."><span class="tp-swatch" data-theme="gruvbox-dark"></span><span class="tp-meta"><b>Gruvbox Dark</b><em>Retro warm dark tones.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="github-dark" role="option" aria-label="GitHub Dark: GitHub's classic dark palette."><span class="tp-swatch" data-theme="github-dark"></span><span class="tp-meta"><b>GitHub Dark</b><em>GitHub's classic dark palette.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="github-light" role="option" aria-label="GitHub Light: GitHub's classic light palette."><span class="tp-swatch" data-theme="github-light"></span><span class="tp-meta"><b>GitHub Light</b><em>GitHub's classic light palette.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="nord" role="option" aria-label="Nord: Arctic blue-gray contrast."><span class="tp-swatch" data-theme="nord"></span><span class="tp-meta"><b>Nord</b><em>Arctic blue-gray contrast.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="rose-pine" role="option" aria-label="Rose Pine: Rose Pine inspired dark palette."><span class="tp-swatch" data-theme="rose-pine"></span><span class="tp-meta"><b>Rose Pine</b><em>Rose Pine inspired dark palette.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="rose-pine-dawn" role="option" aria-label="Rose Pine Dawn: Rose Pine inspired light palette."><span class="tp-swatch" data-theme="rose-pine-dawn"></span><span class="tp-meta"><b>Rose Pine Dawn</b><em>Rose Pine inspired light palette.</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="amoled" role="option" aria-label="AMOLED: Pure black for the darkest dark mode."><span class="tp-swatch" data-theme="amoled"></span><span class="tp-meta"><b>AMOLED</b><em>Pure black for the darkest dark mode.</em></span></button>
               </div>
 
               <label class="ui-field">display density

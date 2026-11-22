@@ -22,26 +22,39 @@ bundles:
 - background tracker (`daemon`)
 - local HTTP server (`serve`)
 
-### macOS
+### macOS Universal (Apple Silicon + Intel)
 
 ```bash
-# Apple Silicon
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-aarch64.tar.gz
-curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-aarch64.tar.gz.sha256
-shasum -a 256 -c struggletime-macos-aarch64.tar.gz.sha256
-tar -xzf struggletime-macos-aarch64.tar.gz
-sudo install -m 755 struggletime-macos-aarch64/struggletime /usr/local/bin/struggletime
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-universal.tar.gz.sha256
+shasum -a 256 -c struggletime-macos-universal.tar.gz.sha256
+tar -xzf struggletime-macos-universal.tar.gz
+chmod +x struggletime-macos-universal/struggletime
+sudo install -m 755 struggletime-macos-universal/struggletime /usr/local/bin/struggletime
 ```
 
-Intel Macs use `struggletime-macos-x86_64.tar.gz`. A universal build
-(`struggletime-macos-universal.tar.gz`) is published when both arches succeed.
+### macOS Intel (`x86_64`)
 
-### Windows
+```bash
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-intel.tar.gz.sha256
+shasum -a 256 -c struggletime-macos-intel.tar.gz.sha256
+tar -xzf struggletime-macos-intel.tar.gz
+chmod +x struggletime-macos-intel/struggletime
+sudo install -m 755 struggletime-macos-intel/struggletime /usr/local/bin/struggletime
+```
 
-1. Download `struggletime-windows-x86_64.zip` and its `.sha256` file from
-   [Releases](https://github.com/derekified/struggletime/releases).
-2. Verify: `Get-FileHash struggletime-windows-x86_64.zip -Algorithm SHA256`
-3. Unzip and put `struggletime.exe` on your PATH.
+### Windows (x64)
+
+```powershell
+# Download struggletime-windows-x64.exe (+ .sha256) from Releases, then:
+Get-FileHash .\struggletime-windows-x64.exe -Algorithm SHA256
+# Compare to the hash in struggletime-windows-x64.exe.sha256 / SHA256SUMS.txt
+# Put struggletime-windows-x64.exe on your PATH as struggletime.exe
+```
+
+A `.zip` of the same binary is also published. See
+[Releases](https://github.com/derekified/struggletime/releases).
 
 ### Checksums
 

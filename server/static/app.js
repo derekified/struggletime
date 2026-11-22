@@ -373,11 +373,11 @@ function loadDashPrefs() {
 let dashPrefs = loadDashPrefs();
 
 const THEME_ALIAS = {
-  lime: "neon", ember: "classic", ocean: "nord", forest: "gruvbox-dark", ink: "midnight",
+  lime: "neon", ember: "classic", ocean: "nord", forest: "gruvbox-dark", ink: "midnight", "catppuccin-latte": "catppuccin-iced-latte",
   obsidian: "amoled", paper: "github-light", crt: "neon", nordic: "nord", sand: "gruvbox-dark",
   midnight: "midnight",
 };
-const THEME_IDS = ["classic","midnight","neon","catppuccin-mocha","catppuccin-latte","gruvbox-dark","github-dark","github-light","nord","rose-pine","rose-pine-dawn","amoled"];
+const THEME_IDS = ["classic","midnight","neon","catppuccin-mocha","catppuccin-iced-latte","gruvbox-dark","github-dark","github-light","nord","rose-pine","rose-pine-dawn","amoled"];
 function resolveTheme(raw) {
   let v = (raw || "").trim() || "classic";
   if (THEME_ALIAS[v]) v = THEME_ALIAS[v];

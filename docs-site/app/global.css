@@ -9,14 +9,14 @@
 
 :root {
   /* Classic (default) — mirrors SPA data-theme=classic */
-  --st-bg: #1a1412;
-  --st-panel: #2a1f1c;
-  --st-panel2: #342824;
-  --st-line: #4a3832;
-  --st-ink: #f5ebe6;
-  --st-mut: #b5a098;
-  --st-accent: #e85d4c;
-  --st-btn-ink: #1a1412;
+  --st-bg: #1C1517;
+  --st-panel: #2A1F22;
+  --st-panel2: #342428;
+  --st-line: #3D2C30;
+  --st-ink: #F5ECEE;
+  --st-mut: #B5A4A8;
+  --st-accent: #EC3750;
+  --st-btn-ink: #FFFFFF;
   --st-radius: 12px;
   --st-rail: 180px;
 
@@ -407,7 +407,7 @@ body {
 .docs-app textarea:focus {
   outline: none;
   border-color: var(--st-accent);
-  box-shadow: 0 0 0 3px rgba(215, 255, 106, 0.18);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--st-accent) 28%, transparent);
 }
 
 .docs-app .table-wrap,
@@ -491,13 +491,14 @@ body {
 /*
  * Docs code blocks (st-codeblock via components/mdx.tsx):
  * <figure.st-codeblock> > .st-code-copy + .st-code-viewport > pre
- * One outer border; copy control sits in a dedicated gutter (never clipped by overflow).
+ * One outer border. Copy is z-10 so sticky header/TOC (z-40) cover it while scrolling.
  */
 .docs-app figure.st-codeblock,
 .docs-app figure.shiki.st-codeblock,
 .docs-app figure.shiki,
 .docs-app figure:has(pre) {
   position: relative;
+  z-index: 0;
   width: 100%;
   max-width: 100%;
   min-width: 0;
@@ -516,11 +517,11 @@ body {
   position: relative;
   z-index: 0;
   box-sizing: border-box !important;
-  width: calc(100% - 3.5rem) !important;
-  max-width: calc(100% - 3.5rem) !important;
+  width: 100% !important;
+  max-width: 100% !important;
   margin: 0 !important;
   padding: 0.75rem 0.875rem !important;
-  padding-right: 3.5rem !important; /* pr-14 */
+  padding-right: 3rem !important; /* pr-12 */
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
@@ -531,8 +532,6 @@ body {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: var(--st-line) transparent;
-  /* keep scrolled ink inside this box — never over the copy gutter */
-  overflow-clip-margin: 0 !important;
 }
 
 .docs-app .st-code-viewport::-webkit-scrollbar,
@@ -580,19 +579,24 @@ body {
   border: 1px solid var(--st-line) !important;
   border-radius: var(--st-radius) !important;
   padding: 12px 14px !important;
-  padding-right: 3.5rem !important;
+  padding-right: 3rem !important; /* pr-12 */
   overflow-x: auto !important;
   scrollbar-width: thin;
   scrollbar-color: var(--st-line) transparent;
 }
 
-/* Dedicated copy slot — top-2.5 / right-2.5, outside the scroll viewport */
+/*
+ * Copy slot:
+ * - single-line: vertically centered (top-1/2 -translate-y-1/2 right-3)
+ * - multi-line: top-3 right-3
+ * z-10 — below sticky docs chrome (z-40)
+ */
 .docs-app .st-code-copy {
   position: absolute !important;
-  top: 0.625rem !important;
-  right: 0.625rem !important;
-  z-index: 20 !important;
-  isolation: isolate;
+  top: 50% !important;
+  right: 0.75rem !important; /* right-3 */
+  transform: translateY(-50%);
+  z-index: 10 !important;
   box-sizing: border-box;
   width: 2rem;
   height: 2rem;
@@ -604,10 +608,16 @@ body {
   pointer-events: none;
 }
 
+.docs-app figure.st-codeblock:has(.line:nth-child(2)) .st-code-copy,
+.docs-app figure.shiki:has(.line:nth-child(2)) .st-code-copy {
+  top: 0.75rem !important; /* top-3 */
+  transform: none;
+}
+
 .docs-app .st-code-copy button {
   pointer-events: auto;
   position: relative !important;
-  z-index: 20 !important;
+  z-index: 10 !important;
   box-sizing: border-box !important;
   width: 2rem !important;
   height: 2rem !important;
@@ -629,7 +639,6 @@ body {
   box-shadow: none !important;
   line-height: 0 !important;
   transition: none !important;
-  /* solid plate so scrolled code cannot show through */
   background-clip: padding-box !important;
 }
 
@@ -638,6 +647,15 @@ body {
   height: 0.875rem !important;
   flex-shrink: 0;
   overflow: visible !important;
+}
+
+/* Sticky docs chrome above scrolling code / copy buttons */
+.docs-app #nd-subnav,
+.docs-app header#nd-subnav,
+.docs-app [data-toc-popover],
+.docs-app #nd-toc-popover,
+.docs-app .docs-toc-popover {
+  z-index: 40 !important;
 }
 
 .docs-app hr {
@@ -667,38 +685,47 @@ body {
 
 /* Docs mirrors of SPA colourschemes (Classic default in :root above) */
 html[data-theme="midnight"] {
-  --st-bg:#121212;--st-panel:#1e1e1e;--st-panel2:#2a2a2a;--st-line:#3a3a3a;--st-ink:#ececec;--st-mut:#9a9a9a;--st-accent:#e85d4c;--st-btn-ink:#121212;
+  --st-bg:#141416;--st-panel:#1E1E22;--st-panel2:#26262C;--st-line:#2E2E34;--st-ink:#F3F3F5;--st-mut:#9E9EA8;--st-accent:#EC3750;--st-btn-ink:#FFFFFF;
 }
 html[data-theme="neon"] {
-  --st-bg:#0a0b0a;--st-panel:#141614;--st-panel2:#1c1f1c;--st-line:#2a302a;--st-ink:#eef5ee;--st-mut:#8a9a8a;--st-accent:#b8ff3c;--st-btn-ink:#0a0b0a;
+  --st-bg:#0D0F0D;--st-panel:#161A16;--st-panel2:#1E241E;--st-line:#262E26;--st-ink:#F2F7F2;--st-mut:#96A396;--st-accent:#B8FF3B;--st-btn-ink:#0D0F0D;
 }
 html[data-theme="catppuccin-mocha"] {
-  --st-bg:#1e1e2e;--st-panel:#313244;--st-panel2:#45475a;--st-line:#585b70;--st-ink:#cdd6f4;--st-mut:#a6adc8;--st-accent:#cba6f7;--st-btn-ink:#1e1e2e;
+  --st-bg:#1E1E2E;--st-panel:#28283D;--st-panel2:#313148;--st-line:#3B3B54;--st-ink:#CDD6F4;--st-mut:#A6ADC8;--st-accent:#CBA6F7;--st-btn-ink:#1E1E2E;
 }
+html[data-theme="catppuccin-iced-latte"],
 html[data-theme="catppuccin-latte"] {
-  --st-bg:#eff1f5;--st-panel:#ffffff;--st-panel2:#e6e9ef;--st-line:#ccd0da;--st-ink:#4c4f69;--st-mut:#6c6f85;--st-accent:#1e66f5;--st-btn-ink:#ffffff;
+  --st-bg:#DCE0E8;--st-panel:#E6E9EF;--st-panel2:#EFF1F5;--st-line:#BCC0CC;--st-ink:#4C4F69;--st-mut:#6C6F85;--st-accent:#1E66F5;--st-btn-ink:#FFFFFF;
 }
 html[data-theme="gruvbox-dark"] {
-  --st-bg:#282828;--st-panel:#3c3836;--st-panel2:#504945;--st-line:#665c54;--st-ink:#ebdbb2;--st-mut:#a89984;--st-accent:#fabd2f;--st-btn-ink:#282828;
+  --st-bg:#282828;--st-panel:#32302F;--st-panel2:#3C3836;--st-line:#504945;--st-ink:#EBDBB2;--st-mut:#A89984;--st-accent:#D79921;--st-btn-ink:#282828;
 }
 html[data-theme="github-dark"] {
-  --st-bg:#0d1117;--st-panel:#161b22;--st-panel2:#21262d;--st-line:#30363d;--st-ink:#e6edf3;--st-mut:#8b949e;--st-accent:#2f81f7;--st-btn-ink:#ffffff;
+  --st-bg:#0D1117;--st-panel:#161B22;--st-panel2:#21262D;--st-line:#30363D;--st-ink:#E6EDF3;--st-mut:#8B949E;--st-accent:#1F6FEB;--st-btn-ink:#FFFFFF;
 }
 html[data-theme="github-light"] {
-  --st-bg:#ffffff;--st-panel:#f6f8fa;--st-panel2:#eef1f4;--st-line:#d0d7de;--st-ink:#1f2328;--st-mut:#656d76;--st-accent:#0969da;--st-btn-ink:#ffffff;
+  --st-bg:#F6F8FA;--st-panel:#FFFFFF;--st-panel2:#EEF1F4;--st-line:#D0D7DE;--st-ink:#1F2328;--st-mut:#656D76;--st-accent:#0969DA;--st-btn-ink:#FFFFFF;
 }
 html[data-theme="nord"] {
-  --st-bg:#2e3440;--st-panel:#3b4252;--st-panel2:#434c5e;--st-line:#4c566a;--st-ink:#eceff4;--st-mut:#d8dee9;--st-accent:#88c0d0;--st-btn-ink:#2e3440;
+  --st-bg:#2E3440;--st-panel:#3B4252;--st-panel2:#434C5E;--st-line:#4C566A;--st-ink:#ECEFF4;--st-mut:#D8DEE9;--st-accent:#88C0D0;--st-btn-ink:#2E3440;
 }
 html[data-theme="rose-pine"] {
-  --st-bg:#191724;--st-panel:#1f1d2e;--st-panel2:#26233a;--st-line:#403d52;--st-ink:#e0def4;--st-mut:#908caa;--st-accent:#ebbcba;--st-btn-ink:#191724;
+  --st-bg:#191724;--st-panel:#1F1D2E;--st-panel2:#26233A;--st-line:#26233A;--st-ink:#E0DEF4;--st-mut:#908CAA;--st-accent:#EB6F92;--st-btn-ink:#191724;
 }
 html[data-theme="rose-pine-dawn"] {
-  --st-bg:#faf4ed;--st-panel:#fffaf3;--st-panel2:#f2e9e1;--st-line:#dfdad9;--st-ink:#575279;--st-mut:#797593;--st-accent:#d7827e;--st-btn-ink:#ffffff;
+  --st-bg:#FAF4ED;--st-panel:#F2E9E1;--st-panel2:#FFF7F0;--st-line:#DFDAD9;--st-ink:#575279;--st-mut:#797593;--st-accent:#B4637A;--st-btn-ink:#FFFFFF;
 }
 html[data-theme="amoled"] {
-  --st-bg:#000000;--st-panel:#0a0a0a;--st-panel2:#141414;--st-line:#222222;--st-ink:#f0f0f0;--st-mut:#888888;--st-accent:#00e5ff;--st-btn-ink:#000000;
+  --st-bg:#000000;--st-panel:#0A0A0A;--st-panel2:#121212;--st-line:#1F1F1F;--st-ink:#FFFFFF;--st-mut:#8E8E93;--st-accent:#00E5FF;--st-btn-ink:#000000;
 }
 html[data-theme="classic"] {
-  --st-bg:#1a1412;--st-panel:#2a1f1c;--st-panel2:#342824;--st-line:#4a3832;--st-ink:#f5ebe6;--st-mut:#b5a098;--st-accent:#e85d4c;--st-btn-ink:#1a1412;
+  --st-bg:#1C1517;--st-panel:#2A1F22;--st-panel2:#342428;--st-line:#3D2C30;--st-ink:#F5ECEE;--st-mut:#B5A4A8;--st-accent:#EC3750;--st-btn-ink:#FFFFFF;
+}
+
+/* Light themes: dark hamburger / foreground. Dark themes: light ink. */
+html[data-theme="catppuccin-iced-latte"] .docs-app #nd-subnav button,
+html[data-theme="catppuccin-latte"] .docs-app #nd-subnav button,
+html[data-theme="github-light"] .docs-app #nd-subnav button,
+html[data-theme="rose-pine-dawn"] .docs-app #nd-subnav button {
+  color: var(--st-ink) !important;
 }

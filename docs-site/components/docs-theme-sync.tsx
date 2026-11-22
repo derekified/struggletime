@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 
 const LIGHT = new Set([
+  'catppuccin-iced-latte',
   'catppuccin-latte',
   'github-light',
   'rose-pine-dawn',
@@ -20,6 +21,7 @@ const ALIAS: Record<string, string> = {
   crt: 'neon',
   nordic: 'nord',
   sand: 'gruvbox-dark',
+  'catppuccin-latte': 'catppuccin-iced-latte',
 };
 
 const KNOWN = new Set([
@@ -27,7 +29,7 @@ const KNOWN = new Set([
   'midnight',
   'neon',
   'catppuccin-mocha',
-  'catppuccin-latte',
+  'catppuccin-iced-latte',
   'gruvbox-dark',
   'github-dark',
   'github-light',

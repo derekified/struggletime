@@ -25,7 +25,7 @@ export function DocsHeader(props: ComponentProps<'header'>) {
       data-transparent={isNavTransparent}
       {...props}
       className={cn(
-        '[grid-area:header] sticky top-(--fd-docs-row-1) z-30 flex items-center gap-2 ps-4 pe-2.5 border-b h-(--fd-header-height) md:hidden max-md:layout:[--fd-header-height:--spacing(14)] data-[transparent=false]:bg-fd-background/80',
+        '[grid-area:header] sticky top-(--fd-docs-row-1) z-40 flex items-center gap-2 ps-4 pe-2.5 border-b h-(--fd-header-height) md:hidden max-md:layout:[--fd-header-height:--spacing(14)] data-[transparent=false]:bg-fd-background/80',
         props.className,
       )}
     >
