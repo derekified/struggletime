@@ -1,7 +1,7 @@
 PY ?= python3
 PORT ?= 18765
 
-.PHONY: help check test test-cross verify-adapters server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs docs docs-dev clean
+.PHONY: help check test test-cross verify-adapters server daemon gui tray inspect demo stress-smoke stress package calibrate sync-docs docs docs-dev clean rust rust-test binaries install-binaries
 help:
 	@echo "make check    verify python, git and the test suite"
 	@echo "make test     run all tests"
@@ -14,6 +14,10 @@ help:
 	@echo "make demo     start a server with demo data on :18766"
 	@echo "make inspect  show what a repo would send:  make inspect REPO=~/my-project"
 	@echo "make package  build dist/struggletime-*.tar.gz"
+	@echo "make rust     build native daemon/server/helper/tray (release)"
+	@echo "make rust-test  run Rust unit tests"
+	@echo "make binaries same as make rust"
+	@echo "make install-binaries  link release bins into ~/.local/bin"
 	@echo "make calibrate run 20-session calibration report"
 	@echo "make sync-docs assert YAML/schema match verify.py"
 	@echo "make docs     build Fumadocs static site into docs-site/out"
@@ -63,6 +67,15 @@ stress:
 
 package:
 	sh scripts/package.sh
+
+rust binaries:
+	cd rust && cargo build --release
+
+rust-test:
+	cd rust && cargo test
+
+install-binaries: rust
+	sh scripts/install_binaries.sh
 
 calibrate:
 	$(PY) scripts/run_calibration_20.py

@@ -7,27 +7,40 @@ Repo: [github.com/derekified/struggletime](https://github.com/derekified/struggl
 
 ## Requirements
 
-- Python 3.10+ (server and daemon are stdlib-only)
+- **Preferred:** Rust toolchain to build, or a release zip (no Python)
 - Git
+- Python 3.10+ only if you use the reference Python daemon/server
 - Node 22+ only if you rebuild docs (`make docs`)
 
-## Clone and run the server
+## Native binaries (Windows / macOS / Linux)
+
+Download the zip for your OS from
+[GitHub Releases](https://github.com/derekified/struggletime/releases)
+(built on each `v*` tag). It contains:
+
+- `struggletime-helper`
+- `struggletime-daemon`
+- `struggletime-server`
+- `struggletime-tray`
+
+Put them on your PATH. No Python install required.
+
+From source:
 
 ```bash
 git clone https://github.com/derekified/struggletime.git
 cd struggletime
-make check
-make server          # dashboard + API on :18765
+make rust
+make install-binaries    # ~/.local/bin
+struggletime-server      # http://127.0.0.1:18765 (serves server/static)
 ```
-
-Open `http://127.0.0.1:18765`. Optional demo seed: `make demo` (port 18766).
 
 ## Sign in and API key
 
-1. Continue with Hack Club Slack.
+1. Continue with Hack Club Slack (Python or Rust server).
 2. Claim a public handle if asked.
 3. Settings → Profile → create a StruggleTime API key (`st_...`).
-4. Paste it into the tray, or:
+4. Paste it:
 
 ```bash
 struggletime-helper apikey <paste-key-here>
@@ -35,20 +48,23 @@ struggletime-helper apikey <paste-key-here>
 
 ## Install the desktop tracker
 
+Native:
+
+```bash
+struggletime-helper start --repo ~/my-project
+struggletime-helper status
+# optional supervisor:
+struggletime-tray
+```
+
+Python reference (still supported):
+
 ```bash
 sh daemon/install.sh
-# Windows:
-# powershell -ExecutionPolicy Bypass -File daemon\install.ps1
-```
-
-Tray (GUI deps once):
-
-```bash
-pip install -r daemon/tray-requirements.txt
+# Windows: powershell -ExecutionPolicy Bypass -File daemon\install.ps1
+pip install -r daemon/tray-requirements.txt   # tray GUI only
 make tray
 ```
-
-Or: `python3 daemon/tray.py`.
 
 ## Link a project
 

@@ -1,0 +1,20 @@
+[package]
+name = "st-helper"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "StruggleTime CLI helper (native binary)"
+
+[[bin]]
+name = "struggletime-helper"
+path = "src/main.rs"
+
+[dependencies]
+st-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+dirs = { workspace = true }
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls", "blocking"] }
+tokio = { workspace = true }

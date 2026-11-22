@@ -1,0 +1,22 @@
+[package]
+name = "st-tray"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "StruggleTime menu bar / system tray (native binary)"
+
+[[bin]]
+name = "struggletime-tray"
+path = "src/main.rs"
+
+[features]
+default = []
+native-tray = []
+
+[dependencies]
+st-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }

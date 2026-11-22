@@ -1,0 +1,27 @@
+[package]
+name = "st-daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+description = "StruggleTime desktop tracker (native binary)"
+
+[[bin]]
+name = "struggletime-daemon"
+path = "src/main.rs"
+
+[dependencies]
+st-core = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+clap = { workspace = true }
+tokio = { workspace = true }
+anyhow = { workspace = true }
+chrono = { workspace = true }
+uuid = { workspace = true }
+reqwest = { workspace = true }
+tracing = { workspace = true }
+tracing-subscriber = { workspace = true }
+walkdir = { workspace = true }
+sha2 = { workspace = true }
+hex = { workspace = true }
+dirs = { workspace = true }
