@@ -15,10 +15,11 @@ make check
 ## Daemon will not start
 
 1. Confirm Python 3.10+: `python3 --version`
-2. Run foreground to see traceback: `python3 daemon/daemon.py --repo /path/to/repo`
+2. Run foreground: `python3 daemon/daemon.py --debug --repo /path/to/repo`
 3. Ensure the path is a real directory with permission to read `.git` if present
 4. Re-install shim: `sh daemon/install.sh`
 5. On Windows, use `install.ps1` with a PowerShell policy that allows the install script
+6. Adapter issues: `python3 scripts/verify_adapters.py`
 
 ## Pause vs stop
 
@@ -35,7 +36,7 @@ Use Stop before uninstalling or rotating environments.
 1. Run `struggletime-helper doctor` (API key present? Server reachable?)
 2. Confirm key is `st_...` and not revoked in Settings -> Danger zone
 3. Reject ephemeral Cloudflare tunnel URLs; set the stable host in settings
-4. Inspect ledger chain: a local rewrite can desync `prev_hash`
+4. Inspect the local history log: rewriting an old entry can break `prev_hash` links
 5. Retry flush after connectivity returns; do not delete the queue unless staff recovery says so
 
 ## Dashboard fetch / blank home
@@ -66,8 +67,8 @@ Headless servers have no tray. Use `struggletime-helper` only.
 
 1. Open `/docs/` (trailing slash), not a legacy SPA `#docs` route
 2. After editing MDX: `make docs`, then reload the server that serves `DOCS_OUT`
-3. Settings -> Docs goes to `/docs/`; Settings -> Daemon goes to `https://62-83-116-143.sslip.io/docs/tray/`
-4. Docs use the same 150ms control transitions as the dashboard, gated by `prefers-reduced-motion`
+3. Settings → Docs goes to `/docs/`; Settings → Daemon goes to `/docs/tray/`; dashboard banner "open tray docs" goes to `/docs/installation/`
+4. Docs stay static (no entrance/scroll/hover motion); colourscheme tokens match the dashboard
 
 ## Tests failing
 
@@ -80,4 +81,4 @@ Start with `tests/test_daemon_tracking.py` and `tests/test_dashboard.py`.
 
 ## Still stuck
 
-Collect `doctor` output, OS, StruggleTime version or git SHA, and whether the failure is local daemon or server sync. Open an issue without pasting API keys, full ledger dumps, or source contents.
+Collect `doctor` output, OS, StruggleTime version or git SHA, and whether the failure is local tracker or server sync. Open an issue without pasting API keys, full history dumps, or source contents.

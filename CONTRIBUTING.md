@@ -1,25 +1,26 @@
 # Contributing
 
 ```bash
-make check    # before anything, and before you open a pr
+git clone https://github.com/derekified/struggletime.git
+cd struggletime
+make check    # before you open a PR
 ```
 
-rules of the repo, in order:
+Rules of the repo, in order:
 
-1. **privacy is the product.** a change that lets raw text, paths,
-   prompts, commands or pixels reach the server is rejected on sight,
-   including in tests and logs. the allowlist test is not negotiable.
-2. **weights are versioned, never edited.** changing the formula means
-   a new `formula_version` and calibration notes in `weighting/`, not
-   quietly different numbers under the same version.
-3. **tests first for trust paths.** chain verification, allowlist,
-   weighting states, integration signatures: if it guards trust, it
-   ships with a failing-then-passing test.
-4. **stdlib only** in `server/`, `daemon/` and `src/` unless a change
-   explains why a dependency earns its keep on a 10-year-old laptop.
-5. keep it boring. plain tables, plain files, plain language in docs.
+1. **Privacy is the product.** A change that lets raw text, paths, prompts,
+   command arguments, or pixels reach the server is rejected on sight —
+   including in tests and logs. The allowlist test is not negotiable.
+2. **Weights are versioned, never silently edited.** Changing the formula
+   means a new `formula_version` and calibration notes in `weighting/`.
+3. **Tests first for trust paths.** Chain verification, allowlist, weighting
+   states, integration signatures: if it guards trust, it ships with a
+   failing-then-passing test.
+4. **Stdlib only** in `server/`, `daemon/`, and `src/` unless a change
+   explains why a dependency earns its keep on an old laptop.
+5. Keep docs and UI copy plain and direct. No buzzword filler.
 
-good first work: a new harness adapter (see `adapters/` — the contract
-is "append counts to the exec log, throw content away"), calibration
-sessions per `weighting/calibration-20.md`, and trying to fake hours
-against your own server and reporting how.
+Good first work: a new adapter under `adapters/` (append counts to the
+agent event log, throw content away), calibration sessions per
+`weighting/calibration-20.md`, or trying to fake hours against your own
+server and reporting how.

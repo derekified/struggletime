@@ -27,6 +27,7 @@ check:
 test:
 	$(PY) -m unittest discover -s tests
 	$(PY) scripts/sync_formula_docs.py
+	$(PY) scripts/verify_adapters.py
 
 test-cross:
 	PWSH="$(PWSH)" $(PY) -m unittest tests.test_cross_platform -v

@@ -2,6 +2,7 @@
   "title": "StruggleTime",
   "pages": [
     "index",
+    "installation",
     "setup",
     "tray",
     "daemon",

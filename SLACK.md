@@ -34,15 +34,20 @@ tampered bucket → 422 hash mismatch, rejected
 load test → 5,000 buckets verified in 0.17s, server sitting at ~31mb ram
 ```
 
-that last one matters bc at full struggletime scale this thing only needs ~0.5 writes/sec, so hosting should be like $40-60/mo, way under the cap
+that last one matters bc at full scale this thing only needs ~0.5 writes/sec, so hosting should be like $40-60/mo, way under the cap
 
-try it: [repo link]
-`python3 server/server.py` in one terminal, `python3 daemon/daemon.py --repo ~/your-project` in another, open the dashboard, go build something
+try it: https://github.com/derekified/struggletime
+```bash
+git clone https://github.com/derekified/struggletime.git
+cd struggletime
+make server
+# other terminal:
+sh daemon/install.sh
+struggletime-helper start --repo ~/your-project
+```
 
-honest wip: there's no installer yet so you run it from source, and the weighting formula is v0.1.0-alpha — it has not been checked against real humans yet
+honest wip: weighting is still alpha and needs more real-session calibration. if you want to help, run a normal coding session, label roughly what you were doing (nothing leaves your machine unless you choose to share notes), and tell me where the formula disagrees with a human reviewer. also pls try to break it / fake hours — i'd rather hear that from you than from fraud squad
 
-which is the part i actually need help with: i need ~20 people to record a normal coding session (recording never leaves your machine, i just need you to label roughly what you were doing) so i can see if the formula agrees with what a human reviewer would say. also pls try to break it / fake hours, i'd genuinely rather find that out from you than from fraud squad
-
-ty for reading this far lol, feedback very welcome
+ty for reading this far, feedback welcome
 
 ---

@@ -4,7 +4,7 @@
 
 /*
  * StruggleTime docs theme
- * Tokens mirror server/static/styles.css. Motions match dashboard (150ms).
+ * Tokens mirror server/static/styles.css. No entrance/scroll/hover motion.
  */
 
 :root {
@@ -18,7 +18,6 @@
   --st-btn-ink: #111111;
   --st-radius: 12px;
   --st-rail: 180px;
-  --st-ease: 150ms ease-out;
 
   --color-fd-background: var(--st-bg);
   --color-fd-foreground: var(--st-ink);
@@ -74,7 +73,6 @@ body {
   letter-spacing: -0.01em;
 }
 
-/* Hide any leftover theme switch chrome */
 .docs-app [data-theme-toggle],
 .docs-app button[aria-label*="heme" i],
 .docs-app button[aria-label*="Toggle theme" i],
@@ -82,18 +80,78 @@ body {
   display: none !important;
 }
 
+/* Sidebar rail only from md up; mobile uses drawer with zero column track. */
 .docs-app #nd-docs-layout {
-  --fd-sidebar-width: var(--st-rail);
+  --fd-sidebar-width: 0px;
+  --fd-sidebar-col: 0px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: clip;
+}
+
+@media (min-width: 768px) {
+  .docs-app #nd-docs-layout {
+    --fd-sidebar-width: var(--st-rail);
+    --fd-sidebar-col: var(--fd-sidebar-width);
+  }
+
+  .docs-app #nd-sidebar,
+  .docs-app [data-sidebar] {
+    width: var(--st-rail) !important;
+    min-width: var(--st-rail) !important;
+  }
+}
+
+@media (max-width: 767px) {
+  .docs-app #nd-docs-layout {
+    --fd-sidebar-width: 0px !important;
+    --fd-sidebar-col: 0px !important;
+  }
+
+  /* Same #nd-sidebar as desktop, fixed drawer when open — never reserves article width */
+  .docs-app [data-sidebar-placeholder][data-mobile-open="true"] {
+    display: block !important;
+  }
+
+  .docs-app [data-sidebar-placeholder][data-mobile-open="false"] {
+    display: none !important;
+  }
+
+  .docs-app #nd-sidebar {
+    width: 100% !important;
+    min-width: 0 !important;
+    max-width: 18rem !important;
+  }
+
+  .docs-app .docs-sidebar-overlay {
+    display: block;
+    animation: none !important;
+    transition: none !important;
+  }
 }
 
 .docs-app #nd-sidebar,
 .docs-app [data-sidebar] {
   background: var(--st-bg) !important;
   border-color: var(--st-line) !important;
-  width: var(--st-rail) !important;
-  min-width: var(--st-rail) !important;
   padding: 8px 6px !important;
-  transition: gap var(--st-ease);
+}
+
+/* Kill fumadocs drawer enter/exit motion if any leftover drawer markup appears */
+.docs-app [data-state],
+.docs-app .docs-sidebar-overlay,
+.docs-app #nd-sidebar {
+  animation: none !important;
+  transition: none !important;
+  transform: none !important;
+}
+
+/* No panel/collapse icon in the docs sidebar rail */
+.docs-app #nd-sidebar [data-sidebar-collapse],
+.docs-app #nd-sidebar button[aria-label*="Collapse" i],
+.docs-app #nd-sidebar button[aria-label*="Expand" i] {
+  display: none !important;
 }
 
 .docs-app header {
@@ -101,7 +159,6 @@ body {
   background: var(--st-bg) !important;
 }
 
-/* Sidebar items ≈ .settings-tab */
 .docs-app #nd-sidebar a,
 .docs-app [data-sidebar] a,
 .docs-app #nd-sidebar button,
@@ -122,7 +179,6 @@ body {
   text-align: left;
   text-decoration: none !important;
   position: relative;
-  transition: background-color var(--st-ease), border-color var(--st-ease), color var(--st-ease), transform var(--st-ease);
 }
 
 .docs-app #nd-sidebar a::before,
@@ -135,7 +191,6 @@ body {
   width: 2px;
   border-radius: 2px;
   background: transparent;
-  transition: background-color var(--st-ease);
 }
 
 .docs-app #nd-sidebar a:hover,
@@ -143,11 +198,6 @@ body {
   color: var(--st-ink) !important;
   background: var(--st-panel2) !important;
   text-decoration: none !important;
-}
-
-.docs-app #nd-sidebar a:active,
-.docs-app [data-sidebar] a:active {
-  transform: scale(0.99);
 }
 
 .docs-app #nd-sidebar a[data-active="true"],
@@ -176,38 +226,115 @@ body {
   margin: 10px 8px 4px !important;
 }
 
-@media (max-width: 800px) {
-  .docs-app #nd-sidebar,
-  .docs-app [data-sidebar] {
-    width: min(100%, 18rem) !important;
-    min-width: 0 !important;
-    max-width: 100% !important;
-  }
-  .docs-app #nd-docs-layout,
-  .docs-app main,
+/* Shared article column — same on mobile and desktop */
+.docs-app [data-layout-main],
+.docs-app main {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding-inline: 0;
+}
+
+.docs-app #nd-page,
+.docs-app [data-layout-content],
+.docs-app article {
+  width: 100%;
+  max-width: 46rem;
+  min-width: 0;
+  box-sizing: border-box;
+  padding-inline: 1rem;
+}
+
+@media (min-width: 640px) {
+  .docs-app #nd-page,
+  .docs-app [data-layout-content],
   .docs-app article {
-    min-width: 0 !important;
-  }
-  .docs-app article,
-  .docs-app [class*="prose"] {
-    padding-inline: 0.75rem !important;
-  }
-  .docs-app pre,
-  .docs-app table,
-  .docs-app .overflow-x-auto {
-    max-width: 100%;
-    overflow-x: auto;
-    -webkit-overflow-scrolling: touch;
-  }
-  .docs-app table {
-    display: block;
-  }
-  .docs-app h1 {
-    font-size: 1.45rem;
+    padding-inline: 1.5rem;
   }
 }
 
-/* Typography */
+@media (min-width: 1024px) {
+  .docs-app #nd-page,
+  .docs-app [data-layout-content],
+  .docs-app article {
+    padding-inline: 2rem;
+  }
+}
+
+/* Mobile uses the same article component; only drop the desktop reading cap. */
+@media (max-width: 767px) {
+  .docs-app #nd-page,
+  .docs-app [data-layout-content],
+  .docs-app article {
+    max-width: none;
+  }
+}
+
+/* Use .prose only — never [class*="prose"] (matches fumadocs `not-prose`). */
+.docs-app .prose {
+  width: 100%;
+  max-width: none;
+  min-width: 0;
+  padding-inline: 0;
+}
+
+.docs-app .prose > :is(h1, h2, h3, h4, h5, h6, p, ul, ol, pre, blockquote, hr, .table-wrap, figure),
+.docs-app .prose > :is(div, section) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+/* Headings: full-width flex row; anchor text must not shrink to one word */
+.docs-app :is(h1, h2, h3, h4, h5, h6) {
+  display: flex !important;
+  flex-direction: row !important;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.35rem;
+  width: 100% !important;
+  max-width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box;
+}
+
+.docs-app :is(h1, h2, h3, h4, h5, h6) > a[data-card],
+.docs-app :is(h1, h2, h3, h4, h5, h6) > a[href^="#"] {
+  flex: 1 1 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  display: inline !important;
+  color: inherit !important;
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  text-decoration: none !important;
+  overflow-wrap: break-word;
+  word-break: normal;
+}
+
+.docs-app :is(h1, h2, h3, h4, h5, h6) > button {
+  flex: 0 0 auto !important;
+  width: auto !important;
+  min-width: 0 !important;
+  max-width: none !important;
+  position: static !important;
+  top: auto !important;
+  right: auto !important;
+  /* Always available; override fumadocs hover fade (docs stay static). */
+  opacity: 0.45 !important;
+  transition: none !important;
+}
+
+.docs-app :is(h1, h2, h3, h4, h5, h6) > button:focus-visible {
+  opacity: 1 !important;
+}
+
 .docs-app h1 {
   font-size: 1.75rem;
   font-weight: 700;
@@ -233,6 +360,13 @@ body {
   margin-top: 1.15rem;
 }
 
+.docs-app h4 {
+  font-size: 0.9rem;
+  font-weight: 650;
+  color: var(--st-ink);
+  margin-top: 1rem;
+}
+
 .docs-app p,
 .docs-app li {
   color: var(--st-mut);
@@ -248,50 +382,22 @@ body {
 .docs-app a {
   color: var(--st-accent);
   text-decoration: none;
-  transition: color var(--st-ease);
 }
 
-/* Cards ≈ dashboard panels */
-.docs-app [class*="card"],
-.docs-app .rounded-lg,
-.docs-app .rounded-xl,
-.docs-app [data-callout] {
+.docs-app .prose a[href^="#"],
+.docs-app :is(h1, h2, h3, h4, h5, h6) a {
+  color: inherit;
+}
+
+.docs-app .rounded-lg:not(button):not([class*="not-prose"]),
+.docs-app .rounded-xl:not(button):not([class*="not-prose"]),
+.docs-app [data-callout],
+.docs-app a[class*="card"]:not([data-card]),
+.docs-app [class*="Card"] {
   background: var(--st-panel) !important;
   border: 1px solid var(--st-line) !important;
   border-radius: var(--st-radius) !important;
   box-shadow: none !important;
-  transition: border-color var(--st-ease), background-color var(--st-ease), transform var(--st-ease), box-shadow var(--st-ease);
-}
-
-.docs-app [class*="card"]:hover,
-.docs-app .rounded-lg:hover,
-.docs-app .rounded-xl:hover {
-  border-color: var(--st-mut) !important;
-}
-
-/* Buttons / controls */
-.docs-app button:not([data-sidebar] button):not(#nd-sidebar button),
-.docs-app a[class*="button"],
-.docs-app [role="button"] {
-  transition: background-color var(--st-ease), border-color var(--st-ease), color var(--st-ease), transform var(--st-ease), opacity var(--st-ease);
-}
-
-.docs-app button:active:not(:disabled),
-.docs-app a[class*="button"]:active,
-.docs-app [role="button"]:active {
-  transform: scale(0.99);
-}
-
-.docs-app input,
-.docs-app select,
-.docs-app textarea {
-  transition: border-color var(--st-ease), box-shadow var(--st-ease), background-color var(--st-ease);
-}
-
-.docs-app input:hover,
-.docs-app select:hover,
-.docs-app textarea:hover {
-  border-color: var(--st-mut);
 }
 
 .docs-app input:focus,
@@ -302,12 +408,21 @@ body {
   box-shadow: 0 0 0 3px rgba(215, 255, 106, 0.18);
 }
 
-/* Tables */
+.docs-app .table-wrap,
+.docs-app .prose > div:has(> table) {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
 .docs-app table {
   width: 100%;
+  max-width: none;
+  min-width: 28rem;
   border: 1px solid var(--st-line);
   border-radius: var(--st-radius);
-  overflow: hidden;
   background: var(--st-bg);
   border-collapse: collapse;
   font-size: 13px;
@@ -319,15 +434,23 @@ body {
   font-weight: 650;
   font-size: 12px;
   text-align: left;
-  padding: 10px 12px;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--st-line);
+  white-space: nowrap;
 }
 
 .docs-app td {
-  padding: 10px 12px;
+  padding: 0.5rem 0.75rem;
   border-bottom: 1px solid var(--st-line);
   color: var(--st-ink);
   vertical-align: top;
+}
+
+@media (min-width: 640px) {
+  .docs-app th,
+  .docs-app td {
+    padding: 0.625rem 1rem;
+  }
 }
 
 .docs-app tr:last-child td {
@@ -358,18 +481,39 @@ body {
   color: var(--st-mut);
   font-size: 0.82em;
   padding: 0.12em 0.4em;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  max-width: 100%;
+}
+
+.docs-app figure:has(> pre),
+.docs-app [class*="codeblock"] {
+  position: relative;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
 }
 
 .docs-app pre {
   background: var(--st-panel) !important;
   border: 1px solid var(--st-line) !important;
   border-radius: var(--st-radius) !important;
-  padding: 10px 12px !important;
+  padding: 12px 14px !important;
+  padding-right: 3rem !important;
   color: var(--st-ink) !important;
   font-size: 12.5px !important;
   line-height: 1.45 !important;
-  overflow: auto;
+  overflow-x: auto !important;
+  overflow-y: hidden;
   max-width: 100%;
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .docs-app pre code {
@@ -378,18 +522,23 @@ body {
   padding: 0 !important;
   color: inherit !important;
   font-size: inherit !important;
+  white-space: inherit;
+  word-break: normal;
+  overflow-wrap: normal;
+  max-width: none;
 }
 
-.docs-app pre,
-.docs-app code {
-  overflow-wrap: anywhere;
-  word-break: break-word;
-  max-width: 100%;
-}
-
-.docs-app article,
-.docs-app main {
-  max-width: 46rem;
+/* Copy control on code blocks only — never heading anchor buttons */
+.docs-app figure:has(> pre) > button,
+.docs-app [class*="codeblock"] > button,
+.docs-app figure:has(> pre) button[aria-label*="opy" i],
+.docs-app [class*="codeblock"] button[aria-label*="opy" i] {
+  position: absolute;
+  top: 0.5rem;
+  right: 0.5rem;
+  z-index: 2;
+  width: auto !important;
+  max-width: none !important;
 }
 
 .docs-app hr {

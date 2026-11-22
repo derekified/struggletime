@@ -44,6 +44,11 @@ export function baseOptions(): BaseLayoutProps {
         active: 'none',
       },
       {
+        text: 'Install',
+        url: '/docs/installation',
+        active: 'nested-url',
+      },
+      {
         text: 'Tray',
         url: '/docs/tray',
         active: 'nested-url',

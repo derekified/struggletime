@@ -203,7 +203,10 @@ function paintNavAuth() {
     shell.classList.toggle("authed", !!ok);
   }
   const topAuth = $("top-auth");
-  if (topAuth) topAuth.hidden = !session;
+  if (topAuth) {
+    // Never show the avatar circle for guests / loading; only when painted .signed.
+    topAuth.hidden = !session || !topAuth.classList.contains("signed");
+  }
 }
 
 function clearClientSession() {
@@ -399,10 +402,10 @@ async function mountHeroShot() {
 mountHeroShot();
 
 const HERO_SCENES = {
-  struggle: { label: "struggle loop · 1.00×", struggle: 78, dump: 14, idle: 8 },
-  dump: { label: "unread dump · 0.20×", struggle: 12, dump: 70, idle: 18 },
-  silent: { label: "silent debug · ~0.42×", struggle: 38, dump: 22, idle: 40 },
-  idle: { label: "idle stare · 0.00×", struggle: 4, dump: 8, idle: 88 },
+  struggle: { label: "fixing a bug · 1.00×", struggle: 78, dump: 14, idle: 8 },
+  dump: { label: "unread AI paste · 0.20×", struggle: 12, dump: 70, idle: 18 },
+  silent: { label: "reading an error · ~0.42×", struggle: 38, dump: 22, idle: 40 },
+  idle: { label: "away from keyboard · 0.00×", struggle: 4, dump: 8, idle: 88 },
 };
 function paintHeroLive(scene = "struggle") {
   const spec = HERO_SCENES[scene] || HERO_SCENES.struggle;
@@ -468,7 +471,7 @@ function paintMetricHint() {
   if (!elHint) return;
   elHint.textContent = ({
     weighted: "Weighted hours favor real recovery loops over dumps and idle time.",
-    raw: "Raw clock hours from the tracker, before struggle weighting.",
+    raw: "Clock hours from the tracker, before StruggleTime adjusts for real fixing vs idle or unread pastes.",
     active: "Active span only: the busy part of each bucket, not the idle tail.",
     compare: "Weighted next to raw, so the discount is easy to see.",
   })[dashPrefs.metric] || elHint.textContent;
@@ -547,8 +550,8 @@ function renderCardToggles() {
   const labels = {
     projects: "Projects", modes: "Modes", velocity: "Struggle → ship", classifier: "Dump vs recovery",
     decay: "Silent & idle", timeline: "Timeline", editor: "Editor", os: "OS", afternoons: "Multi-project afternoons",
-    rhythm: "Rhythm", pace: "Pace", assist: "Assist", languages: "Languages", chain: "Hash chain",
-    sharecard: "Summary card", friction: "Friction timeline", ledger: "Ledger buckets",
+    rhythm: "Rhythm", pace: "Pace", assist: "Assist", languages: "Languages", chain: "History check",
+    sharecard: "Summary card", friction: "Friction timeline", ledger: "Time log",
   };
   box.replaceChildren(...dashPrefs.cards.map((id, idx) => {
     const row = el("label", { className: "card-toggle-row" }, [
@@ -973,14 +976,21 @@ const COUNTRIES = [
 function paintTopUser(url, handle, href, title) {
   const topAuth = $("top-auth");
   if (!topAuth) return;
-  topAuth.href = href;
-  topAuth.title = title;
-  topAuth.setAttribute("aria-label", title);
-  topAuth.classList.toggle("signed", !!url || !!handle);
   topAuth.innerHTML = "";
+  const show = !!(url || handle);
+  topAuth.classList.toggle("signed", show);
+  topAuth.hidden = !show;
+  if (!show) {
+    topAuth.removeAttribute("href");
+    topAuth.title = "";
+    topAuth.setAttribute("aria-label", "profile");
+    return;
+  }
+  topAuth.href = href || "/settings";
+  topAuth.title = title || "";
+  topAuth.setAttribute("aria-label", title || "profile");
   if (url) topAuth.appendChild(el("img", { src: url, alt: handle || "profile" }));
-  else if (handle) topAuth.appendChild(el("span", { className: "top-user-fallback", text: String(handle).slice(0, 1).toUpperCase() }));
-  else topAuth.appendChild(el("span", { className: "top-user-fallback", text: "in" }));
+  else topAuth.appendChild(el("span", { className: "top-user-fallback", text: String(handle).slice(0, 1).toUpperCase() }));
 }
 
 function paintWhoAction(label, href, glyph) {
@@ -1146,6 +1156,25 @@ async function saveProfile(patch) {
   return r;
 }
 
+const DAEMON_BANNER_DISMISS_KEY = "st_daemon_banner_dismissed";
+const INSTALL_DOCS_URL = "/docs/installation/";
+const TRAY_DOCS_URL = "/docs/tray/";
+function isDaemonBannerDismissed() {
+  try {
+    if (localStorage.getItem(DAEMON_BANNER_DISMISS_KEY) === "1") return true;
+    // Migrate prior session-only dismissals into permanent localStorage.
+    if (sessionStorage.getItem(DAEMON_BANNER_DISMISS_KEY) === "1") {
+      localStorage.setItem(DAEMON_BANNER_DISMISS_KEY, "1");
+      return true;
+    }
+  } catch (_) {}
+  return false;
+}
+function dismissDaemonBanner() {
+  try { localStorage.setItem(DAEMON_BANNER_DISMISS_KEY, "1"); } catch (_) {}
+  if ($("daemon-banner")) $("daemon-banner").hidden = true;
+}
+
 function paintDaemonBanners() {
   const p = meProfile || {};
   const info = daemonLinkInfo || {
@@ -1157,27 +1186,31 @@ function paintDaemonBanners() {
   const needKey = signed && !info.has_api_key && !apiKeyPlain;
   const needDaemon = signed && (info.has_api_key || apiKeyPlain) && !info.daemon_linked;
   const show = !!(signed && (needKey || needDaemon));
-  let dismissed = false;
-  try { dismissed = sessionStorage.getItem("st_daemon_banner_dismissed") === "1"; } catch (_) {}
+  const dismissed = isDaemonBannerDismissed();
 
   const title = needKey
-    ? "Generate an API key & install the daemon"
-    : "Install and link the desktop daemon";
+    ? "Generate an API key & install the tracker"
+    : "Link the desktop tracker";
   const msg = needKey
     ? "Your dashboard stays empty until a machine is linked. Open Settings → Daemon for install steps."
-    : "API key is ready, but nothing has synced yet. Paste the key into the tray and start tracking a project.";
+    : "Install StruggleTime on your computer and paste your API key so your hours show up here.";
 
   const global = $("daemon-banner");
   if (global) {
-    // Guests never see the daemon banner; dismiss only applies while signed in.
+    // Guests never see the daemon banner; dismiss is permanent via localStorage.
     global.hidden = !(show && !dismissed && activePage !== "landing" && activePage !== "login");
     if (!global.hidden) {
       if ($("daemon-banner-title")) $("daemon-banner-title").textContent = title;
       if ($("daemon-banner-text")) $("daemon-banner-text").textContent = msg;
       const cta = $("daemon-banner-cta");
       if (cta) {
-        cta.textContent = needKey ? "open settings" : "install steps";
-        cta.setAttribute("href", "/settings");
+        if (needKey) {
+          cta.textContent = "open settings";
+          cta.setAttribute("href", "/settings");
+        } else {
+          cta.textContent = "open tray docs";
+          cta.setAttribute("href", INSTALL_DOCS_URL);
+        }
       }
       hydrateNavIcons(global);
     }
@@ -1188,6 +1221,8 @@ function paintDaemonBanners() {
     if (show) {
       if ($("daemon-banner-settings-title")) $("daemon-banner-settings-title").textContent = title;
       if ($("daemon-banner-settings-msg")) $("daemon-banner-settings-msg").textContent = msg;
+      const sCta = $("daemon-banner-settings-cta");
+      if (sCta) sCta.setAttribute("href", needKey ? "/settings" : INSTALL_DOCS_URL);
       hydrateNavIcons(settingsBanner);
     }
   }
@@ -1833,7 +1868,7 @@ async function loadReviewQueue() {
         <b>${esc(s.project_id)}</b> <span class="tag">${esc(s.status)}</span> ${flags}
         <div class="review-meta sub tabular">${hours}h weighted · @${esc(s.user_id || "")}${evidence ? " · " + esc(evidence) : ""}</div>
         ${notesHtml}
-        <p class="sub">Structural audit only — flags, active/idle, struggle signals, hash chain. No code or prompts.</p>
+        <p class="sub">Review timing flags, active vs idle, and the linked history check. No code or prompts.</p>
         ${actions}
         <div class="review-inspect" id="inspect-${esc(s.id)}" hidden></div>
       </div>`;
@@ -2057,7 +2092,7 @@ function analyticsQS() {
 
 const KONAMI = ["ArrowUp", "ArrowUp", "ArrowDown", "ArrowDown", "ArrowLeft", "ArrowRight", "ArrowLeft", "ArrowRight", "KeyB", "KeyA"];
 let konamiBuf = [];
-// Real telemetry by default. Never restore sample mode from a prior tab session —
+// Real tracker data by default. Never restore sample mode from a prior tab session —
 // stale sessionStorage "1" made the dashboard look fake until Konami was toggled off.
 try {
   sessionStorage.removeItem("st_fake_stats");
@@ -2611,7 +2646,7 @@ function renderChainPanel(a) {
   box.replaceChildren(
     el("div", { className: `tag ${ch.ok ? "ok" : "bad"}`, text: ch.ok ? "chain ok" : `chain breaks · ${ch.break_count}` }),
     el("p", { className: "sub wrap-text", text: `${ch.bucket_count || 0} buckets across ${ch.projects_checked || 0} projects · ${ch.unsigned_buckets || 0} unsigned` }),
-    el("p", { className: "sub wrap-text", text: "Daemon adopts the server chain head after offline flush so local ledgers reconnect without rewriting history." }),
+    el("p", { className: "sub wrap-text", text: "After you sync, the tracker picks up the server’s latest history tip so offline time reconnects without rewriting older entries." }),
   );
 }
 
@@ -3053,7 +3088,7 @@ async function drawFriction() {
   }
   if ($("fr-legend")) {
     $("fr-legend").textContent = fr.chain_ok === false
-      ? "Hash chain errors on this project. Review structural signals only; paths stay local."
+      ? "History check failed on this project (an older entry may have been edited). Review timing signals only; paths stay on your machine."
       : "Click a bar for re-edits, fail→pass, git plumbing, and active/idle. Commit anchors mark verified recovery.";
   }
   if (inspect) { inspect.hidden = true; inspect.replaceChildren(); }
@@ -3225,28 +3260,32 @@ if ($("lb-search-slot")) {
   $("lb-search-slot").appendChild(UI.searchInput({ placeholder: "Find a builder…", onInput: (v) => { lbQuery = v; renderLeaderboard(); } }));
 }
 
-const TRAY_DOCS_URL = "https://62-83-116-143.sslip.io/docs/tray/";
-function openDaemonSettingsTab() {
-  location.href = TRAY_DOCS_URL;
+function openInstallDocs() {
+  location.href = INSTALL_DOCS_URL;
 }
 if ($("daemon-banner-settings-cta")) {
   $("daemon-banner-settings-cta").addEventListener("click", (e) => {
     e.preventDefault();
-    openDaemonSettingsTab();
+    openInstallDocs();
   });
 }
 if ($("daemon-banner-cta")) {
   $("daemon-banner-cta").addEventListener("click", (e) => {
+    const href = $("daemon-banner-cta").getAttribute("href") || INSTALL_DOCS_URL;
+    if (href === "/settings" || href.startsWith("/settings")) {
+      e.preventDefault();
+      navigate("/settings");
+      return;
+    }
     e.preventDefault();
-    openDaemonSettingsTab();
+    location.href = href;
   });
 }
 if ($("daemon-banner-dismiss")) {
   $("daemon-banner-dismiss").addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    try { sessionStorage.setItem("st_daemon_banner_dismissed", "1"); } catch (_) {}
-    if ($("daemon-banner")) $("daemon-banner").hidden = true;
+    dismissDaemonBanner();
   });
 }
 if ($("btn-github-disconnect")) {
@@ -3269,7 +3308,7 @@ if ($("btn-github-disconnect")) {
 
 function setSettingsSection(id) {
   if (id === "daemon") {
-    location.href = "https://62-83-116-143.sslip.io/docs/tray/";
+    location.href = TRAY_DOCS_URL;
     return;
   }
   if (id === "docs") {

@@ -1,47 +1,66 @@
 # StruggleTime
 
-Time tracking that counts **productive struggle**, not raw activity.
-Built for Hack Club builders shipping open source. Reviewers see structure
-and weights — not screenshots or prompts. AGPLv3.
+Time tracking for people who ship. It gives more weight to the loops where
+something breaks, you dig in, and it works again — and less to idle staring
+or huge unread AI pastes. Reviewers see structure and weights, not your
+screenshots or prompts.
 
-Docs: `/docs` after `make docs`
+Built for Hack Club builders. AGPLv3.
 
-An unattended agent hour is not a learning hour. StruggleTime watches the
-loop `(edit|prompt) → (test|build) → (follow-up|commit)`, weights it, and
-hash-chains it so quiet rewrites are obvious.
+Source: [github.com/derekified/struggletime](https://github.com/derekified/struggletime)
 
-## Run it
+## Quick start
 
 ```bash
+git clone https://github.com/derekified/struggletime.git
+cd struggletime
 make check
-make server                                  # :18765
+make server                                  # dashboard on :18765
 sh daemon/install.sh                         # once per machine
 struggletime-helper apikey <st_…>            # from Settings
 struggletime-helper start --repo ~/my-project
 struggletime-helper status
 ```
 
-Open http://127.0.0.1:18765. Python 3.10+ stdlib for core. Demo seed:
-`make demo` on :18766.
+Open http://127.0.0.1:18765. Core server and daemon need Python 3.10+ (stdlib
+only). Demo data: `make demo` on :18766.
+
+Docs site: `make docs`, then open `/docs/` on the running server.
+
+## How it works (short)
+
+The desktop tracker watches saved files and git activity in your project
+folder. Paths are scrambled with a secret salt before upload
+(`sha256(salt:path)`). Each sealed time slice links to the previous one
+(`prev_hash`) so quiet edits to past history are easy to spot. Scoring rules
+live in `src/verify.py` and are shared by the daemon and the server.
 
 ## Repo layout
 
 | Path | What |
 |---|---|
-| `daemon/` | Stdlib tracker, helper CLI, tray, installers, hooks |
+| `daemon/` | Tracker, helper CLI, tray, installers, shell hooks |
+| `adapters/` | Optional IDE / agent helpers (VS Code, Neovim, Godot, …) |
 | `server/` | HTTP API + dashboard SPA (`server/static/`) |
-| `src/` | Shared `verify.py` formula |
-| `weighting/` | Rules YAML + calibration notes |
-| `docs-site/` | Fumadocs source → `docs-site/out` (`make docs`) |
-| `docs/` | Short markdown mirrors / pointers |
+| `src/` | Shared scoring (`verify.py`) |
+| `weighting/` | Rules YAML and calibration notes |
+| `docs-site/` | Fumadocs source → static export (`make docs`) |
+| `docs/` | Short plain-markdown notes (mirrors / pointers) |
 | `schemas/` | Allowlist + SQL |
-| `scripts/` | Demo, package, formula sync |
-| `adapters/` | Optional IDE/agent helpers |
+| `scripts/` | Demo, package, formula sync, adapter verify |
 | `tests/` | Unittest suite (`make check`) |
+| `examples/` | Small examples |
+| `struggletime.svg` | Brand mark |
 
-## Docs
+## Useful make targets
 
-Fumadocs at `/docs` (`make docs`). Plain mirrors under `docs/`.
+```bash
+make check             # deps + tests + adapter verify
+make server            # API + dashboard
+make docs              # build /docs
+make tray              # menu bar / system tray
+make verify-adapters   # adapter emit/drain smoke checks
+```
 
 ## License
 

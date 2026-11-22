@@ -1892,9 +1892,9 @@ class H(BaseHTTPRequestHandler):
             if not who: return self.send_json(401, {"error": "sign in with slack first"})
             d = self.body()
             source = (d.get("source") or "").strip().lower()
-            # StruggleTime project import UI removed; keep WakaTime-compatible stub for ~/.wakatime.cfg pipelines
+            # Legacy import source id still accepted so old clients get a clear 410.
             if source == "struggletime":
-                return self.send_json(410, {"error": "struggletime project import removed"})
+                return self.send_json(410, {"error": "legacy project import removed"})
             if source != "wakatime":
                 return self.send_json(400, {"error": "source must be wakatime"})
             # TODO: wire backend endpoint/action — ingest WakaTime heartbeats into buckets

@@ -1,18 +1,18 @@
 ---
-title: Privacy and ledger
-description: Stdlib-only daemon, salted file IDs, allowlisted schema budget, hash-chained ledger, and offline sync.
+title: Privacy
+description: Stdlib-only tracker, scrambled file IDs, allowlisted payloads, and tamper-evident local history.
 ---
 
 ## Guarantees
 
-| Guarantee | Detail |
+| Guarantee | Plain meaning |
 |---|---|
 | Stdlib-only daemon | `daemon/daemon.py` imports only the Python standard library |
-| No screen / keystroke / prompt capture | No screenshots, OCR, keylogs, clipboard, or transcript text |
+| No screen / keystroke / prompt capture | No screenshots, OCR, keylogs, clipboard, or chat transcripts |
 | No content / argv | File bodies and command arguments never leave the machine |
-| Salted file IDs | On-wire identity is `sha256(salt:path)` hex, not absolute paths |
-| Schema budget | Allowlisted JSON fields only; typical sealed bucket ~25-50 KB |
-| Hash chain | Each ledger entry carries `prev_hash` linking to the prior seal |
+| Scrambled file IDs | On-wire identity is `sha256(salt:path)` hex, not absolute paths |
+| Schema budget | Allowlisted JSON fields only; typical sealed slice ~25–50 KB |
+| Tamper-evident history | Each local log entry carries `prev_hash` linking to the prior seal |
 
 ## What never leaves the machine
 
@@ -22,13 +22,15 @@ description: Stdlib-only daemon, salted file IDs, allowlisted schema budget, has
 - Screenshots, window pixel buffers, microphone audio
 - Keystroke streams or clipboard history
 
-## Salted file IDs
+## Scrambled file IDs
+
+Paths are mixed with a secret salt before anything is sent, so reviewers never see your real folder layout:
 
 ```text
 file_id = hex(sha256( f"{salt}:{absolute_or_repo_relative_path}" ))
 ```
 
-Salt is local/config-scoped. The server sees opaque IDs and size/mtime classes, not path strings. An intercepted bucket does not reconstruct your tree as readable paths.
+Salt is local/config-scoped. The server sees opaque IDs and size/mtime classes, not path strings. An intercepted payload does not reconstruct your tree as readable paths.
 
 ## Allowlisted schema
 
@@ -38,27 +40,27 @@ Salt is local/config-scoped. The server sees opaque IDs and size/mtime classes, 
 |---|---|
 | Identity | `user` / key binding, `project_id`, `formula_version` |
 | Time | bucket start/end, active span seconds |
-| Structure | salted file IDs, event category counts |
+| Structure | scrambled file IDs, event category counts |
 | Integrity | `prev_hash`, entry `hash`, sequence |
 | Weight | computed weighted seconds / state labels |
 
-Payloads stay small (~25-50 KB) because they carry metadata counts and IDs, never source blobs.
+Payloads stay small (~25–50 KB) because they carry metadata counts and IDs, never source blobs.
 
-## Hash-chained ledger (`.aitime-ledger.json`)
+## Local history log (`.aitime-ledger.json`)
 
-Local append-only log (per project or configured path):
+Each sealed time slice is appended to a local append-only log. Every entry links to the previous one:
 
 ```text
 entry_n.hash = H( canonical(entry_n without hash) )
 entry_n.prev_hash = entry_{n-1}.hash
 ```
 
-Quiet rewrite of an old bucket breaks the chain for everything after it. Reviewers can flag `CHAIN_BROKEN`. The server tracks a chain head; clients adopt that head after a successful flush so multi-device stays aligned.
+Quietly rewriting an old entry breaks the chain for everything after it. Reviewers can flag `CHAIN_BROKEN`. The server tracks a chain head; clients adopt that head after a successful flush so multi-device stays aligned.
 
 ## Offline queue and sync
 
 ```text
-seal locally -> append ledger -> enqueue
+seal locally -> append log -> enqueue
                      |
         online? -----+--- no -> keep queue on disk
                      |
@@ -71,7 +73,7 @@ Flush is ordered. Partial failures leave unacked entries on the queue for retry.
 ## Server retention
 
 - Soft-deleted / anonymized analytics paths filter PII where applicable
-- Review reason codes describe patterns (idle inflation, dump), not pasted secrets
+- Review reason codes describe patterns (idle inflation, unread paste), not pasted secrets
 - Builders leaderboard opt-out is in Settings (see [Web app](/docs/web-app))
 
 ## Audit locally
@@ -81,6 +83,6 @@ python3 -m unittest tests.test_daemon_tracking -v
 python3 -c "import json; print(json.load(open('.aitime-ledger.json'))[-1].keys())"
 ```
 
-Treat ledger hashes as sensitive metadata even though they are not source.
+Treat history hashes as sensitive metadata even though they are not source.
 
-Also: [Daemon](/docs/daemon), [API](/docs/api), [Review](/docs/review).
+Also: [Desktop tracker](/docs/daemon), [API](/docs/api), [Review](/docs/review).

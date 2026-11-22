@@ -1,0 +1,101 @@
+---
+title: Installation
+description: Clone StruggleTime, install the desktop tracker, and link a project.
+---
+
+Brand mark: `struggletime.svg`. Repo: [github.com/derekified/struggletime](https://github.com/derekified/struggletime).
+
+## Requirements
+
+- Python 3.10+ (server and daemon are stdlib-only)
+- Git
+- Node 22+ only if you rebuild docs (`make docs`)
+
+## Clone and run the server
+
+```bash
+git clone https://github.com/derekified/struggletime.git
+cd struggletime
+make check
+make server          # dashboard + API on :18765
+```
+
+Open `http://127.0.0.1:18765`. Optional demo seed: `make demo` (port 18766).
+
+## Sign in and API key
+
+1. Continue with Hack Club Slack.
+2. Claim a public handle if asked.
+3. Settings → Profile → create a StruggleTime API key (`st_...`).
+4. Paste it into the tray, or:
+
+```bash
+struggletime-helper apikey <paste-key-here>
+```
+
+## Install the desktop tracker
+
+```bash
+sh daemon/install.sh
+# Windows:
+# powershell -ExecutionPolicy Bypass -File daemon\install.ps1
+```
+
+Tray (GUI deps once):
+
+```bash
+pip install -r daemon/tray-requirements.txt
+make tray
+```
+
+Or: `python3 daemon/tray.py`.
+
+## Link a project
+
+```bash
+struggletime-helper link
+struggletime-helper start --repo ~/my-project
+struggletime-helper status
+```
+
+`daemon/daemon.py` watches every linked root. Switch repos during the day without reinstalling.
+
+## Optional shell hooks
+
+Watching saved files and git still works without hooks. Hooks only add exec/test categories (never argv):
+
+```bash
+# bash / zsh
+source /path/to/struggletime/daemon/hooks.sh
+
+# PowerShell
+. C:\path\to\struggletime\daemon\hooks.ps1
+```
+
+## Debug
+
+```bash
+# env
+STRUGGLETIME_DEBUG=1 python3 daemon/daemon.py --repo ~/my-project
+
+# flag (same allowlisted logs)
+python3 daemon/daemon.py --debug --repo ~/my-project
+
+# adapter smoke check
+python3 scripts/verify_adapters.py
+# or
+make verify-adapters
+```
+
+Debug logs print allowlisted labels only (`editor`, `event_type`, counts) — never paths, prompts, or argv.
+
+## Config paths
+
+| What | Where |
+|---|---|
+| Settings | `~/.config/struggletime/settings.json` (Windows: `%APPDATA%\struggletime\`) |
+| Runtime logs | `~/.aitime/` |
+| Local history log | `.aitime-ledger.json` in the watched repo |
+| Brand SVG | `struggletime.svg` / `server/static/img/struggletime.svg` |
+
+Next: [CLI and tray](/docs/tray), [Daemon](/docs/daemon), [Integrations](/docs/integrations).

@@ -1294,7 +1294,12 @@ def main():
                     help="override AITIME_BUCKET_SECS / gui bucket_mins (default 300)")
     ap.add_argument("--once", action="store_true", help="seal one bucket per active project and exit")
     ap.add_argument("--flush-only", action="store_true", help="retry pending ledger upload and exit")
+    ap.add_argument("--debug", action="store_true",
+                    help="allowlisted diagnostic logs (same as STRUGGLETIME_DEBUG=1); never paths/prompts")
     a = ap.parse_args()
+    if a.debug:
+        os.environ["STRUGGLETIME_DEBUG"] = "1"
+        os.environ.setdefault("AITIME_DEBUG", "1")
 
     project_maps = {}
     for raw in a.project_map or []:

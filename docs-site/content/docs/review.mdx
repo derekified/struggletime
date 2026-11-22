@@ -5,15 +5,15 @@ description: Review queues, reason codes, chain anomalies, and staff safeguards.
 
 ## Why review exists
 
-`src/verify.py` catches most inflation automatically. Staff still catch edge cases: broken chains, git mismatches, and creative unattended dumps. Review decisions are reason-coded and stamped with `FORMULA_VERSION`.
+`src/verify.py` catches most inflated hours automatically. Staff still catch edge cases: broken history links, git mismatches, and creative unattended pastes. Review decisions use reason codes and are stamped with `FORMULA_VERSION`.
 
 ## Review queue
 
 Staff open Review from the signed-in nav (role-gated).
 
-1. Open a submission or bucket set.
-2. Inspect weighted seconds, formula version, project, chain status.
-3. Approve as-is, deflate weighted seconds, or reject.
+1. Open a submission or time-slice set.
+2. Inspect weighted seconds, scoring version, project, and history-check status.
+3. Approve as-is, reduce weighted seconds, or reject.
 4. Attach a reason code (required for non-clean outcomes).
 
 ```http
@@ -36,9 +36,9 @@ Content-Type: application/json
 | `IDLE_INFLATION` | Quiet time billed as struggle |
 | `NO_TEST_ITERATION` | Edits without execute/test causality |
 | `BOILERPLATE_HEAVY` | Low-signal repetitive churn |
-| `CHAIN_BROKEN` | Ledger `prev_hash` discontinuity |
-| `GIT_MISMATCH` | Claimed git activity does not match plumbing |
-| `UNSIGNED_INSTALL` | Tracker provenance / install trust failure |
+| `CHAIN_BROKEN` | Local history `prev_hash` link broken (past entry likely edited) |
+| `GIT_MISMATCH` | Claimed git activity does not match git plumbing |
+| `UNSIGNED_INSTALL` | Tracker install / provenance trust failure |
 
 Reason codes feed calibration notes for the next `FORMULA_VERSION`.
 
@@ -46,12 +46,12 @@ Reason codes feed calibration notes for the next `FORMULA_VERSION`.
 
 Elevated staff tools look for:
 
-- Repeated chain breaks after offline gaps that do not flush cleanly
-- Sudden unverified multi-file dumps with high wall time
-- Cross-project copy patterns that defeat salted-ID expectations
+- Repeated history breaks after offline gaps that do not sync cleanly
+- Sudden unverified multi-file pastes with high wall-clock time
+- Cross-project copy patterns that defeat scrambled file-ID expectations
 - API key sharing anomalies when signals exist
 
-Prefer deflation plus a reason code over silent deletion when the data helps formula tuning.
+Prefer reducing hours plus a reason code over silent deletion when the data helps scoring tuning.
 
 ## Role guards
 

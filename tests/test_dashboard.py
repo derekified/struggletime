@@ -31,7 +31,7 @@ class TestDashboard(unittest.TestCase):
         self.assertEqual(s, 200)
         low = html.lower()
         for needle in ("struggletime", "page-landing", "count the loops that fixed the code", "styles.css", "ui.js", "app.js",
-                       "fake-stats-preview", "hero-preview", "hero-features", "struggle scoring", "privacy first",
+                       "fake-stats-preview", "hero-preview", "hero-features", "credits real fixing", "privacy first",
                        "brand-mark", "/img/struggletime.svg"):
             self.assertIn(needle, low)
         s_logo, logo = req(self.port, "GET", "/img/struggletime.svg")
@@ -50,6 +50,12 @@ class TestDashboard(unittest.TestCase):
         self.assertIn('aria-label="Docs"', html)
         self.assertIn('data-glyph="docs"', html)
         self.assertIn("docs/tray", html.lower())
+        self.assertIn('href="/docs/installation/"', html)
+        self.assertIn('id="top-auth"', html)
+        self.assertIn("st_daemon_banner_dismissed", req(self.port, "GET", "/app.js")[1])
+        self.assertIn("localStorage", req(self.port, "GET", "/app.js")[1])
+        self.assertIn("currentColor", req(self.port, "GET", "/styles.css")[1])
+        self.assertIn(".nav-toggle .nav-ico", req(self.port, "GET", "/styles.css")[1])
         self.assertNotIn("struggletime-style", html.lower())
         self.assertNotIn("package-managers", html.lower())
         self.assertNotIn("high seas", html.lower())
@@ -95,7 +101,7 @@ class TestDashboard(unittest.TestCase):
         for needle in ("sign in with hack club slack", "connect github", "btn-github-disconnect", "settings-rail", "set-country",
                        "btn-delete-account", "daemon-banner-dismiss",
                        'href="/docs/"', "open docs", "settings-docs",
-                       "62-83-116-143.sslip.io/docs/tray", "settings-rail-select"):
+                       'href="/docs/tray/"', 'href="/docs/installation/"', "settings-rail-select"):
             self.assertIn(needle, settings_l)
         app_js = req(self.port, "GET", "/app.js")[1]
         self.assertIn("setMobileNavOpen", app_js)
@@ -113,6 +119,17 @@ class TestDashboard(unittest.TestCase):
             self.assertIn(needle, docs_l)
         self.assertNotIn("theme-switch", docs_l)
         self.assertNotIn("toggle theme", docs_l)
+        s, install_docs = req(self.port, "GET", "/docs/installation/")
+        self.assertEqual(s, 200)
+        install_l = install_docs.lower()
+        self.assertIn("derekified/struggletime", install_l)
+        self.assertIn("struggletime.svg", install_l)
+        self.assertIn("struggletime_debug", install_l)
+        self.assertNotIn("struggletime", install_l)
+        self.assertNotIn("package-managers", install_l)
+        s, setup_docs = req(self.port, "GET", "/docs/setup/")
+        self.assertEqual(s, 200)
+        self.assertIn("install", setup_docs.lower())
         s, tray_docs = req(self.port, "GET", "/docs/tray/")
         self.assertEqual(s, 200)
         tray_l = tray_docs.lower()

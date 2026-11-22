@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: Layers from passive tomography through shared verify.py to the review surface.
+description: Passive file/git tracking, shared verify.py scoring, and the review surface.
 ---
 
 ## Stack
@@ -12,7 +12,7 @@ description: Layers from passive tomography through shared verify.py to the revi
                      | starts / pauses / links
 +--------------------v------------------------+
 |  daemon/daemon.py  (stdlib, ~1s loop)       |
-|  - git / inode / cache tomography           |
+|  - watch saves, git, and build caches       |
 |  - optional hooks and IDE adapters          |
 |  - seal -> .aitime-ledger.json              |
 +--------------------+------------------------+
@@ -23,38 +23,38 @@ description: Layers from passive tomography through shared verify.py to the revi
 |  - chain-head sync, allowlist schema        |
 |  - static SPA + Fumadocs under /docs        |
 +--------------------+------------------------+
-                     | same formula
+                     | same scoring rules
 +--------------------v------------------------+
 |  src/verify.py + weighting/rules-*.yaml     |
 +---------------------------------------------+
 ```
 
-## L1: Passive tomography
+## L1: Passive file & git tracking
 
 No OCR. No window titles as content. Structural footprints only:
 
 - `.git` object and index pulses
-- Salted file IDs (`sha256(salt:path)`)
+- Scrambled file IDs (`sha256(salt:path)`)
 - Build/test cache directory presence/mtime classes
 - Exec category events from shell hooks (name/category, not argv)
 
-## L2: Causality weighting
+## L2: Scoring what “counts”
 
-`src/verify.py` turns a sealed bucket into weighted seconds:
+`src/verify.py` turns a sealed time slice into weighted seconds:
 
 | Concept | Role |
 |---|---|
 | Struggle / closed loop | Full weight |
-| Fail -> fix -> pass | Full weight |
+| Fail → fix → pass | Full weight |
 | Unverified dump | Heavy deflation |
-| Silent follow-up | 5-12 minute taper |
+| Quiet follow-up | 5–12 minute taper |
 | Idle after span | Gradual decay |
 
 `FORMULA_VERSION` is stamped on every accepted bucket so reviewers know which rule set applied.
 
 ## Provenance
 
-- Local append-only ledger with `prev_hash`
+- Local append-only log with `prev_hash` (each entry links to the previous one)
 - Server stores chain heads per user/project
 - Offline queue flushes in order when connectivity returns
 - Review UI can flag `CHAIN_BROKEN` / `GIT_MISMATCH`
@@ -74,8 +74,10 @@ No OCR. No window titles as content. Structural footprints only:
 |---|---|
 | `daemon/` | Tracker, installers, hooks, tray, helper |
 | `server/` | HTTP API + static UI |
-| `src/` | Shared verify / formula |
+| `src/` | Shared verify / scoring rules |
 | `weighting/` | YAML rules + calibration notes |
 | `docs-site/` | Fumadocs MDX source |
-| `adapters/` | Optional L2 IDE/tool enrichment (vscode, neovim, godot, jetbrains, unity, …) |
-| `tests/` | Unittest suite (`make check`) |
+| `adapters/` | Optional L2 enrichment: `vscode`, `neovim`, `godot`, `jetbrains`, `unity`, `claude-code`, `codex`, `openclaw` |
+| `scripts/verify_adapters.py` | Adapter emit/drain smoke checks (`make verify-adapters`) |
+
+Also: [Desktop tracker](/docs/daemon), [Privacy](/docs/privacy), [API](/docs/api).
