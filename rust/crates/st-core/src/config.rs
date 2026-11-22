@@ -29,6 +29,9 @@ pub struct Settings {
     pub project: String,
     #[serde(default)]
     pub projects: Vec<LinkedProject>,
+    /// Dashboard / tray colourscheme id (classic, neon, nord, …).
+    #[serde(default = "default_theme")]
+    pub theme: String,
 }
 
 fn default_server() -> String {
@@ -36,6 +39,9 @@ fn default_server() -> String {
 }
 fn default_bucket_mins() -> u32 {
     5
+}
+fn default_theme() -> String {
+    "classic".to_string()
 }
 
 impl Default for Settings {
@@ -48,6 +54,7 @@ impl Default for Settings {
             bucket_mins: 5,
             project: String::new(),
             projects: vec![],
+            theme: default_theme(),
         }
     }
 }

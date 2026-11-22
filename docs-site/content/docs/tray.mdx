@@ -43,13 +43,31 @@ struggletime tray --headless
 ```
 
 On **macOS** and **Windows**, `tray` opens a menu-bar / notification-area icon
-with Start / Pause / Resume / Sync / Quit. Tooltip shows server, handle, and
-daemon pid. On **Linux**, or if the graphical tray cannot start, it runs a
-headless supervisor that prints the same status line and keeps the daemon
-alive.
+using the StruggleTime SVG, tinted from your colourscheme (`theme` in
+`settings.json`, default `classic`):
 
-Put the release binary on your PATH (`make install-binaries` or a
-[Releases](https://github.com/derekified/struggletime/releases) archive).
+| State | Icon colour |
+|---|---|
+| Tracking | theme `--accent` |
+| Paused | theme `--trust-yellow` |
+| Idle | theme `--mut` |
+
+Menu (same layout as the old Python tray):
+
+- Status / Today (read-only)
+- set / link API key…
+- get API key in browser…
+- clear API key
+- link / create project…
+- create project…
+- start tracking / stop tracking
+- open dashboard
+- inspect what would be sent
+- settings…
+- quit
+
+On **Linux**, or if the graphical tray cannot start, it runs a headless
+supervisor that prints the same status line and keeps the daemon alive.
 
 Login autostart: `sh daemon/autostart.sh`.
 
