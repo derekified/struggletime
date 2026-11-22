@@ -1,6 +1,6 @@
 ---
 title: Architecture
-description: Passive file/git tracking, shared verify.py scoring, and the review surface.
+description: Passive file tracking, shared st-core scoring, and the review surface.
 ---
 
 ## Stack
@@ -11,74 +11,51 @@ description: Passive file/git tracking, shared verify.py scoring, and the review
 +--------------------+------------------------+
                      | starts / pauses / links
 +--------------------v------------------------+
-|  daemon/daemon.py  (stdlib, ~1s loop)       |
-|  - watch saves, git, and build caches       |
+|  struggletime-daemon  (native, ~1s loop)    |
+|  - watch saves and build caches             |
 |  - optional hooks and IDE adapters          |
 |  - seal -> .aitime-ledger.json              |
 +--------------------+------------------------+
                      | POST /v1/buckets/batch
 +--------------------v------------------------+
-|  server/server.py  (stdlib HTTP)            |
-|  - auth, projects, stats, review, fraud     |
-|  - chain-head sync, allowlist schema        |
+|  struggletime-server  (native HTTP)         |
+|  - auth, projects, stats                    |
+|  - allowlist schema                         |
 |  - static SPA + Fumadocs under /docs        |
 +--------------------+------------------------+
                      | same scoring rules
 +--------------------v------------------------+
-|  src/verify.py + weighting/rules-*.yaml     |
+|  rust/crates/st-core + weighting/rules-*.yaml |
 +---------------------------------------------+
 ```
 
-## L1: Passive file & git tracking
+## L1: Passive file tracking
 
-No OCR. No window titles as content. Structural footprints only:
+No OCR. Structural footprints only:
 
-- `.git` object and index pulses
 - Scrambled file IDs (`sha256(salt:path)`)
 - Build/test cache directory presence/mtime classes
 - Exec category events from shell hooks (name/category, not argv)
 
 ## L2: Scoring what “counts”
 
-`src/verify.py` turns a sealed time slice into weighted seconds:
-
-| Concept | Role |
-|---|---|
-| Struggle / closed loop | Full weight |
-| Fail → fix → pass | Full weight |
-| Unverified dump | Heavy deflation |
-| Quiet follow-up | 5–12 minute taper |
-| Idle after span | Gradual decay |
-
-`FORMULA_VERSION` is stamped on every accepted bucket so reviewers know which rule set applied.
+`st-core` turns a sealed time slice into weighted seconds. `FORMULA_VERSION`
+is stamped on every accepted bucket.
 
 ## Provenance
 
-- Local append-only log with `prev_hash` (each entry links to the previous one)
-- Server stores chain heads per user/project
+- Local append-only log with `prev_hash`
 - Offline queue flushes in order when connectivity returns
-- Review UI can flag `CHAIN_BROKEN` / `GIT_MISMATCH`
-
-## Surfaces
-
-| Surface | Tech | Notes |
-|---|---|---|
-| Dashboard SPA | `server/static/*` | Home, stats, settings, builders, review |
-| Docs | Fumadocs static export | Served at `/docs/` |
-| API | `server/server.py` | Bearer `st_...` keys |
-| Tracker | `daemon/*` | Stdlib daemon + helper + tray |
 
 ## In-repo packages
 
 | Path | Purpose |
 |---|---|
-| `daemon/` | Tracker, installers, hooks, tray, helper |
-| `server/` | HTTP API + static UI |
-| `src/` | Shared verify / scoring rules |
+| `rust/crates/st-daemon` | Tracker binary |
+| `rust/crates/st-server` | HTTP API + static UI |
+| `rust/crates/st-helper` / `st-tray` | CLI + supervisor |
+| `rust/crates/st-core` | Shared verify / scoring |
 | `weighting/` | YAML rules + calibration notes |
 | `docs-site/` | Fumadocs MDX source |
-| `adapters/` | Optional L2 enrichment: VS Code family, Neovim, JetBrains, Godot, Unity, Claude Code, Codex/Aider wrap, OpenClaw |
-| `daemon/editors.py` | Layer-1 process labels for AI IDEs, editors, CAD/creative tools, and CLI agents |
-| `scripts/verify_adapters.py` | Adapter emit/drain smoke checks (`make verify-adapters`) |
-
-Also: [Desktop tracker](/docs/daemon), [Privacy](/docs/privacy), [API](/docs/api).
+| `adapters/` | Optional L2 enrichment |
+| `scripts/verify_adapters.sh` | Adapter emit/presence checks |

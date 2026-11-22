@@ -25,8 +25,8 @@ i just re-tested the server before posting this, here's the actual output:
 $ curl localhost:18765/health
 {"ok": true}
 
-$ python3 -m unittest discover -s tests
-ran 36 tests in 2.650s — ok
+$ make check
+cargo test + adapter verify — ok
 
 struggle-loop session → 0.25 weighted h (full weight, nothing flagged)
 agent-dump session → 0.033 weighted h + auto-flagged (ai:human ratio 27)

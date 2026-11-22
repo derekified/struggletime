@@ -18,8 +18,6 @@ default-members = [
 version = "0.1.0"
 edition = "2021"
 license = "AGPL-3.0-or-later"
-repository = "https://github.com/derekified/struggletime"
-authors = ["derekified"]
 
 [workspace.dependencies]
 st-core = { path = "crates/st-core" }

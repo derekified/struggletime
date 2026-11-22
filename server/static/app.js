@@ -372,8 +372,21 @@ function loadDashPrefs() {
 }
 let dashPrefs = loadDashPrefs();
 
-const theme = localStorage.getItem("st_theme") || "lime";
+const THEME_ALIAS = {
+  lime: "neon", ember: "classic", ocean: "nord", forest: "gruvbox-dark", ink: "midnight",
+  obsidian: "amoled", paper: "github-light", crt: "neon", nordic: "nord", sand: "gruvbox-dark",
+  midnight: "midnight",
+};
+const THEME_IDS = ["classic","midnight","neon","catppuccin-mocha","catppuccin-latte","gruvbox-dark","github-dark","github-light","nord","rose-pine","rose-pine-dawn","amoled"];
+function resolveTheme(raw) {
+  let v = (raw || "").trim() || "classic";
+  if (THEME_ALIAS[v]) v = THEME_ALIAS[v];
+  if (!THEME_IDS.includes(v)) v = "classic";
+  return v;
+}
+const theme = resolveTheme(localStorage.getItem("st_theme"));
 document.documentElement.setAttribute("data-theme", theme);
+try { localStorage.setItem("st_theme", theme); } catch (_) {}
 const density = localStorage.getItem("st_density") || "comfortable";
 document.documentElement.setAttribute("data-density", density);
 if (!localStorage.getItem("st_range") && localStorage.getItem("st_def_range")) {
@@ -444,9 +457,15 @@ function mountHeroLive() {
 mountHeroLive();
 
 function applyTheme(v) {
+  v = resolveTheme(v);
   localStorage.setItem("st_theme", v);
   document.documentElement.setAttribute("data-theme", v);
   ["theme-sel", "dash-theme-sel"].forEach((id) => { if ($(id)) $(id).value = v; });
+  document.querySelectorAll("[data-theme-pick]").forEach((btn) => {
+    const on = btn.getAttribute("data-theme-pick") === v;
+    btn.classList.toggle("on", on);
+    btn.setAttribute("aria-selected", on ? "true" : "false");
+  });
 }
 function applyDensity(v) {
   localStorage.setItem("st_density", v);
@@ -636,6 +655,16 @@ function setDashCustomizeOpen(open) {
 if ($("theme-sel")) {
   $("theme-sel").value = theme;
   $("theme-sel").addEventListener("change", (e) => applyTheme(e.target.value));
+}
+const themeGrid = $("theme-preview-grid");
+if (themeGrid && !themeGrid.dataset.ready) {
+  themeGrid.dataset.ready = "1";
+  themeGrid.addEventListener("click", (e) => {
+    const btn = e.target.closest("[data-theme-pick]");
+    if (!btn) return;
+    applyTheme(btn.getAttribute("data-theme-pick"));
+  });
+  applyTheme(theme);
 }
 if ($("density-sel")) {
   $("density-sel").value = density;

@@ -1,6 +1,6 @@
 # Calibration: 20 labelled sessions
 
-**Formula:** `v0.4.0-alpha` (source: `src/verify.py`)
+**Formula:** `v0.4.0-alpha` (source: `rust/crates/st-core`)
 **Result:** 20/20 buckets agree with reviewer labels (**100.0%**).
 **Gate (≥80%):** PASS
 
@@ -9,7 +9,6 @@
 Synthetic sessions covering human-only, AI-pairing, agent dumps, struggle
 loops, silent/reading, and tomography counters. Each session is one 5-min
 bucket with an a-priori reviewer label `FULL` / `PARTIAL` / `NONE`.
-`python3 scripts/run_calibration_20.py` regenerates fixtures under
 `weighting/calibration-sessions/` and this report.
 
 Reading/debugging silent buckets correctly land as PARTIAL (0.70), not

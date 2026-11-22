@@ -8,14 +8,15 @@
  */
 
 :root {
-  --st-bg: #0d0c0a;
-  --st-panel: #191817;
-  --st-panel2: #211f1d;
-  --st-line: #2e2b28;
-  --st-ink: #f2efe9;
-  --st-mut: #a39e93;
-  --st-accent: #d7ff6a;
-  --st-btn-ink: #111111;
+  /* Classic (default) — mirrors SPA data-theme=classic */
+  --st-bg: #1a1412;
+  --st-panel: #2a1f1c;
+  --st-panel2: #342824;
+  --st-line: #4a3832;
+  --st-ink: #f5ebe6;
+  --st-mut: #b5a098;
+  --st-accent: #e85d4c;
+  --st-btn-ink: #1a1412;
   --st-radius: 12px;
   --st-rail: 180px;
 
@@ -486,22 +487,32 @@ body {
   max-width: 100%;
 }
 
+/* Single code-block chrome: wrapper is layout-only; border lives on <pre> only */
 .docs-app figure:has(> pre),
-.docs-app [class*="codeblock"] {
+.docs-app [class*="codeblock"],
+.docs-app div:has(> pre) {
   position: relative;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  overflow-x: auto;
-  -webkit-overflow-scrolling: touch;
+  margin: 0.75rem 0;
+  padding: 0 !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  overflow: visible;
 }
 
+.docs-app figure:has(> pre) > pre,
+.docs-app [class*="codeblock"] pre,
+.docs-app div:has(> pre) > pre,
 .docs-app pre {
   background: var(--st-panel) !important;
   border: 1px solid var(--st-line) !important;
   border-radius: var(--st-radius) !important;
   padding: 12px 14px !important;
-  padding-right: 3rem !important;
+  padding-right: 3rem !important; /* pr-12: clear of copy button */
   color: var(--st-ink) !important;
   font-size: 12.5px !important;
   line-height: 1.45 !important;
@@ -514,9 +525,13 @@ body {
   white-space: pre;
   word-break: normal;
   overflow-wrap: normal;
+  -webkit-overflow-scrolling: touch;
+  box-shadow: none !important;
 }
 
-.docs-app pre code {
+.docs-app pre code,
+.docs-app figure:has(> pre) pre code,
+.docs-app [class*="codeblock"] pre code {
   background: transparent !important;
   border: 0 !important;
   padding: 0 !important;
@@ -526,6 +541,7 @@ body {
   word-break: normal;
   overflow-wrap: normal;
   max-width: none;
+  box-shadow: none !important;
 }
 
 /* Copy control on code blocks only — never heading anchor buttons */
@@ -563,4 +579,43 @@ body {
     transition: none !important;
     transform: none !important;
   }
+}
+
+
+/* Docs mirrors of SPA colourschemes (Classic default in :root above) */
+html[data-theme="midnight"] {
+  --st-bg:#121212;--st-panel:#1e1e1e;--st-panel2:#2a2a2a;--st-line:#3a3a3a;--st-ink:#ececec;--st-mut:#9a9a9a;--st-accent:#e85d4c;--st-btn-ink:#121212;
+}
+html[data-theme="neon"] {
+  --st-bg:#0a0b0a;--st-panel:#141614;--st-panel2:#1c1f1c;--st-line:#2a302a;--st-ink:#eef5ee;--st-mut:#8a9a8a;--st-accent:#b8ff3c;--st-btn-ink:#0a0b0a;
+}
+html[data-theme="catppuccin-mocha"] {
+  --st-bg:#1e1e2e;--st-panel:#313244;--st-panel2:#45475a;--st-line:#585b70;--st-ink:#cdd6f4;--st-mut:#a6adc8;--st-accent:#cba6f7;--st-btn-ink:#1e1e2e;
+}
+html[data-theme="catppuccin-latte"] {
+  --st-bg:#eff1f5;--st-panel:#ffffff;--st-panel2:#e6e9ef;--st-line:#ccd0da;--st-ink:#4c4f69;--st-mut:#6c6f85;--st-accent:#1e66f5;--st-btn-ink:#ffffff;
+}
+html[data-theme="gruvbox-dark"] {
+  --st-bg:#282828;--st-panel:#3c3836;--st-panel2:#504945;--st-line:#665c54;--st-ink:#ebdbb2;--st-mut:#a89984;--st-accent:#fabd2f;--st-btn-ink:#282828;
+}
+html[data-theme="github-dark"] {
+  --st-bg:#0d1117;--st-panel:#161b22;--st-panel2:#21262d;--st-line:#30363d;--st-ink:#e6edf3;--st-mut:#8b949e;--st-accent:#2f81f7;--st-btn-ink:#ffffff;
+}
+html[data-theme="github-light"] {
+  --st-bg:#ffffff;--st-panel:#f6f8fa;--st-panel2:#eef1f4;--st-line:#d0d7de;--st-ink:#1f2328;--st-mut:#656d76;--st-accent:#0969da;--st-btn-ink:#ffffff;
+}
+html[data-theme="nord"] {
+  --st-bg:#2e3440;--st-panel:#3b4252;--st-panel2:#434c5e;--st-line:#4c566a;--st-ink:#eceff4;--st-mut:#d8dee9;--st-accent:#88c0d0;--st-btn-ink:#2e3440;
+}
+html[data-theme="rose-pine"] {
+  --st-bg:#191724;--st-panel:#1f1d2e;--st-panel2:#26233a;--st-line:#403d52;--st-ink:#e0def4;--st-mut:#908caa;--st-accent:#ebbcba;--st-btn-ink:#191724;
+}
+html[data-theme="rose-pine-dawn"] {
+  --st-bg:#faf4ed;--st-panel:#fffaf3;--st-panel2:#f2e9e1;--st-line:#dfdad9;--st-ink:#575279;--st-mut:#797593;--st-accent:#d7827e;--st-btn-ink:#ffffff;
+}
+html[data-theme="amoled"] {
+  --st-bg:#000000;--st-panel:#0a0a0a;--st-panel2:#141414;--st-line:#222222;--st-ink:#f0f0f0;--st-mut:#888888;--st-accent:#00e5ff;--st-btn-ink:#000000;
+}
+html[data-theme="classic"] {
+  --st-bg:#1a1412;--st-panel:#2a1f1c;--st-panel2:#342824;--st-line:#4a3832;--st-ink:#f5ebe6;--st-mut:#b5a098;--st-accent:#e85d4c;--st-btn-ink:#1a1412;
 }

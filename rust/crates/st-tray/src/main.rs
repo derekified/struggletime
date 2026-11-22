@@ -2,7 +2,7 @@
 //!
 //! Default build is a headless supervisor (works everywhere): keeps the daemon
 //! running and prints status. Full OS tray icons ship on Windows/macOS release
-//! builds; until then this binary is the supported no-Python entrypoint alongside
+//! builds; until then this binary is the supported native entrypoint alongside
 //! `struggletime-helper`.
 use anyhow::Result;
 use clap::Parser;
@@ -30,7 +30,7 @@ fn main() -> Result<()> {
     let args = Args::parse();
     fs::create_dir_all(runtime_home())?;
     println!("StruggleTime tray (native)");
-    println!("settings + helper drive the daemon — no Python required.");
+    println!("settings + helper drive the daemon — native binaries.");
     ensure_daemon()?;
     if args.headless {
         loop {

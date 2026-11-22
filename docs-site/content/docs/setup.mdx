@@ -1,77 +1,25 @@
 ---
 title: Getting started
-description: Clone StruggleTime, run checks, start the API, and link a project.
+description: Clone, build native binaries, run server and daemon.
 ---
-
-## Requirements
-
-- Python 3.10+ (core server and daemon use the stdlib only)
-- Git
-- Node 22+ only if you rebuild the docs (`make docs`)
-
-## Clone and run
 
 ```bash
 git clone https://github.com/derekified/struggletime.git
 cd struggletime
 make check
-make server          # dashboard + API on :18765
+make rust
+make install-binaries
+struggletime-server          # :18765
 ```
 
-Optional demo seed: `make demo` (port 18766).
-
-Open `http://127.0.0.1:18765`.
-
-## Sign in and API key
-
-1. Continue with Slack.
-2. Claim a public handle if asked.
-3. In Settings -> Profile, create a StruggleTime API key (`st_...`).
-4. Paste it into the tray, or run:
+In another terminal:
 
 ```bash
-struggletime-helper apikey <paste-key-here>
-```
-
-## Install the desktop tracker
-
-```bash
-sh daemon/install.sh
-# Windows:
-# powershell -ExecutionPolicy Bypass -File daemon\install.ps1
-```
-
-Tray (GUI deps once):
-
-```bash
-pip install -r daemon/tray-requirements.txt
-make tray
-```
-
-## Link a project
-
-```bash
-struggletime-helper link
+struggletime-helper apikey <st_…>    # from Settings
 struggletime-helper start --repo ~/my-project
 struggletime-helper status
 ```
 
-`daemon/daemon.py` watches every linked root, so you can switch repos during the day without reinstalling.
+Docs: `make docs`, then open `/docs/` on the running server.
 
-## Optional shell hooks
-
-Filesystem signals work without hooks. Hooks only add exec/test categories (never argv):
-
-```bash
-source /path/to/struggletime/daemon/hooks.sh
-```
-
-## Config paths
-
-| What | Where |
-|---|---|
-| Settings | `~/.config/struggletime/settings.json` (Windows: `%APPDATA%\struggletime\`) |
-| Runtime logs | `~/.aitime/` |
-| Local history log | `.aitime-ledger.json` in the watched repo |
-
-For a shorter install checklist see [Installation](/docs/installation). Next: [CLI and tray](/docs/tray), [Daemon](/docs/daemon).
+See [Installation](/docs/installation) for release zips and Windows notes.

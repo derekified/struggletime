@@ -5,7 +5,7 @@ description: Review queues, reason codes, chain anomalies, and staff safeguards.
 
 ## Why review exists
 
-`src/verify.py` catches most inflated hours automatically. Staff still catch edge cases: broken history links, git mismatches, and creative unattended pastes. Review decisions use reason codes and are stamped with `FORMULA_VERSION`.
+`st-core` catches most inflated hours automatically. Staff still catch edge cases: broken history links, git mismatches, and creative unattended pastes. Review decisions use reason codes and are stamped with `FORMULA_VERSION`.
 
 ## Review queue
 
@@ -56,7 +56,7 @@ Prefer reducing hours plus a reason code over silent deletion when the data help
 ## Role guards
 
 - SPA hides Review / fraud for non-staff
-- `server/server.py` rejects unauthorized review POSTs
+- The API rejects unauthorized review POSTs
 - Reviewer identity is recorded with the decision
 
 ## What reviewers never see

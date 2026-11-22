@@ -1,6 +1,6 @@
 use sha2::{Digest, Sha256};
 
-/// Salted file id: `sha256(salt:path)` truncated to 16 hex chars (matches Python).
+/// Salted file id: `sha256(salt:path)` truncated to 16 hex chars (16 hex chars).
 pub fn anonymized_file_id(rel_path: &str, salt: &str) -> String {
     let mut h = Sha256::new();
     h.update(format!("{salt}:{rel_path}").as_bytes());

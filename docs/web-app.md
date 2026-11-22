@@ -1,5 +1,4 @@
-# Web app & customization
+# web-app
 
-See `/docs/web-app` (source: `docs-site/content/docs/web-app.mdx`) for dashboard metric modes, calibration presets, layout density, colourschemes, builders leaderboard opt-out, roles, and danger-zone safeguards.
+See the live docs at `/docs/web-app` (source: `docs-site/content/docs/`).
 
-Settings → Docs navigates directly to `/docs/`.

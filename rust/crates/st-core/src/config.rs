@@ -97,7 +97,7 @@ pub fn normalize_server(url: &str) -> String {
     if u.is_empty() {
         return DEFAULT_SERVER.to_string();
     }
-    // Drop ephemeral tunnel hosts — same policy as Python config.
+    // Drop ephemeral tunnel hosts — same policy as the settings normalizer.
     let lower = u.to_lowercase();
     if lower.contains("trycloudflare.com")
         || lower.contains("ngrok")

@@ -1,137 +1,24 @@
 ---
 title: Deployment
-description: Hosting the API and dashboard.
+description: Run struggletime-server on a small VPS.
 ---
 
-One small VPS runs the stack. At community scale (~15k monthly builders, ~110k hours/month) clients pre-roll time into 5-minute buckets, so the server sees roughly 0.5 writes/second.
-
-## Sizing (measured)
-
-- 3,000 hash-chained buckets ingest + verify in ~0.10s locally (~30k/sec) against a ~0.5/sec requirement
-- Server idles at tens of MB of RAM
-- Evidence packs are KB; object storage is a rounding error
-
-Budget: a $40-60/mo VPS covers it with headroom; design target is $500/mo. Production persistence should use the Postgres schema in [`schemas/server.sql`](../schemas/server.sql) (monthly-partitioned buckets) behind the same API. The reference server in `server/` stores to SQLite for pilots and self-hosting.
-
-## Run it
+One small VPS runs the stack. Clients pre-roll time into buckets, so write load stays modest.
 
 ```bash
-PORT=18765 SERVER_DB=/srv/struggletime.db \
-GITHUB_WEBHOOK_SECRET=... SLACK_SIGNING_SECRET=... SLACK_WEBHOOK_URL=... \
-python3 server/server.py
+make rust
+./rust/target/release/struggletime-server --bind 0.0.0.0 --port 18765
 ```
 
-Full env list: [`.env.example`](../.env.example). The server binds `127.0.0.1` only. Traffic reaches it through a tunnel or reverse proxy on the same box.
+Environment (see `.env.example`): `PORT`, `BIND`, `SERVER_DB`, OAuth/Slack secrets as needed.
 
-## VPS setup
-
-```bash
-# on the vps
-git clone https://github.com/derekified/struggletime.git && cd struggletime
-cp .env.example .env
-mkdir -p /srv/struggletime
-```
-
-In `.env`:
-
-```bash
-PORT=18765
-SERVER_DB=/srv/struggletime/server.db
-OAUTH_REDIRECT_BASE=https://your-domain.example
-GITHUB_CLIENT_ID=
-GITHUB_CLIENT_SECRET=
-SLACK_CLIENT_ID=
-SLACK_CLIENT_SECRET=
-```
-
-Run once by hand (`make server`), claim your handle, then keep it alive with systemd:
+Example systemd unit:
 
 ```ini
-# /etc/systemd/system/struggletime.service
-[Unit]
-Description=StruggleTime server
-After=network.target
 [Service]
-WorkingDirectory=/home/you/struggletime
-ExecStart=/usr/bin/python3 server/server.py
+WorkingDirectory=/opt/struggletime
+ExecStart=/opt/struggletime/rust/target/release/struggletime-server
 Restart=on-failure
-User=you
-[Install]
-WantedBy=multi-user.target
 ```
 
-```bash
-sudo systemctl daemon-reload && sudo systemctl enable --now struggletime
-journalctl -u struggletime -f
-```
-
-## Port forward
-
-### 1. SSH tunnel (private testing)
-
-From your machine:
-
-```bash
-ssh -L 18765:127.0.0.1:18765 you@your-vps
-```
-
-`http://127.0.0.1:18765` is the VPS dashboard. Point local daemon/tray at the same URL. OAuth and webhooks cannot reach this tunnel.
-
-### 2. Reverse proxy + TLS (public)
-
-Point a domain at the VPS. Caddy:
-
-```
-your-domain.example {
-    reverse_proxy 127.0.0.1:18765
-}
-```
-
-```bash
-sudo caddy reload --config /etc/caddy/Caddyfile
-```
-
-Set `OAUTH_REDIRECT_BASE=https://your-domain.example`, restart the server, and register Slack/GitHub callbacks from [Integrations](/docs/integrations) on that domain. Firewall port 18765 off (`ufw allow OpenSSH`, `ufw allow 80,443/tcp`).
-
-### 3. Public IP + Caddy HTTPS
-
-Slack/GitHub require HTTPS redirect URIs. Put Caddy on `:443` in front of the app. On a bare IP, [sslip.io](https://sslip.io) works without buying a domain:
-
-```bash
-# /etc/caddy/Caddyfile
-62-83-116-143.sslip.io {
-  reverse_proxy 127.0.0.1:18765
-}
-```
-
-```bash
-OAUTH_REDIRECT_BASE=https://62-83-116-143.sslip.io
-AITIME_SERVER=https://62-83-116-143.sslip.io
-STRUGGLETIME_SERVER=https://62-83-116-143.sslip.io
-BIND=127.0.0.1
-```
-
-```bash
-systemctl enable --now caddy struggletime-server
-```
-
-Register OAuth callbacks once:
-
-- `https://62-83-116-143.sslip.io/v1/auth/slack/callback`
-- `https://62-83-116-143.sslip.io/v1/auth/github/callback`
-
-### 4. Temporary public tunnel (tests only)
-
-URL changes every restart:
-
-```bash
-ngrok http 18765
-# or: cloudflared tunnel --url http://127.0.0.1:18765
-```
-
-## Operations
-
-- Backups: copy the database file (or `pg_dump`). Buckets are append-only; the chain head per project is in the same backup.
-- Upgrades: pull, restart. Schema creation is `if not exists`. Bucket payloads and formula versions are stored per bucket.
-- Watch: `GET /health`, `GET /v1/overview`, `GET /v1/integrations/events` (undelivered Slack queue staying non-zero is a smell if a webhook is configured).
-- Trust knobs: reviewer reason codes and the formula live under `weighting/`. Changing weights means bumping the formula version, never rewriting history.
+Put Caddy or nginx in front for TLS. Serve `docs-site/out` under `/docs/` or let the process serve static files next to the SPA.

@@ -1,43 +1,39 @@
 ---
 title: Installation
-description: Clone StruggleTime, install the desktop tracker, and link a project.
+description: Install StruggleTime native binaries and link a project.
 ---
 
 Repo: [github.com/derekified/struggletime](https://github.com/derekified/struggletime).
 
 ## Requirements
 
-- **Preferred:** Rust toolchain to build, or a release zip (no Python)
+- A release zip **or** a Rust toolchain to build from source
 - Git
-- Python 3.10+ only if you use the reference Python daemon/server
 - Node 22+ only if you rebuild docs (`make docs`)
 
-## Native binaries (Windows / macOS / Linux)
+## Release zip (Windows / macOS / Linux)
 
-Download the zip for your OS from
-[GitHub Releases](https://github.com/derekified/struggletime/releases)
-(built on each `v*` tag). It contains:
+Download from [GitHub Releases](https://github.com/derekified/struggletime/releases)
+(built on each `v*` tag). Unpack and put these on your PATH:
 
 - `struggletime-helper`
 - `struggletime-daemon`
 - `struggletime-server`
 - `struggletime-tray`
 
-Put them on your PATH. No Python install required.
-
-From source:
+## Build from source
 
 ```bash
 git clone https://github.com/derekified/struggletime.git
 cd struggletime
 make rust
 make install-binaries    # ~/.local/bin
-struggletime-server      # http://127.0.0.1:18765 (serves server/static)
+struggletime-server      # http://127.0.0.1:18765
 ```
 
 ## Sign in and API key
 
-1. Continue with Hack Club Slack (Python or Rust server).
+1. Continue with Hack Club Slack.
 2. Claim a public handle if asked.
 3. Settings → Profile → create a StruggleTime API key (`st_...`).
 4. Paste it:
@@ -46,39 +42,15 @@ struggletime-server      # http://127.0.0.1:18765 (serves server/static)
 struggletime-helper apikey <paste-key-here>
 ```
 
-## Install the desktop tracker
-
-Native:
-
-```bash
-struggletime-helper start --repo ~/my-project
-struggletime-helper status
-# optional supervisor:
-struggletime-tray
-```
-
-Python reference (still supported):
-
-```bash
-sh daemon/install.sh
-# Windows: powershell -ExecutionPolicy Bypass -File daemon\install.ps1
-pip install -r daemon/tray-requirements.txt   # tray GUI only
-make tray
-```
-
 ## Link a project
 
 ```bash
-struggletime-helper link
 struggletime-helper start --repo ~/my-project
 struggletime-helper status
+struggletime-tray          # optional supervisor
 ```
 
-`daemon/daemon.py` watches every linked root. Switch repos during the day without reinstalling.
-
-## Optional shell hooks
-
-Watching saved files and git still works without hooks. Hooks only add exec/test categories (never argv):
+Shell hooks (exec categories only, never argv):
 
 ```bash
 # bash / zsh
@@ -91,29 +63,13 @@ source /path/to/struggletime/daemon/hooks.sh
 ## Debug
 
 ```bash
-# env
-STRUGGLETIME_DEBUG=1 python3 daemon/daemon.py --repo ~/my-project
-
-# flag (same allowlisted logs)
-python3 daemon/daemon.py --debug --repo ~/my-project
-
-# adapter smoke check
-python3 scripts/verify_adapters.py
-# or
-make verify-adapters
+STRUGGLETIME_DEBUG=1 struggletime-daemon --repo ~/my-project
+struggletime-daemon --debug --repo ~/my-project
+make check                 # cargo test + adapter verify
 ```
 
-Debug logs print allowlisted labels only (`editor`, `event_type`, counts) — never paths, prompts, or argv.
-
-## Editors and tools
-
-Layer 1 labels many editors and agents from the process list with no plugin
-(Cursor, VS Code, Neovim, Helix, JetBrains, Godot, Unity, KiCad, Blender,
-Claude Code, Codex, Aider, OpenClaw, and more). Optional adapters under
-`adapters/` add finer counts for VS Code family, Neovim, JetBrains, Godot,
-Unity, Claude Code, Codex/Aider, and OpenClaw.
-
-Full tables and setup: [Desktop tracker](/docs/daemon), [Integrations](/docs/integrations).
+Debug logs print allowlisted labels only (`editor`, `event_type`, counts) —
+never paths, prompts, or argv.
 
 ## Config paths
 

@@ -9,43 +9,28 @@ AGPLv3. Aimed at Hack Club projects.
 
 https://github.com/derekified/struggletime
 
-## Native binaries (no Python)
-
-Daemon, server, helper, and tray are written in Rust under `rust/`.
+## Install (native binaries)
 
 ```bash
 git clone https://github.com/derekified/struggletime.git
 cd struggletime
-make rust                  # needs a Rust toolchain
-make install-binaries      # symlinks into ~/.local/bin
-struggletime-server        # dashboard on :18765 (serves server/static)
+make rust
+make install-binaries      # ~/.local/bin
+struggletime-server        # http://127.0.0.1:18765
 struggletime-helper apikey <st_…>
 struggletime-helper start --repo ~/my-project
 struggletime-helper status
 ```
 
-Windows / macOS / Linux release zips are built by GitHub Actions on version
-tags (`v*`) — download from
-[Releases](https://github.com/derekified/struggletime/releases), unzip, put
-the four binaries on your PATH. No Python install required.
-
-## Source (Python reference)
-
-The original stdlib Python daemon/server under `daemon/` and `server/` remain
-for tests, adapters, and calibration:
-
-```bash
-make check
-make server
-sh daemon/install.sh
-```
+Or download a Windows / macOS / Linux zip from
+[Releases](https://github.com/derekified/struggletime/releases) (built on
+`v*` tags). No scripting-language runtime required.
 
 ## What it does
 
 A local tracker watches file saves in linked project folders. Paths leave as
 `sha256(salt:path)`. Each sealed bucket points at the previous one with
-`prev_hash`. Scoring lives in Rust (`st-core`) and the Python mirror
-`src/verify.py` (same formula version).
+`prev_hash`. Scoring lives in `rust/crates/st-core`.
 
 Optional IDE/agent adapters live under `adapters/`.
 
@@ -53,23 +38,22 @@ Optional IDE/agent adapters live under `adapters/`.
 
 | Path | |
 |---|---|
-| `rust/` | native daemon, server, helper, tray (`make rust`) |
-| `daemon/` | Python tracker + installers (reference) |
+| `rust/` | daemon, server, helper, tray (`make rust`) |
+| `daemon/` | installers, shell hooks, assets |
 | `adapters/` | optional editor / agent bridges |
-| `server/` | Python API + dashboard SPA assets (`server/static/`) |
-| `src/` | Python scoring mirror (`verify.py`) |
+| `server/static/` | dashboard SPA |
+| `docs-site/` | Fumadocs → `/docs` |
 | `weighting/` | rules YAML + calibration notes |
-| `docs-site/` | Fumadocs → static `/docs` |
-| `tests/` | Python unittest suite (`make check`) |
+| `schemas/` | allowlist + SQL |
 
 ## Make
 
 ```bash
-make rust              # release native binaries
+make rust              # release binaries
 make install-binaries  # link into ~/.local/bin
-make rust-test         # Rust unit tests
-make check             # Python tests + adapter verify
-make server            # Python API + dashboard
+make check             # cargo test + adapter verify
+make clippy
+make server            # struggletime-server
 make docs              # build /docs
 ```
 

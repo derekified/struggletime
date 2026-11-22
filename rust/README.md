@@ -1,7 +1,7 @@
 # StruggleTime Rust workspace
 
 Native rewrite of the desktop tracker, HTTP server, helper CLI, and tray
-supervisor. Users can run StruggleTime without installing Python.
+supervisor. Users can run StruggleTime as native binaries.
 
 | Binary | Crate | Role |
 |---|---|---|
@@ -10,7 +10,7 @@ supervisor. Users can run StruggleTime without installing Python.
 | `struggletime-helper` | `st-helper` | apikey / start / stop / status |
 | `struggletime-tray` | `st-tray` | headless supervisor (release tray UI later) |
 
-Shared scoring and config: `st-core` (port of `src/verify.py` + settings paths).
+Shared scoring and config: `st-core` (scoring + settings paths).
 
 ```bash
 cargo test

@@ -9,7 +9,6 @@
     "types:check": "next typegen && tsc --noEmit"
   },
   "dependencies": {
-    "cn": "^0.5.2",
     "fumadocs-core": "16.19.6",
     "fumadocs-mdx": "15.6.4",
     "fumadocs-ui": "npm:@fumadocs/base-ui@16.19.6",

@@ -1,4 +1,4 @@
-//! Causal weighting + chain verification (port of src/verify.py).
+//! Causal weighting + chain verification (shared weighting + chain verification).
 use serde_json::{Map, Value};
 use sha2::{Digest, Sha256};
 
@@ -266,7 +266,7 @@ pub fn friction(bucket: &Value) -> f64 {
     (raw.min(1.0) * 1000.0).round() / 1000.0
 }
 
-/// Match Python `json.dumps(..., sort_keys=True, separators=(",", ":"))` key escaping.
+/// Canonical JSON with sorted keys (compact separators).
 fn escape_key_proper(k: &str) -> String {
     serde_json::to_string(k).unwrap_or_else(|_| format!("\"{k}\""))
 }

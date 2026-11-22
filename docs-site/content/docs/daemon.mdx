@@ -1,61 +1,49 @@
 ---
 title: Desktop tracker
-description: The 1-second stdlib loop, multi-project switching, quiet-reading decay, and file/git tracking.
+description: Native 1-second loop, multi-project watching, quiet-reading decay, and ledger seals.
 ---
 
 ## Process model
 
-`daemon/daemon.py` is a background process that uses only the Python standard library. No third-party packages, browser automation, or accessibility APIs for screen content.
+`struggletime-daemon` is a native background process. No screen capture,
+accessibility APIs for content, or third-party analytics SDKs.
 
 ```text
 every ~1s
   |- poll linked project folders
-  |- watch saves, git activity, and known build/test caches
-  |- optional adapter/exec events (hooks, IDE plugins)
+  |- watch saves and known build/test caches
+  |- drain ~/.aitime/agent_events.jsonl (adapter counts)
   |- update active work window + idle clock
   |- seal time slices -> append local log -> offline queue -> sync
 ```
 
-Start via tray, helper, or:
-
 ```bash
-python3 daemon/daemon.py --repo /path/to/project
+struggletime-daemon --repo /path/to/project
+# or via helper:
+struggletime-helper start --repo /path/to/project
 ```
 
 ## Multi-project afternoons
 
-Link multiple repos with the tray or `struggletime-helper link`. The loop watches all linked roots. When you switch trees, credit follows the project that is actually changing. You do not need to stop and start for each repo.
+Link multiple repos with the helper. The loop watches all linked roots. When
+you switch trees, credit follows the project that is actually changing.
 
 ## What counts as “active”
 
-Billable time is the **active span**: contiguous seconds where the tracker sees meaningful change (git updates, file saves, test/build category events, adapter heartbeats). Leaving the daemon running while you do nothing does not bill.
-
-| Signal class | Examples (metadata only) |
-|---|---|
-| Git activity | `HEAD`, index, packed-refs, reflog mtime/inode |
-| Filesystem | Scrambled file IDs, size class, mtime deltas |
-| Cache / build | Known tool cache footprints (compile, test, package) |
-| Adapter / exec | Category tags (`test`, `build`, `run`); never command arguments |
+Billable time is the **active span**: contiguous seconds where the tracker
+sees meaningful change (file saves, adapter/exec category events). Leaving
+the daemon running while you do nothing does not bill.
 
 ## Quiet reading after real work (5–12 minutes)
 
-After you fix something you often stare at a stack trace without typing. `src/verify.py` applies a tapered weight (`SILENT_*` curve) instead of dropping to zero immediately:
-
-- Full credit while the quiet window is short
-- Gradual scale-down between roughly 5 and 12 minutes of silent follow-up
-- Same curve on daemon and server
-
-This replaces the old hard cliff where `idle_secs >= 240` forced weight to zero. Rules YAML may still mention `idle_pause_secs: 240` as a reference. Live weighting uses the gradual curve (`tests/test_daemon_tracking.py::test_no_idle_cliff_at_240`).
-
-## Idle cutoffs
-
-After the active span ends, remaining quiet time decays toward idle. `verify.py` labels `IDLE` when that curve has exhausted credit. Long unattended gaps do not accumulate struggle hours.
+After you fix something you often stare at a stack trace without typing.
+`st-core` applies a tapered weight instead of dropping to zero immediately.
 
 ## Sealing time slices
 
 1. Aggregate events into a time bucket.
-2. Run `verify.weight_bucket` and stamp `FORMULA_VERSION`.
-3. Append to the local log (`.aitime-ledger.json`) with `prev_hash` linking to the previous entry.
+2. Stamp `FORMULA_VERSION` and score.
+3. Append to `.aitime-ledger.json` with `prev_hash`.
 4. Enqueue for `POST /v1/buckets/batch` when online.
 
 ## What the tracker never does
@@ -65,147 +53,25 @@ After the active span ends, remaining quiet time decays toward idle. `verify.py`
 - Store command-line arguments
 - Send unhashed absolute paths
 
-See [Privacy](/docs/privacy).
+File IDs are `sha256(salt:path)` hex. See [Privacy](/docs/privacy).
 
-## Editor / agent labels (Layer 1)
+## Optional adapters
 
-`daemon/editors.py` maps running processes to `editor` / `agent` labels from the process list. No plugin required for attribution — if the tool is running over a linked repo, saves and git activity still count. Override or extend without code changes via `~/.config/struggletime/editors.json`.
-
-### AI-native IDEs
-
-| Label | Matched processes (examples) |
-|---|---|
-| `cursor` | Cursor |
-| `windsurf` | Windsurf |
-| `trae` | Trae |
-| `kiro` | Kiro |
-| `zed` | Zed |
-| `antigravity` | Antigravity |
-
-### Editors and IDEs
-
-| Label | Matched processes (examples) |
-|---|---|
-| `vscode` | Visual Studio Code, `code.exe`, Code Helper |
-| `vscodium` | VSCodium, Code - OSS, Codium |
-| `neovim` | `nvim` |
-| `helix` | Helix, `hx` |
-| `kakoune` | Kakoune |
-| `sublime` | Sublime Text, `subl` |
-| `emacs` | Emacs |
-| `vim` | Vim (not Neovim) |
-| `jetbrains` | IntelliJ IDEA, WebStorm, PyCharm, GoLand, CLion, Rider, RustRover, Android Studio (`studio64`) |
-| `fleet` | JetBrains Fleet |
-| `nova` | Nova |
-| `textmate` | TextMate |
-| `kate` | Kate |
-| `gedit` | gedit |
-| `notepadpp` | Notepad++ |
-| `xcode` | Xcode |
-| `arduino` | Arduino IDE |
-
-### Game, creative, CAD, and notebooks
-
-| Label | Matched processes (examples) |
-|---|---|
-| `godot` | Godot |
-| `unity` | Unity, Unity Hub |
-| `kicad` | KiCad, `pcbnew`, `eeschema`, `gerbview` |
-| `blender` | Blender |
-| `freecad` | FreeCAD |
-| `openscad` | OpenSCAD |
-| `aseprite` | Aseprite |
-| `krita` | Krita |
-| `gimp` | GIMP |
-| `figma` | Figma |
-| `jupyter` | JupyterLab, Jupyter Notebook |
-| `rstudio` | RStudio |
-| `obsidian` | Obsidian |
-
-### CLI / desktop AI agents
-
-| Label | Agent id | Matched processes (examples) |
-|---|---|---|
-| `claude-code` | `claude` | `claude`, `claude-code` |
-| `codex` | `codex` | Codex, ChatGPT CLI, OpenAI CLI |
-| `openclaw` | `openclaw` | OpenClaw |
-| `aider` | `aider` | Aider |
-| `goose` | `goose` | Goose |
-| `opencode` | `opencode` | OpenCode |
-| `gemini-cli` | `gemini` | Gemini CLI |
-| `cursor` | `cursor-agent` | `cursor-agent` |
-| `amp` | `amp` | Amp |
-| `crush` | `crush` | Crush |
-| `qwen` | `qwen` | Qwen |
-| `cline` | `cline` | Cline |
-| `roo` | `roo` | Roo / Roo Code |
-| `continue` | `continue` | Continue |
-| `copilot` | `copilot` | Copilot |
-
-Custom entries:
-
-```jsonc
-// ~/.config/struggletime/editors.json
-{
-  "signatures": [
-    {"match": "my-ide", "editor": "my-ide", "kind": "ai_ide"},
-    {"match": "my-cli", "editor": "my-cli", "agent": "my-cli", "kind": "cli_agent"}
-  ],
-  "aliases": { "code": "vscode" }
-}
-```
-
-`kind` is `ai_ide`, `editor`, or `cli_agent`. Unknown tools that still touch a linked repo get a sanitized process-name label plus burst shape (1–2 files ≈ human; 5+ ≈ agent/formatter).
-
-## Optional adapters (Layer 2)
-
-Adapters append allowlisted lines to `~/.aitime/agent_events.jsonl` (counts and labels only). The daemon drains that file each poll tick, then falls back to process signatures. There is no MCP server. Setup details: [Integrations](/docs/integrations).
-
-| Path | Tools | Adds |
-|---|---|---|
-| `adapters/vscode` | VS Code, Cursor, Windsurf, Trae, Kiro, VSCodium | Human edits, focus, file-op counts |
-| `adapters/neovim` | Neovim | Insert vs external edits, focus, saves |
-| `adapters/jetbrains` | IntelliJ family + Android Studio | Typing vs bulk writes, window focus |
-| `adapters/godot` | Godot 4 | Focus, filesystem edits, playtest |
-| `adapters/unity` | Unity Editor | Focus, asset saves, play mode |
-| `adapters/claude-code` | Claude Code | Agent turn boundaries (`hooks.json`) |
-| `adapters/codex` | Codex, Aider, other CLIs | Turn start/stop via `wrap.sh` |
-| `adapters/openclaw` | OpenClaw | Session turn / tool counts from local logs |
-
-Shell hooks (`daemon/hooks.sh`, `daemon/hooks.ps1`) emit `test` / `build` / `run` categories without argv. Legacy `~/.aitime/exec.jsonl` is still drained. If an adapter breaks, Layer 1 keeps counting.
-
-## Cache / lock ignores
-
-The tracker skips tool caches and lock files so they do not look like bulk agent writes:
-
-- Godot: `.godot/`, `*.import`
-- Unity / Unreal: `Library/`, `Temp/`, `Obj/`, `Intermediate/`, `Saved/`, `Binaries/`
-- KiCad / CAD: `~*.lck`, `*-bak`, `*-backups/`, `fp-info-cache`
-- Blender: `*.blend1`, `*.blend2`
-- Xcode / JetBrains: `DerivedData/`, `xcuserdata/`, `.idea/`
+Adapters append allowlisted lines to `~/.aitime/agent_events.jsonl`. Setup:
+[Integrations](/docs/integrations).
 
 ## Debug mode
 
-Enable allowlisted diagnostics with either the env var or the CLI flag (same effect):
-
 ```bash
-STRUGGLETIME_DEBUG=1 python3 daemon/daemon.py --repo ~/my-project
-python3 daemon/daemon.py --debug --repo ~/my-project
+STRUGGLETIME_DEBUG=1 struggletime-daemon --repo ~/my-project
+struggletime-daemon --debug --repo ~/my-project
 ```
 
-`AITIME_DEBUG=1` is accepted as an alias. Adapters honor the same env. Logs print labels only (`editor`, `event_type`, counts) — never paths, prompts, or argv.
+Logs print labels only — never paths, prompts, or argv.
 
 ## Verification
 
 ```bash
-python3 scripts/verify_adapters.py
-# or
-make verify-adapters
-
-python3 -m unittest tests.test_daemon_tracking tests.test_editors tests.test_ecosystem_adapters tests.test_adapters_e2e -v
-python3 -c "from src import verify; print(verify.FORMULA_VERSION)"
+make check
+cd rust && cargo test -p st-core
 ```
-
-`scripts/verify_adapters.py` loads each adapter under `adapters/` and checks emit → drain paths without uploading source.
-
-Also: [Architecture](/docs/architecture), [Privacy](/docs/privacy), [API](/docs/api).

@@ -1,5 +1,5 @@
-# Mirror of src/verify.py — regenerate with: python3 scripts/sync_formula_docs.py
-# Do not treat this file as the runtime engine; verify.py is authoritative.
+# Mirror of rust/crates/st-core weighting
+# Do not treat this file as the runtime engine; st-core is authoritative.
 formula_version: v0.4.0-alpha
 bucket_secs_default: 300
 silent_full_secs: 300   # ≤5m quiet follow-up keeps 0.70×

@@ -1,4 +1,4 @@
-//! StruggleTime HTTP API + static dashboard (Rust port of server/server.py core paths).
+//! StruggleTime HTTP API + static dashboard (Native HTTP API + static dashboard).
 use anyhow::{Context, Result};
 use axum::body::Body;
 use axum::extract::{Path, State};

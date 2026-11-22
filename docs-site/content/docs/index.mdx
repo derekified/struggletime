@@ -25,11 +25,11 @@ StruggleTime tracks **productive struggle**: the loops where something breaks, y
 - **Passive file & git tracking:** the desktop tracker watches saved file changes and git activity in your project folder. It does not screenshot your screen or read file contents.
 - **Scrambled file IDs:** paths are mixed with a secret salt (`sha256(salt:path)`) before anything is sent, so raw paths and source never leave your machine.
 - **Tamper-evident history:** each sealed time slice stores `prev_hash` of the previous entry. Quiet edits to past history are easy to spot in review.
-- **Shared scoring rules:** `daemon/daemon.py` and `server/server.py` both call `src/verify.py` with the same `FORMULA_VERSION`.
+- **Shared scoring rules:** daemon and server both use `st-core` with the same `FORMULA_VERSION`.
 
 ## Privacy
 
-`daemon/daemon.py` uses only the Python standard library. Wire payloads are allowlisted metadata (~25–50 KB) with scrambled file IDs. See [Privacy](/docs/privacy).
+`struggletime-daemon` is a native binary. Wire payloads are allowlisted metadata (~25–50 KB) with scrambled file IDs. See [Privacy](/docs/privacy).
 
 ## Pages
 

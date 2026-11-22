@@ -112,7 +112,7 @@
         </div>
         <div class="bento-card span-6">
           <div class="card-head"><span class="nav-ico" data-glyph="private"></span><h2>privacy first</h2></div>
-          <p class="sub">The desktop tracker uses only Python’s standard library. Reviewers see timing and weights—not your code, prompts, or screenshots.</p>
+          <p class="sub">The desktop tracker is a native binary. Reviewers see timing and weights—not your code, prompts, or screenshots.</p>
         </div>
       </div>
     </section>
@@ -207,17 +207,18 @@
             </label>
             <label class="ui-field">color scheme
               <select id="dash-theme-sel" class="ui-input" aria-label="dashboard color scheme">
-                <option value="lime">Lime</option>
-                <option value="ember">Ember</option>
-                <option value="ocean">Ocean</option>
-                <option value="forest">Forest</option>
-                <option value="ink">Ink</option>
-                <option value="obsidian">Obsidian Signal</option>
-                <option value="paper">Paper &amp; Ink</option>
-                <option value="crt">CRT / Phosphor</option>
-                <option value="nordic">Nordic Dusk</option>
-                <option value="midnight">Midnight Indigo</option>
-                <option value="sand">Warm Sand</option>
+                <option value="classic">Classic</option>
+                <option value="midnight">Midnight</option>
+                <option value="neon">Neon</option>
+                <option value="catppuccin-mocha">Catppuccin Mocha</option>
+                <option value="catppuccin-latte">Catppuccin Iced Latte</option>
+                <option value="gruvbox-dark">Gruvbox Dark</option>
+                <option value="github-dark">GitHub Dark</option>
+                <option value="github-light">GitHub Light</option>
+                <option value="nord">Nord</option>
+                <option value="rose-pine">Rose Pine</option>
+                <option value="rose-pine-dawn">Rose Pine Dawn</option>
+                <option value="amoled">AMOLED</option>
               </select>
             </label>
             <label class="ui-field">density
@@ -492,7 +493,7 @@
         </label>
         <aside class="settings-rail" role="tablist">
           <button type="button" class="settings-tab on" data-settings-tab="profile" role="tab"><span class="nav-ico" data-glyph="profile"></span> Profile</button>
-          <a class="settings-tab" href="/docs/tray/" data-settings-link="daemon"><span class="nav-ico" data-glyph="terminal"></span> Daemon</a>
+          <a class="settings-tab" href="https://62-83-116-143.sslip.io/docs/tray/" data-settings-link="daemon"><span class="nav-ico" data-glyph="terminal"></span> Daemon</a>
           <a class="settings-tab" href="/docs/" data-nav-link data-settings-link="docs"><span class="nav-ico" data-glyph="docs"></span> Docs</a>
           <button type="button" class="settings-tab" data-settings-tab="appearance" role="tab"><span class="nav-ico" data-glyph="contrast"></span> Appearance</button>
         </aside>
@@ -592,8 +593,8 @@ cd struggletime</pre>
                 </li>
                 <li>
                   <b>Install (Linux / macOS)</b>
-                  <pre class="install-code">sh daemon/install.sh</pre>
-                  <p class="sub">Windows PowerShell: <code>powershell -ExecutionPolicy Bypass -File daemon\install.ps1</code></p>
+                  <pre class="install-code">make rust && make install-binaries</pre>
+                  <p class="sub">Or download the Windows/macOS/Linux zip from <a href="https://github.com/derekified/struggletime/releases">Releases</a>.</p>
                 </li>
                 <li>
                   <b>Link your API key</b>
@@ -612,7 +613,7 @@ source /path/to/struggletime/daemon/hooks.sh
 . C:\path\to\struggletime\daemon\hooks.ps1</pre>
                 </li>
               </ol>
-              <p class="sub">Privacy: only metadata leaves your machine (no code, prompts, or screenshots). Inspect anytime with <code>python3 daemon/tracker_inspect.py ~/my-project</code>.</p>
+              <p class="sub">Privacy: only metadata leaves your machine (no code, prompts, or screenshots). Start with <code>struggletime-helper start --repo ~/my-project</code>.</p>
               <p class="sub" id="daemon-link-status">Daemon status: checking…</p>
             </div>
           </div>
@@ -629,19 +630,36 @@ source /path/to/struggletime/daemon/hooks.sh
               <p class="sub">Saved on this device. Applies across the dashboard, modals, and review tools.</p>
               <label class="ui-field">color scheme
                 <select id="theme-sel" class="ui-input" aria-label="color scheme">
-                  <option value="lime">Lime</option>
-                  <option value="ember">Ember</option>
-                  <option value="ocean">Ocean</option>
-                  <option value="forest">Forest</option>
-                  <option value="ink">Ink</option>
-                  <option value="obsidian">Obsidian Signal</option>
-                  <option value="paper">Paper &amp; Ink</option>
-                  <option value="crt">CRT / Phosphor</option>
-                  <option value="nordic">Nordic Dusk</option>
-                  <option value="midnight">Midnight Indigo</option>
-                  <option value="sand">Warm Sand</option>
-                </select>
+                  <option value="classic">Classic</option>
+                  <option value="midnight">Midnight</option>
+                  <option value="neon">Neon</option>
+                  <option value="catppuccin-mocha">Catppuccin Mocha</option>
+                  <option value="catppuccin-latte">Catppuccin Iced Latte</option>
+                  <option value="gruvbox-dark">Gruvbox Dark</option>
+                  <option value="github-dark">GitHub Dark</option>
+                  <option value="github-light">GitHub Light</option>
+                  <option value="nord">Nord</option>
+                  <option value="rose-pine">Rose Pine</option>
+                  <option value="rose-pine-dawn">Rose Pine Dawn</option>
+                  <option value="amoled">AMOLED</option>
+              </select>
               </label>
+              
+              <div class="theme-preview-grid" id="theme-preview-grid" role="listbox" aria-label="Theme previews">
+                <button type="button" class="theme-preview-card" data-theme-pick="classic" role="option" aria-label="Classic: Warm dark with coral accent"><span class="tp-swatch" data-theme="classic"></span><span class="tp-meta"><b>Classic</b><em>Warm dark with coral accent</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="midnight" role="option" aria-label="Midnight: Charcoal with coral accent"><span class="tp-swatch" data-theme="midnight"></span><span class="tp-meta"><b>Midnight</b><em>Charcoal with coral accent</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="neon" role="option" aria-label="Neon: Dark with bright lime accent"><span class="tp-swatch" data-theme="neon"></span><span class="tp-meta"><b>Neon</b><em>Dark with bright lime accent</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="catppuccin-mocha" role="option" aria-label="Catppuccin Mocha: Soft lavender dark"><span class="tp-swatch" data-theme="catppuccin-mocha"></span><span class="tp-meta"><b>Catppuccin Mocha</b><em>Soft lavender dark</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="catppuccin-latte" role="option" aria-label="Catppuccin Iced Latte: Cool light with blue accent"><span class="tp-swatch" data-theme="catppuccin-latte"></span><span class="tp-meta"><b>Catppuccin Iced Latte</b><em>Cool light with blue accent</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="gruvbox-dark" role="option" aria-label="Gruvbox Dark: Warm retro amber/gold"><span class="tp-swatch" data-theme="gruvbox-dark"></span><span class="tp-meta"><b>Gruvbox Dark</b><em>Warm retro amber/gold</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="github-dark" role="option" aria-label="GitHub Dark: Crisp blue on dark"><span class="tp-swatch" data-theme="github-dark"></span><span class="tp-meta"><b>GitHub Dark</b><em>Crisp blue on dark</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="github-light" role="option" aria-label="GitHub Light: Blue on light"><span class="tp-swatch" data-theme="github-light"></span><span class="tp-meta"><b>GitHub Light</b><em>Blue on light</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="nord" role="option" aria-label="Nord: Arctic slate and frost"><span class="tp-swatch" data-theme="nord"></span><span class="tp-meta"><b>Nord</b><em>Arctic slate and frost</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="rose-pine" role="option" aria-label="Rose Pine: Deep plum with rose accent"><span class="tp-swatch" data-theme="rose-pine"></span><span class="tp-meta"><b>Rose Pine</b><em>Deep plum with rose accent</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="rose-pine-dawn" role="option" aria-label="Rose Pine Dawn: Soft warm light rose"><span class="tp-swatch" data-theme="rose-pine-dawn"></span><span class="tp-meta"><b>Rose Pine Dawn</b><em>Soft warm light rose</em></span></button>
+                <button type="button" class="theme-preview-card" data-theme-pick="amoled" role="option" aria-label="AMOLED: Pure black with cyan accent"><span class="tp-swatch" data-theme="amoled"></span><span class="tp-meta"><b>AMOLED</b><em>Pure black with cyan accent</em></span></button>
+              </div>
+
               <label class="ui-field">display density
                 <select id="density-sel" class="ui-input" aria-label="display density">
                   <option value="comfortable">Comfortable</option>

@@ -7,7 +7,7 @@ Integrations are optional and self-hosted. With nothing configured, the tracker 
 
 ## What works without an adapter
 
-`daemon/editors.py` already labels these from the process list when they run over a linked repo. Full tables live on [Desktop tracker](/docs/daemon#editor--agent-labels-layer-1).
+Layer 1 process labels cover common editors and agents when they run over a linked repo. Details: [Desktop tracker](/docs/daemon).
 
 **AI IDEs:** Cursor, Windsurf, Trae, Kiro, Zed, Antigravity
 
@@ -100,10 +100,8 @@ alias aider='$PWD/adapters/codex/wrap.sh aider'
 Wraps start/stop around the CLI. Manual bridge:
 
 ```bash
-python3 daemon/agent_event.py --editor codex --agent codex --event-type start
-codex "$@"
-python3 daemon/agent_event.py --editor codex --agent codex --event-type stop \
-  --op modified --exit-code $? --files-touched-count 1
+chmod +x adapters/codex/wrap.sh
+adapters/codex/wrap.sh codex "$@"
 ```
 
 ### OpenClaw (`adapters/openclaw`)
@@ -111,8 +109,8 @@ python3 daemon/agent_event.py --editor codex --agent codex --event-type stop \
 OpenClaw runs agents inside its gateway, so shell hooks see file/git results but miss turns. Run the adapter next to the daemon:
 
 ```bash
-python3 adapters/openclaw/adapter.py
-python3 daemon/daemon.py --repo ~/.openclaw/workspace/your-project
+sh adapters/openclaw/run.sh
+struggletime-helper start --repo ~/.openclaw/workspace/your-project
 ```
 
 Tails local session logs and appends turn/tool counts only — message text and tool arguments are discarded.
@@ -133,9 +131,9 @@ The server exchanges the one-time code, reads your GitHub login, and discards th
 1. On your repo: Settings → Webhooks → Add webhook
 2. Payload URL: `https://your-server/v1/integrations/github/webhook`
 3. Content type `application/json`, events: `push` only
-4. Set a secret and start the server with the same value: `GITHUB_WEBHOOK_SECRET=... python3 server/server.py`
+4. Set a secret and start the server with the same value: `GITHUB_WEBHOOK_SECRET=... struggletime-server`
 
-`server.py` verifies the signature (bad signature → 401), matches the push to the project whose repo URL matches, and stores a commit anchor: commit count and head SHA only. Commit messages are never stored. Anchors appear on `GET /v1/projects/{id}/github` for review cross-checks. With no secret set, webhooks are accepted unverified (fine locally, not on the public internet).
+The server verifies the signature (bad signature → 401), matches the push to the project whose repo URL matches, and stores a commit anchor: commit count and head SHA only. Commit messages are never stored. Anchors appear on `GET /v1/projects/{id}/github` for review cross-checks. With no secret set, webhooks are accepted unverified (fine locally, not on the public internet).
 
 ### Live repo lookup (optional)
 

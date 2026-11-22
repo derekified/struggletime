@@ -1,5 +1,5 @@
 #!/bin/sh
-# Install Rust StruggleTime binaries into ~/.local/bin (no Python required).
+# Install Rust StruggleTime binaries into ~/.local/bin (native binaries).
 set -e
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BIN="${HOME}/.local/bin"
