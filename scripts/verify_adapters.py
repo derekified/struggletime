@@ -116,14 +116,17 @@ def main():
     os.environ.pop("STRUGGLETIME_DEBUG", None)
 
     # repo reference hygiene in working tree key files
+    old_repo = "hacka" + "time-next"  # split so history rewrites cannot retarget this check
     for rel in (
         "server/static/index.html",
         "docs-site/lib/shared.ts",
         "docs-site/content/docs/setup.mdx",
     ):
         text = (ROOT / rel).read_text()
-        if "struggletime" in text:
-            errors.append(f"{rel} still contains struggletime")
+        if old_repo in text:
+            errors.append(f"{rel} still contains {old_repo}")
+        if "doruk-aydin" in text or "origin.cursor.com/doruk" in text:
+            errors.append(f"{rel} still points at the old host/user")
         if "github.com/derekified/struggletime" not in text and rel != "docs-site/lib/shared.ts":
             if "derekified" not in text:
                 errors.append(f"{rel} missing derekified/struggletime")
