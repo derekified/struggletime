@@ -9,15 +9,15 @@ cd struggletime
 make check
 make rust
 make install-binaries
-struggletime-server          # :18765
+struggletime serve          # :18765
 ```
 
 In another terminal:
 
 ```bash
-struggletime-helper apikey <st_…>    # from Settings
-struggletime-helper start --repo ~/my-project
-struggletime-helper status
+struggletime apikey <st_…>    # from Settings
+struggletime start --repo ~/my-project
+struggletime status
 ```
 
 Docs: `make docs`, then open `/docs/` on the running server.

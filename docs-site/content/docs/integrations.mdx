@@ -110,7 +110,7 @@ OpenClaw runs agents inside its gateway, so shell hooks see file/git results but
 
 ```bash
 sh adapters/openclaw/run.sh
-struggletime-helper start --repo ~/.openclaw/workspace/your-project
+struggletime start --repo ~/.openclaw/workspace/your-project
 ```
 
 Tails local session logs and appends turn/tool counts only — message text and tool arguments are discarded.
@@ -131,7 +131,7 @@ The server exchanges the one-time code, reads your GitHub login, and discards th
 1. On your repo: Settings → Webhooks → Add webhook
 2. Payload URL: `https://your-server/v1/integrations/github/webhook`
 3. Content type `application/json`, events: `push` only
-4. Set a secret and start the server with the same value: `GITHUB_WEBHOOK_SECRET=... struggletime-server`
+4. Set a secret and start the server with the same value: `GITHUB_WEBHOOK_SECRET=... struggletime serve`
 
 The server verifies the signature (bad signature → 401), matches the push to the project whose repo URL matches, and stores a commit anchor: commit count and head SHA only. Commit messages are never stored. Anchors appear on `GET /v1/projects/{id}/github` for review cross-checks. With no secret set, webhooks are accepted unverified (fine locally, not on the public internet).
 

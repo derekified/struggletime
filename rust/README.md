@@ -1,20 +1,27 @@
 # StruggleTime Rust workspace
 
-Native rewrite of the desktop tracker, HTTP server, helper CLI, and tray
-supervisor. Users can run StruggleTime as native binaries.
-
-| Binary | Crate | Role |
-|---|---|---|
-| `struggletime-daemon` | `st-daemon` | watch repos, seal ledger, sync |
-| `struggletime-server` | `st-server` | API + static dashboard |
-| `struggletime-helper` | `st-helper` | apikey / start / stop / status |
-| `struggletime-tray` | `st-tray` | headless supervisor (release tray UI later) |
-
-Shared scoring and config: `st-core` (scoring + settings paths).
+Single binary `struggletime` (crate `crates/struggletime`) bundles tray, CLI,
+daemon, and local HTTP server.
 
 ```bash
-cargo test
-cargo build --release
+cargo build --release -p struggletime
+./target/release/struggletime --help
+```
+
+| Subcommand | Crate | Role |
+|---|---|---|
+| `daemon` | `st-daemon` | watch repos, seal ledger, sync |
+| `serve` | `st-server` | API + static dashboard |
+| (CLI) | `st-helper` | apikey / start / stop / status |
+| `tray` | `st-tray` | headless supervisor |
+| (shared) | `st-core` | scoring, ledger, privacy |
+
+Legacy thin binaries (`struggletime-daemon`, …) still build from the same libs
+for local debugging; releases ship only `struggletime`.
+
+```bash
+cargo test --workspace
+cargo build --release -p struggletime
 # from repo root:
 make install-binaries
 ```

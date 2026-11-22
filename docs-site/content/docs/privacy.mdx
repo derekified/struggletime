@@ -7,7 +7,7 @@ description: Native tracker, scrambled file IDs, allowlisted payloads, and tampe
 
 | Guarantee | Plain meaning |
 |---|---|
-| Native daemon | `struggletime-daemon` is a compiled binary — no scripting runtime on the machine |
+| Native daemon | `struggletime daemon` is a compiled binary — no scripting runtime on the machine |
 | No screen / keystroke / prompt capture | No screenshots, OCR, keylogs, clipboard, or chat transcripts |
 | No content / argv | File bodies and command arguments never leave the machine |
 | Scrambled file IDs | On-wire identity is `sha256(salt:path)` hex, not absolute paths |
@@ -48,7 +48,7 @@ Quietly rewriting an old entry breaks the chain. Flush is ordered.
 
 ```bash
 cd rust && cargo test -p st-core
-struggletime-helper logs
+struggletime logs
 ```
 
 Also: [Desktop tracker](/docs/daemon), [API](/docs/api), [Review](/docs/review).

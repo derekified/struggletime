@@ -1,37 +1,48 @@
 ---
-title: CLI helper and tray
-description: struggletime-helper and the native tray supervisor.
+title: CLI and tray
+description: StruggleTime single-binary CLI and tray supervisor.
 ---
 
-## struggletime-helper
+The release binary is one executable: `struggletime`. Tray, CLI, daemon, and
+local HTTP server all live inside it. Download from
+[GitHub Releases](https://github.com/derekified/struggletime/releases).
+
+## CLI
 
 ```bash
-struggletime-helper apikey <st_…>
-struggletime-helper start --repo ~/my-project
-struggletime-helper status
-struggletime-helper pause
-struggletime-helper resume
-struggletime-helper sync
-struggletime-helper stop
-struggletime-helper link --repo ~/my-project
-struggletime-helper logs
-struggletime-helper server          # show URL
-struggletime-helper config          # settings path
+struggletime apikey <st_…>
+struggletime start --repo ~/my-project
+struggletime status
+struggletime pause
+struggletime resume
+struggletime sync
+struggletime stop
+struggletime link --repo ~/my-project
+struggletime logs
+struggletime server          # show or set API URL
+struggletime config          # settings path
+struggletime verify --ledger .aitime-ledger.json
 ```
 
-Settings live in `~/.config/struggletime/settings.json`. The helper starts
-`struggletime-daemon` from the same install directory (or
-`STRUGGLETIME_DAEMON`).
+Settings live in `~/.config/struggletime/settings.json`. `start` re-launches
+the same binary as `struggletime daemon` (or `STRUGGLETIME_DAEMON` if set).
+
+## Daemon & server
+
+```bash
+struggletime daemon --repo ~/my-project
+struggletime serve           # http://127.0.0.1:18765
+```
 
 ## Tray
 
 ```bash
-struggletime-tray
+struggletime tray
 ```
 
-Keeps the daemon running and prints a short status line. Use
-`make install-binaries` or a release zip so `struggletime-helper` and
-`struggletime-daemon` sit next to the tray binary.
+Keeps the daemon running and prints a short status line. Put the release
+binary on your PATH (`make install-binaries` or a
+[Releases](https://github.com/derekified/struggletime/releases) archive).
 
 Login autostart: `sh daemon/autostart.sh`.
 
@@ -39,4 +50,4 @@ Login autostart: `sh daemon/autostart.sh`.
 
 Only allowlisted metadata is synced. Inspect what would be sealed by reading
 `.aitime-ledger.json` in the project folder after a seal, or check
-`struggletime-helper logs`.
+`struggletime logs`.

@@ -1,0 +1,47 @@
+name: ci
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  rust:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: fmt
+        working-directory: rust
+        run: cargo fmt --all -- --check
+      - name: clippy
+        working-directory: rust
+        run: cargo clippy --workspace --all-targets -- -D warnings
+      - name: test
+        working-directory: rust
+        run: cargo test --workspace
+      - name: build unified binary
+        working-directory: rust
+        run: cargo build --release -p struggletime
+      - name: adapter suite
+        run: sh scripts/verify_adapters.sh
+
+  docs:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: docs-site/package-lock.json
+      - name: install + build docs
+        working-directory: docs-site
+        run: |
+          npm ci
+          npm run build

@@ -1,19 +1,17 @@
-# Desktop tracker (native)
+# Daemon assets
 
-Hooks and installers for the Rust binaries built from `rust/`.
+Installers, shell hooks, and tray assets for StruggleTime.
 
-| File | Role |
-|---|---|
-| `install.sh` / `install.ps1` | Build & link `struggletime-*` binaries |
-| `hooks.sh` / `hooks.ps1` | Shell exec categories (no argv) |
-| `autostart.sh` | Login autostart helper |
-| `assets/` | Tray / brand SVG |
-
-Commands:
+The tracker itself is the unified Rust binary:
 
 ```bash
-make rust && make install-binaries
-struggletime-helper apikey <st_…>
-struggletime-helper start --repo ~/my-project
-struggletime-tray
+struggletime daemon --repo ~/my-project
+struggletime start --repo ~/my-project
+struggletime tray
 ```
+
+Build with `make rust` or download from
+[Releases](https://github.com/derekified/struggletime/releases).
+
+Hooks (`hooks.sh` / `hooks.ps1`) emit allowlisted exec categories only —
+never argv or environment secrets.

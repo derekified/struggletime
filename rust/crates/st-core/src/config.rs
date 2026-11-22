@@ -62,7 +62,8 @@ pub fn runtime_home() -> PathBuf {
 }
 
 pub fn config_home() -> PathBuf {
-    if let Ok(v) = std::env::var("STRUGGLETIME_CONFIG").or_else(|_| std::env::var("AITIME_CONFIG")) {
+    if let Ok(v) = std::env::var("STRUGGLETIME_CONFIG").or_else(|_| std::env::var("AITIME_CONFIG"))
+    {
         return PathBuf::from(v);
     }
     #[cfg(windows)]
@@ -72,7 +73,11 @@ pub fn config_home() -> PathBuf {
         }
     }
     dirs::config_dir()
-        .unwrap_or_else(|| dirs::home_dir().unwrap_or_else(|| PathBuf::from(".")).join(".config"))
+        .unwrap_or_else(|| {
+            dirs::home_dir()
+                .unwrap_or_else(|| PathBuf::from("."))
+                .join(".config")
+        })
         .join("struggletime")
 }
 
@@ -171,7 +176,11 @@ fn shellexpand_home(p: &str) -> String {
 
 pub fn upsert_linked_project(s: &mut Settings, project_id: &str, local_path: &Path) {
     let path = local_path.to_string_lossy().to_string();
-    if let Some(row) = s.projects.iter_mut().find(|p| p.path == path || (!project_id.is_empty() && p.id == project_id)) {
+    if let Some(row) = s
+        .projects
+        .iter_mut()
+        .find(|p| p.path == path || (!project_id.is_empty() && p.id == project_id))
+    {
         if !project_id.is_empty() {
             row.id = project_id.to_string();
         }

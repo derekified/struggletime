@@ -5,24 +5,24 @@ description: Daemon, sync, and fetch fixes.
 
 ## Daemon will not start
 
-1. Confirm binaries exist: `which struggletime-daemon struggletime-helper`
-2. Run foreground: `struggletime-daemon --debug --repo /path/to/repo`
-3. Check `struggletime-helper logs`
-4. Confirm API key: `struggletime-helper status`
+1. Confirm binaries exist: `which struggletime`
+2. Run foreground: `struggletime daemon --debug --repo /path/to/repo`
+3. Check `struggletime logs`
+4. Confirm API key: `struggletime status`
 5. Adapter issues: `make verify-adapters`
 
 ## Hours not showing up
 
 1. Open Settings → Daemon and confirm the machine is linked
-2. `struggletime-helper sync`
-3. Confirm server URL is not an ephemeral tunnel (`struggletime-helper server`)
+2. `struggletime sync`
+3. Confirm server URL is not an ephemeral tunnel (`struggletime server`)
 
 ## Tray
 
 ```bash
-struggletime-tray
+struggletime tray
 # or
-struggletime-helper status
+struggletime status
 ```
 
 ## Checks

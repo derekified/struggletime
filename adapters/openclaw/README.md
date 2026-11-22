@@ -5,7 +5,7 @@ but miss turns. Run this next to the daemon:
 
 ```bash
 sh adapters/openclaw/run.sh          # tails local session JSONL
-struggletime-helper start --repo ~/.openclaw/workspace/your-project
+struggletime start --repo ~/.openclaw/workspace/your-project
 ```
 
 `--once` drains once and exits (for checks). The script appends allowlisted

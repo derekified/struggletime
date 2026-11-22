@@ -1,0 +1,142 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            target: aarch64-apple-darwin
+            artifact: struggletime-macos-aarch64
+          - os: macos-13
+            target: x86_64-apple-darwin
+            artifact: struggletime-macos-x86_64
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: struggletime-windows-x86_64
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: struggletime-linux-x86_64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+      - name: Build release binary
+        working-directory: rust
+        run: cargo build --release -p struggletime --target ${{ matrix.target }}
+      - name: Stage artifact (Unix)
+        if: runner.os != 'Windows'
+        run: |
+          set -euo pipefail
+          OUT="dist/${{ matrix.artifact }}"
+          mkdir -p "$OUT"
+          BIN="rust/target/${{ matrix.target }}/release/struggletime"
+          cp "$BIN" "$OUT/struggletime"
+          chmod +x "$OUT/struggletime"
+          (
+            cd dist
+            tar -czf "${{ matrix.artifact }}.tar.gz" "${{ matrix.artifact }}"
+            shasum -a 256 "${{ matrix.artifact }}.tar.gz" > "${{ matrix.artifact }}.tar.gz.sha256"
+          )
+      - name: Stage artifact (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $out = "dist/${{ matrix.artifact }}"
+          New-Item -ItemType Directory -Force -Path $out | Out-Null
+          Copy-Item "rust/target/${{ matrix.target }}/release/struggletime.exe" "$out/struggletime.exe"
+          Compress-Archive -Path $out -DestinationPath "dist/${{ matrix.artifact }}.zip" -Force
+          $hash = (Get-FileHash "dist/${{ matrix.artifact }}.zip" -Algorithm SHA256).Hash.ToLower()
+          Set-Content -Path "dist/${{ matrix.artifact }}.zip.sha256" -Value "$hash  ${{ matrix.artifact }}.zip"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact }}
+          path: |
+            dist/${{ matrix.artifact }}.*
+
+  optional-universal-macos:
+    needs: build
+    runs-on: macos-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Make universal binary (lipo)
+        run: |
+          set -euo pipefail
+          mkdir -p dist/struggletime-macos-universal
+          # Artifacts are archives; extract both arches if present
+          mkdir -p /tmp/arm /tmp/x64
+          tar -xzf artifacts/struggletime-macos-aarch64/struggletime-macos-aarch64.tar.gz -C /tmp/arm
+          tar -xzf artifacts/struggletime-macos-x86_64/struggletime-macos-x86_64.tar.gz -C /tmp/x64
+          lipo -create \
+            /tmp/arm/struggletime-macos-aarch64/struggletime \
+            /tmp/x64/struggletime-macos-x86_64/struggletime \
+            -output dist/struggletime-macos-universal/struggletime
+          chmod +x dist/struggletime-macos-universal/struggletime
+          (
+            cd dist
+            tar -czf struggletime-macos-universal.tar.gz struggletime-macos-universal
+            shasum -a 256 struggletime-macos-universal.tar.gz > struggletime-macos-universal.tar.gz.sha256
+          )
+      - uses: actions/upload-artifact@v4
+        with:
+          name: struggletime-macos-universal
+          path: |
+            dist/struggletime-macos-universal.tar.gz
+            dist/struggletime-macos-universal.tar.gz.sha256
+
+  release:
+    needs: [build, optional-universal-macos]
+    if: startsWith(github.ref, 'refs/tags/')
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+      - name: Assemble SHA256SUMS + publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          TAG="${GITHUB_REF_NAME}"
+          mkdir -p upload
+          find artifacts -type f \( -name '*.tar.gz' -o -name '*.zip' -o -name '*.sha256' \) -print0 \
+            | xargs -0 -I{} cp {} upload/
+          (
+            cd upload
+            : > SHA256SUMS.txt
+            for f in *.tar.gz *.zip; do
+              [ -f "$f" ] || continue
+              if [ -f "$f.sha256" ]; then
+                cat "$f.sha256" >> SHA256SUMS.txt
+              else
+                sha256sum "$f" >> SHA256SUMS.txt
+              fi
+            done
+          )
+          gh release view "$TAG" >/dev/null 2>&1 || gh release create "$TAG" --generate-notes \
+            --title "StruggleTime $TAG" \
+            --notes "Single \`struggletime\` binary per OS: tray + CLI + daemon + local HTTP server.
+
+Download the archive for your platform, verify the checksum in \`SHA256SUMS.txt\`, and put \`struggletime\` on your PATH.
+
+\`\`\`bash
+struggletime serve
+struggletime apikey st_…
+struggletime start --repo ~/my-project
+struggletime status
+\`\`\`"
+          gh release upload "$TAG" upload/* --clobber

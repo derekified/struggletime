@@ -33,9 +33,9 @@ Or download a release zip for your OS from:
   https://github.com/derekified/struggletime/releases
 
 Then:
-  struggletime-helper apikey <st_…>
-  struggletime-helper start --repo ~/my-project
-  struggletime-server
+  struggletime apikey <st_…>
+  struggletime start --repo ~/my-project
+  struggletime serve
 
 Requires: Rust toolchain (to build) or a prebuilt release zip; git.
 EOF

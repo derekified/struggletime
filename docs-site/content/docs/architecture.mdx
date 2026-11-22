@@ -7,18 +7,18 @@ description: Passive file tracking, shared st-core scoring, and the review surfa
 
 ```text
 +---------------------------------------------+
-|  StruggleTime Tray / struggletime-helper    |
+|  StruggleTime tray / CLI (`struggletime`) |
 +--------------------+------------------------+
                      | starts / pauses / links
 +--------------------v------------------------+
-|  struggletime-daemon  (native, ~1s loop)    |
+|  struggletime daemon  (native, ~1s loop)    |
 |  - watch saves and build caches             |
 |  - optional hooks and IDE adapters          |
 |  - seal -> .aitime-ledger.json              |
 +--------------------+------------------------+
                      | POST /v1/buckets/batch
 +--------------------v------------------------+
-|  struggletime-server  (native HTTP)         |
+|  struggletime serve  (native HTTP)         |
 |  - auth, projects, stats                    |
 |  - allowlist schema                         |
 |  - static SPA + Fumadocs under /docs        |

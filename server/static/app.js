@@ -1073,7 +1073,7 @@ function paintAccount() {
     if ($("claim-box")) $("claim-box").hidden = true;
     if ($("settings-main")) $("settings-main").hidden = false;
     if ($("signout-form")) $("signout-form").style.display = "flex";
-    if ($("daemon-cmd")) $("daemon-cmd").textContent = `struggletime-helper start --repo ~/my-project`;
+    if ($("daemon-cmd")) $("daemon-cmd").textContent = `struggletime start --repo ~/my-project`;
   } else {
     paintTopUser("", "", "/login", "sign in");
     if (ident) ident.hidden = true;
@@ -1264,7 +1264,7 @@ function paintDaemonBanners() {
   }
   const cmd = $("daemon-cmd");
   if (cmd && p.handle) {
-    cmd.textContent = `struggletime-helper start --repo ~/my-project`;
+    cmd.textContent = `struggletime start --repo ~/my-project`;
   }
 }
 

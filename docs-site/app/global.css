@@ -390,11 +390,12 @@ body {
   color: inherit;
 }
 
-.docs-app .rounded-lg:not(button):not([class*="not-prose"]),
-.docs-app .rounded-xl:not(button):not([class*="not-prose"]),
+/* Cards/callouts — never code blocks (figure.shiki / not-prose pre wrappers) */
+.docs-app .rounded-lg:not(button):not([class*="not-prose"]):not(:has(pre)):not(.shiki),
+.docs-app .rounded-xl:not(button):not([class*="not-prose"]):not(:has(pre)):not(.shiki),
 .docs-app [data-callout],
 .docs-app a[class*="card"]:not([data-card]),
-.docs-app [class*="Card"] {
+.docs-app [class*="Card"]:not(:has(pre)) {
   background: var(--st-panel) !important;
   border: 1px solid var(--st-line) !important;
   border-radius: var(--st-radius) !important;
@@ -487,68 +488,96 @@ body {
   max-width: 100%;
 }
 
-/* Single code-block chrome: wrapper is layout-only; border lives on <pre> only */
-.docs-app figure:has(> pre),
-.docs-app [class*="codeblock"],
-.docs-app div:has(> pre) {
+/*
+ * Fumadocs CodeBlock: <figure.shiki.border> > [copy] + <div.fd-scroll-container> > <pre>
+ * One chrome only — border/bg on the outer figure; pre/viewport stay naked.
+ */
+.docs-app figure.shiki,
+.docs-app figure:has(pre),
+.docs-app figure.not-prose:has(pre) {
   position: relative;
   width: 100%;
   max-width: 100%;
   min-width: 0;
-  margin: 0.75rem 0;
+  margin: 0.75rem 0 !important;
   padding: 0 !important;
+  border: 1px solid var(--st-line) !important;
+  border-radius: var(--st-radius) !important;
+  background: var(--st-panel) !important;
+  box-shadow: none !important;
+  overflow: hidden !important;
+}
+
+.docs-app figure.shiki > div,
+.docs-app figure:has(pre) > div.fd-scroll-container,
+.docs-app figure:has(pre) > div {
+  margin: 0 !important;
+  padding: 0.75rem 0.875rem !important;
+  padding-right: 3rem !important; /* pr-12: clear of copy button */
   border: 0 !important;
   border-radius: 0 !important;
   background: transparent !important;
   box-shadow: none !important;
-  overflow: visible;
+  overflow-x: auto !important;
+  overflow-y: auto !important;
+  max-height: 600px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: thin;
+  scrollbar-color: var(--st-line) transparent;
 }
 
-.docs-app figure:has(> pre) > pre,
-.docs-app [class*="codeblock"] pre,
-.docs-app div:has(> pre) > pre,
-.docs-app pre {
+.docs-app figure.shiki > div::-webkit-scrollbar,
+.docs-app figure:has(pre) > div::-webkit-scrollbar {
+  height: 8px;
+  width: 8px;
+}
+
+.docs-app figure.shiki > div::-webkit-scrollbar-thumb,
+.docs-app figure:has(pre) > div::-webkit-scrollbar-thumb {
+  background: var(--st-line);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+
+.docs-app figure.shiki pre,
+.docs-app figure:has(pre) pre,
+.docs-app figure.shiki code,
+.docs-app figure:has(pre) code {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  color: var(--st-ink) !important;
+  font-size: 12.5px !important;
+  line-height: 1.45 !important;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
+  max-width: none;
+  width: max-content;
+  min-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Bare <pre> outside CodeBlock (rare) — single box */
+.docs-app .prose > pre {
   background: var(--st-panel) !important;
   border: 1px solid var(--st-line) !important;
   border-radius: var(--st-radius) !important;
   padding: 12px 14px !important;
-  padding-right: 3rem !important; /* pr-12: clear of copy button */
-  color: var(--st-ink) !important;
-  font-size: 12.5px !important;
-  line-height: 1.45 !important;
+  padding-right: 3rem !important;
   overflow-x: auto !important;
-  overflow-y: hidden;
-  max-width: 100%;
-  min-width: 0;
-  width: 100%;
-  box-sizing: border-box;
-  white-space: pre;
-  word-break: normal;
-  overflow-wrap: normal;
-  -webkit-overflow-scrolling: touch;
-  box-shadow: none !important;
+  scrollbar-width: thin;
+  scrollbar-color: var(--st-line) transparent;
 }
 
-.docs-app pre code,
-.docs-app figure:has(> pre) pre code,
-.docs-app [class*="codeblock"] pre code {
-  background: transparent !important;
-  border: 0 !important;
-  padding: 0 !important;
-  color: inherit !important;
-  font-size: inherit !important;
-  white-space: inherit;
-  word-break: normal;
-  overflow-wrap: normal;
-  max-width: none;
-  box-shadow: none !important;
-}
-
-/* Copy control on code blocks only — never heading anchor buttons */
-.docs-app figure:has(> pre) > button,
-.docs-app [class*="codeblock"] > button,
-.docs-app figure:has(> pre) button[aria-label*="opy" i],
-.docs-app [class*="codeblock"] button[aria-label*="opy" i] {
+/* Copy control — top-right of the single outer frame */
+.docs-app figure.shiki button,
+.docs-app figure:has(pre) button[aria-label*="opy" i],
+.docs-app figure.shiki [class*="absolute"] button {
   position: absolute;
   top: 0.5rem;
   right: 0.5rem;

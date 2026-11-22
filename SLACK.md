@@ -43,7 +43,7 @@ cd struggletime
 make server
 # other terminal:
 sh daemon/install.sh
-struggletime-helper start --repo ~/your-project
+struggletime start --repo ~/your-project
 ```
 
 honest wip: weighting is still alpha and needs more real-session calibration. if you want to help, run a normal coding session, label roughly what you were doing (nothing leaves your machine unless you choose to share notes), and tell me where the formula disagrees with a human reviewer. also pls try to break it / fake hours — i'd rather hear that from you than from fraud squad

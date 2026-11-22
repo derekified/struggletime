@@ -1,13 +1,13 @@
 ---
 title: Deployment
-description: Run struggletime-server on a small VPS.
+description: Run struggletime serve on a small VPS.
 ---
 
 One small VPS runs the stack. Clients pre-roll time into buckets, so write load stays modest.
 
 ```bash
 make rust
-./rust/target/release/struggletime-server --bind 0.0.0.0 --port 18765
+./rust/target/release/struggletime serve --bind 0.0.0.0 --port 18765
 ```
 
 Environment (see `.env.example`): `PORT`, `BIND`, `SERVER_DB`, OAuth/Slack secrets as needed.
@@ -17,7 +17,7 @@ Example systemd unit:
 ```ini
 [Service]
 WorkingDirectory=/opt/struggletime
-ExecStart=/opt/struggletime/rust/target/release/struggletime-server
+ExecStart=/opt/struggletime/rust/target/release/struggletime serve --bind 0.0.0.0 --port 18765
 Restart=on-failure
 ```
 

@@ -81,7 +81,11 @@ impl Ledger {
 
     pub fn ack_pending(&mut self, hashes: &[String]) {
         let set: std::collections::HashSet<&str> = hashes.iter().map(|s| s.as_str()).collect();
-        self.pending
-            .retain(|b| !b.get("hash").and_then(|v| v.as_str()).map(|h| set.contains(h)).unwrap_or(false));
+        self.pending.retain(|b| {
+            !b.get("hash")
+                .and_then(|v| v.as_str())
+                .map(|h| set.contains(h))
+                .unwrap_or(false)
+        });
     }
 }

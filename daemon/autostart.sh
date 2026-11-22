@@ -17,7 +17,7 @@ export PATH="\$HOME/.local/bin:\$PATH"
 export STRUGGLETIME_CONFIG="\${STRUGGLETIME_CONFIG:-\$HOME/.config/struggletime}"
 export AITIME_HOME="\${AITIME_HOME:-\$HOME/.aitime}"
 mkdir -p "\$STRUGGLETIME_CONFIG" "\$AITIME_HOME"
-exec struggletime-tray --headless
+exec struggletime tray --headless
 EOF
 chmod +x "$LAUNCHER"
 

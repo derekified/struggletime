@@ -1,14 +1,15 @@
 PORT ?= 18765
 
 .PHONY: help check test verify-adapters server daemon tray rust rust-test binaries install-binaries docs docs-dev package clean clippy
+
 help:
-	@echo "make rust / binaries   build native release binaries"
+	@echo "make rust / binaries   build unified struggletime binary"
 	@echo "make install-binaries  link into ~/.local/bin"
 	@echo "make check             cargo test + adapter verify"
 	@echo "make clippy            cargo clippy -D warnings"
-	@echo "make server            run struggletime-server on :$(PORT)"
-	@echo "make daemon            struggletime-daemon --repo=\$$REPO"
-	@echo "make tray              struggletime-tray"
+	@echo "make server            struggletime serve on :$(PORT)"
+	@echo "make daemon            struggletime daemon --repo=\$$REPO"
+	@echo "make tray              struggletime tray"
 	@echo "make docs              build Fumadocs static site"
 	@echo "make package           source tarball (scripts/package.sh)"
 
@@ -21,26 +22,26 @@ verify-adapters:
 	sh scripts/verify_adapters.sh
 
 rust binaries:
-	cd rust && cargo build --release
+	cd rust && cargo build --release -p struggletime
 
 rust-test:
-	cd rust && cargo test
+	cd rust && cargo test --workspace
 
 clippy:
-	cd rust && cargo clippy --all-targets -- -D warnings
+	cd rust && cargo clippy --workspace --all-targets -- -D warnings
 
 install-binaries: rust
 	sh scripts/install_binaries.sh
 
 server: rust
-	PORT=$(PORT) ./rust/target/release/struggletime-server
+	PORT=$(PORT) ./rust/target/release/struggletime serve
 
 daemon: rust
 	@test -n "$(REPO)" || (echo "set REPO=path/to/repo" && exit 1)
-	./rust/target/release/struggletime-daemon --repo "$(REPO)" --user "$(USER)"
+	./rust/target/release/struggletime daemon --repo "$(REPO)" --user "$(USER)"
 
 tray: rust
-	./rust/target/release/struggletime-tray
+	./rust/target/release/struggletime tray
 
 docs:
 	cd docs-site && npm run build

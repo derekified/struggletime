@@ -69,7 +69,11 @@ fn idle_decay_factor(idle_secs: i64) -> f64 {
 }
 
 pub fn billable_secs(bucket: &Value) -> i64 {
-    let secs = bucket.get("bucket_secs").and_then(|v| v.as_i64()).unwrap_or(0).max(0);
+    let secs = bucket
+        .get("bucket_secs")
+        .and_then(|v| v.as_i64())
+        .unwrap_or(0)
+        .max(0);
     if is_silent(bucket) {
         return secs;
     }
@@ -105,7 +109,10 @@ pub fn is_ai_struggle(c: &Map<String, Value>) -> bool {
     if fail_pass > 0 {
         return true;
     }
-    if failed > 0 && reedit > 0 && (ai > 0 || churn > 0 || prompts > 0 || human > 0 || recovery > 0 || atomic > 0) {
+    if failed > 0
+        && reedit > 0
+        && (ai > 0 || churn > 0 || prompts > 0 || human > 0 || recovery > 0 || atomic > 0)
+    {
         return true;
     }
     if failed > 0 && (retries > 0 || recovery > 0) && (reedit > 0 || human > 0 || ai > 0) {
@@ -148,8 +155,10 @@ pub fn weight(bucket: &Value) -> (f64, String) {
         .and_then(|v| v.as_object())
         .cloned()
         .unwrap_or_default();
-    let followup = ci(&c, "human_edits") > 0 || ci(&c, "commits") > 0 || ci(&c, "human_recovery_edits") > 0;
-    let steering = ci(&c, "prompts") > 0 || ci(&c, "human_edits") > 0 || ci(&c, "agent_turn_churn") > 0;
+    let followup =
+        ci(&c, "human_edits") > 0 || ci(&c, "commits") > 0 || ci(&c, "human_recovery_edits") > 0;
+    let steering =
+        ci(&c, "prompts") > 0 || ci(&c, "human_edits") > 0 || ci(&c, "agent_turn_churn") > 0;
     let verified_loop = ci(&c, "exec_failures") > 0 && ci(&c, "executions") > 1 && followup;
     let closed = steering && ci(&c, "executions") > 0 && followup;
     let formatterish = ci(&cats, "formatter") > 0;
@@ -236,7 +245,8 @@ pub fn friction(bucket: &Value) -> f64 {
     let struggle = 0.12 * (ci(&c, "same_file_reedit_count").min(5) as f64) / 5.0
         + 0.12 * (ci(&c, "ai_retry_loops").min(4) as f64) / 4.0
         + 0.12
-            * ((ci(&c, "test_fail_to_pass_transitions") + ci(&c, "cache_fail_to_pass")).min(3) as f64)
+            * ((ci(&c, "test_fail_to_pass_transitions") + ci(&c, "cache_fail_to_pass")).min(3)
+                as f64)
             / 3.0
         + 0.08 * (ci(&c, "human_recovery_edits").min(4) as f64) / 4.0
         + 0.08 * (ci(&c, "agent_turn_churn").min(5) as f64) / 5.0
@@ -347,14 +357,28 @@ pub fn verify_chain(buckets: &[Value]) -> Vec<String> {
 
 pub fn validate_allowlist(bucket: &Value) -> Vec<String> {
     const FORBIDDEN: &[&str] = &[
-        "content", "text", "code", "prompt_text", "command", "args", "keystrokes", "screenshot",
-        "image", "path", "filepath", "file_path", "raw", "transcript",
+        "content",
+        "text",
+        "code",
+        "prompt_text",
+        "command",
+        "args",
+        "keystrokes",
+        "screenshot",
+        "image",
+        "path",
+        "filepath",
+        "file_path",
+        "raw",
+        "transcript",
     ];
     let mut errs = Vec::new();
     if let Some(obj) = bucket.as_object() {
         for k in obj.keys() {
             if FORBIDDEN.contains(&k.as_str()) {
-                errs.push(format!("top.{k}: forbidden (raw content can never be sent)"));
+                errs.push(format!(
+                    "top.{k}: forbidden (raw content can never be sent)"
+                ));
             }
         }
     }
@@ -366,7 +390,9 @@ pub fn validate_allowlist(bucket: &Value) -> Vec<String> {
             if let Some(obj) = f.as_object() {
                 for k in obj.keys() {
                     if FORBIDDEN.contains(&k.as_str()) {
-                        errs.push(format!("files[{i}].{k}: forbidden (raw content can never be sent)"));
+                        errs.push(format!(
+                            "files[{i}].{k}: forbidden (raw content can never be sent)"
+                        ));
                     }
                 }
             }

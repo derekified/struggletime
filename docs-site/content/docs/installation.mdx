@@ -1,25 +1,51 @@
 ---
 title: Installation
-description: Install StruggleTime native binaries and link a project.
+description: Install the StruggleTime single binary and link a project.
 ---
 
 Repo: [github.com/derekified/struggletime](https://github.com/derekified/struggletime).
 
 ## Requirements
 
-- A release zip **or** a Rust toolchain to build from source
+- A release archive **or** a Rust toolchain to build from source
 - Git
 - Node 22+ only if you rebuild docs (`make docs`)
 
-## Release zip (Windows / macOS / Linux)
+## Releases & prebuilt binaries
 
 Download from [GitHub Releases](https://github.com/derekified/struggletime/releases)
-(built on each `v*` tag). Unpack and put these on your PATH:
+(built on each `v*` tag). Each archive is **one** `struggletime` binary that
+bundles:
 
-- `struggletime-helper`
-- `struggletime-daemon`
-- `struggletime-server`
-- `struggletime-tray`
+- tray supervisor
+- CLI (`status`, `start`, `apikey`, …)
+- background tracker (`daemon`)
+- local HTTP server (`serve`)
+
+### macOS
+
+```bash
+# Apple Silicon
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-aarch64.tar.gz
+curl -LO https://github.com/derekified/struggletime/releases/latest/download/struggletime-macos-aarch64.tar.gz.sha256
+shasum -a 256 -c struggletime-macos-aarch64.tar.gz.sha256
+tar -xzf struggletime-macos-aarch64.tar.gz
+sudo install -m 755 struggletime-macos-aarch64/struggletime /usr/local/bin/struggletime
+```
+
+Intel Macs use `struggletime-macos-x86_64.tar.gz`. A universal build
+(`struggletime-macos-universal.tar.gz`) is published when both arches succeed.
+
+### Windows
+
+1. Download `struggletime-windows-x86_64.zip` and its `.sha256` file from
+   [Releases](https://github.com/derekified/struggletime/releases).
+2. Verify: `Get-FileHash struggletime-windows-x86_64.zip -Algorithm SHA256`
+3. Unzip and put `struggletime.exe` on your PATH.
+
+### Checksums
+
+Every release includes `SHA256SUMS.txt`. Prefer verifying before first run.
 
 ## Build from source
 
@@ -27,8 +53,8 @@ Download from [GitHub Releases](https://github.com/derekified/struggletime/relea
 git clone https://github.com/derekified/struggletime.git
 cd struggletime
 make rust
-make install-binaries    # ~/.local/bin
-struggletime-server      # http://127.0.0.1:18765
+make install-binaries    # ~/.local/bin/struggletime
+struggletime serve       # http://127.0.0.1:18765
 ```
 
 ## Sign in and API key
@@ -39,15 +65,15 @@ struggletime-server      # http://127.0.0.1:18765
 4. Paste it:
 
 ```bash
-struggletime-helper apikey <paste-key-here>
+struggletime apikey <paste-key-here>
 ```
 
 ## Link a project
 
 ```bash
-struggletime-helper start --repo ~/my-project
-struggletime-helper status
-struggletime-tray          # optional supervisor
+struggletime start --repo ~/my-project
+struggletime status
+struggletime tray          # optional supervisor
 ```
 
 Shell hooks (exec categories only, never argv):
@@ -63,8 +89,9 @@ source /path/to/struggletime/daemon/hooks.sh
 ## Debug
 
 ```bash
-STRUGGLETIME_DEBUG=1 struggletime-daemon --repo ~/my-project
-struggletime-daemon --debug --repo ~/my-project
+STRUGGLETIME_DEBUG=1 struggletime daemon --repo ~/my-project
+struggletime daemon --debug --repo ~/my-project
+struggletime verify --ledger .aitime-ledger.json
 make check                 # cargo test + adapter verify
 ```
 
@@ -78,5 +105,3 @@ never paths, prompts, or argv.
 | Settings | `~/.config/struggletime/settings.json` (Windows: `%APPDATA%\struggletime\`) |
 | Runtime logs | `~/.aitime/` |
 | Local history log | `.aitime-ledger.json` in the watched repo |
-
-Next: [CLI and tray](/docs/tray), [Daemon](/docs/daemon), [Integrations](/docs/integrations).

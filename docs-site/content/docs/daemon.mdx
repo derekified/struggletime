@@ -5,7 +5,7 @@ description: Native 1-second loop, multi-project watching, quiet-reading decay, 
 
 ## Process model
 
-`struggletime-daemon` is a native background process. No screen capture,
+`struggletime daemon` is a native background process. No screen capture,
 accessibility APIs for content, or third-party analytics SDKs.
 
 ```text
@@ -18,9 +18,9 @@ every ~1s
 ```
 
 ```bash
-struggletime-daemon --repo /path/to/project
+struggletime daemon --repo /path/to/project
 # or via helper:
-struggletime-helper start --repo /path/to/project
+struggletime start --repo /path/to/project
 ```
 
 ## Multi-project afternoons
@@ -63,8 +63,8 @@ Adapters append allowlisted lines to `~/.aitime/agent_events.jsonl`. Setup:
 ## Debug mode
 
 ```bash
-STRUGGLETIME_DEBUG=1 struggletime-daemon --repo ~/my-project
-struggletime-daemon --debug --repo ~/my-project
+STRUGGLETIME_DEBUG=1 struggletime daemon --repo ~/my-project
+struggletime daemon --debug --repo ~/my-project
 ```
 
 Logs print labels only — never paths, prompts, or argv.
