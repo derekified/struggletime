@@ -10,9 +10,7 @@ use clap::{Parser, Subcommand};
 use st_core::ledger::Ledger;
 use st_core::verify::{verify_chain, FORMULA_VERSION};
 use st_daemon::{run as run_daemon, DaemonArgs};
-use st_helper::{
-    run as run_helper, AdaptersAction, HelperCli, HelperCmd,
-};
+use st_helper::{run as run_helper, AdaptersAction, HelperCli, HelperCmd};
 use st_server::{run as run_server, ServerArgs};
 use st_tray::{run as run_tray, TrayArgs};
 use std::io::IsTerminal;

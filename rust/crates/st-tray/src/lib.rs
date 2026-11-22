@@ -1,5 +1,9 @@
 #![cfg_attr(
-    not(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray"))),
+    not(any(
+        target_os = "macos",
+        target_os = "windows",
+        all(target_os = "linux", feature = "linux-tray")
+    )),
     allow(dead_code)
 )]
 //! StruggleTime tray — menu-bar matching the classic Python tray.
@@ -49,14 +53,22 @@ pub fn run(args: TrayArgs) -> Result<()> {
     ensure_daemon_if_configured()?;
 
     if !args.headless {
-        #[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray")))]
+        #[cfg(any(
+            target_os = "macos",
+            target_os = "windows",
+            all(target_os = "linux", feature = "linux-tray")
+        ))]
         {
             match native::run_native_tray(args.interval.max(5), Arc::clone(&state)) {
                 Ok(()) => return Ok(()),
                 Err(e) => eprintln!("graphical tray unavailable ({e}); using headless supervisor"),
             }
         }
-        #[cfg(not(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray"))))]
+        #[cfg(not(any(
+            target_os = "macos",
+            target_os = "windows",
+            all(target_os = "linux", feature = "linux-tray")
+        )))]
         {
             eprintln!("StruggleTime tray: headless supervisor on this OS");
         }
@@ -454,7 +466,10 @@ fn do_install_adapters() {
             }
             // Keep the dialog readable.
             if t.len() > 3500 {
-                t = format!("{}…\n\n(full output: struggletime adapters install)", &t[..3500]);
+                t = format!(
+                    "{}…\n\n(full output: struggletime adapters install)",
+                    &t[..3500]
+                );
             }
             t
         }
@@ -478,7 +493,11 @@ fn do_open_api_key_page() {
     open_url(&format!("{}/settings", browser_base(&s)));
 }
 
-#[cfg(any(target_os = "macos", target_os = "windows", all(target_os = "linux", feature = "linux-tray")))]
+#[cfg(any(
+    target_os = "macos",
+    target_os = "windows",
+    all(target_os = "linux", feature = "linux-tray")
+))]
 mod native {
     use super::*;
     use std::sync::atomic::{AtomicBool, Ordering};

@@ -164,7 +164,10 @@ pub fn list_adapters() -> Result<()> {
 
 fn adapter_source_present(root: &Path, name: &str) -> bool {
     if name == "hooks" {
-        return root.parent().map(|p| p.join("daemon").join("hooks.sh").is_file()).unwrap_or(false)
+        return root
+            .parent()
+            .map(|p| p.join("daemon").join("hooks.sh").is_file())
+            .unwrap_or(false)
             || root.join("hooks").join("hooks.sh").is_file()
             || root.join("hooks.sh").is_file();
     }
@@ -179,7 +182,10 @@ fn installed_hint(name: &str) -> bool {
         }),
         "neovim" => {
             let pack = neovim_pack_dir();
-            pack.join("lua").join("struggletime").join("init.lua").is_file()
+            pack.join("lua")
+                .join("struggletime")
+                .join("init.lua")
+                .is_file()
         }
         "claude-code" => claude_settings_path()
             .ok()
@@ -190,7 +196,10 @@ fn installed_hint(name: &str) -> bool {
         "hooks" => {
             config_home().join("hooks.sh").is_file() || config_home().join("hooks.ps1").is_file()
         }
-        "openclaw" => adapters_vendor_dir().join("openclaw").join("run.sh").is_file(),
+        "openclaw" => adapters_vendor_dir()
+            .join("openclaw")
+            .join("run.sh")
+            .is_file(),
         "godot" | "unity" | "jetbrains" => adapters_vendor_dir().join(name).is_dir(),
         _ => false,
     }
@@ -207,7 +216,10 @@ fn codex_wrap_path() -> PathBuf {
     }
     #[cfg(not(windows))]
     {
-        home_dir().join(".local").join("bin").join("struggletime-wrap")
+        home_dir()
+            .join(".local")
+            .join("bin")
+            .join("struggletime-wrap")
     }
 }
 
@@ -360,7 +372,12 @@ fn install_vscode(root: &Path) -> Result<String> {
 
 fn install_neovim(root: &Path) -> Result<String> {
     let src = root.join("neovim");
-    if !src.join("lua").join("struggletime").join("init.lua").is_file() {
+    if !src
+        .join("lua")
+        .join("struggletime")
+        .join("init.lua")
+        .is_file()
+    {
         bail!("adapters/neovim missing");
     }
     let dest = neovim_pack_dir();
