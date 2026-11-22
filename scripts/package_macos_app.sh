@@ -9,6 +9,12 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 APP="$OUT/StruggleTime.app"
 MACOS="$APP/Contents/MacOS"
 RES="$APP/Contents/Resources"
+# Prefer workspace Cargo.toml version; override with STRUGGLETIME_VERSION.
+APP_VERSION="${STRUGGLETIME_VERSION:-}"
+if [ -z "$APP_VERSION" ] && [ -f "$ROOT/rust/Cargo.toml" ]; then
+  APP_VERSION="$(sed -n 's/^version = "\([^"]*\)"/\1/p' "$ROOT/rust/Cargo.toml" | head -1)"
+fi
+APP_VERSION="${APP_VERSION:-0.1.3}"
 
 rm -rf "$APP"
 mkdir -p "$MACOS" "$RES"
@@ -23,7 +29,7 @@ exec "$DIR/struggletime" --tray
 WRAP
 chmod +x "$MACOS/StruggleTime"
 
-cat > "$APP/Contents/Info.plist" <<'PLIST'
+cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
@@ -43,9 +49,9 @@ cat > "$APP/Contents/Info.plist" <<'PLIST'
   <key>CFBundlePackageType</key>
   <string>APPL</string>
   <key>CFBundleShortVersionString</key>
-  <string>0.1.0</string>
+  <string>${APP_VERSION}</string>
   <key>CFBundleVersion</key>
-  <string>0.1.0</string>
+  <string>${APP_VERSION}</string>
   <key>LSMinimumSystemVersion</key>
   <string>11.0</string>
   <key>LSUIElement</key>
