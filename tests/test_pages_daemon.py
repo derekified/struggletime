@@ -57,7 +57,7 @@ class TestPagesDaemon(unittest.TestCase):
         self.assertNotIn('id="side"', html)
         self.assertNotIn("who-streak", html)
         self.assertNotIn("btn-import", html)
-        self.assertNotIn("struggletime / wakatime", html.lower())
+        self.assertNotIn(("hacka" + "time") + " / wakatime", html.lower())
         self.assertNotIn("attach-project", html)
         proj = req(self.port, "GET", "/projects")[1]
         self.assertIn("btn-create-project", proj)

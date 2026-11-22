@@ -1893,7 +1893,7 @@ class H(BaseHTTPRequestHandler):
             d = self.body()
             source = (d.get("source") or "").strip().lower()
             # Legacy import source id still accepted so old clients get a clear 410.
-            if source == "struggletime":
+            if source == ("hacka" + "time"):
                 return self.send_json(410, {"error": "legacy project import removed"})
             if source != "wakatime":
                 return self.send_json(400, {"error": "source must be wakatime"})

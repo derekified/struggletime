@@ -1,8 +1,8 @@
-# Architecture: telemetry + provenance + causal verification
+# Architecture: telemetry, provenance, and scoring
 
-Not a stopwatch. Three pipelines, all metadata-only, no LLM in the hot path.
+Not a stopwatch. Three pipelines, all metadata-only, no LLM on the ingest path.
 
-## 1. Causal weighting (kills the "formula" risk)
+## 1. Causal weighting
 
 Daemon classifies raw events into buckets (default 5 min). Server and daemon
 share the same rules in `src/verify.py` (`FORMULA_VERSION`). YAML under
@@ -20,7 +20,7 @@ Active-span billing: `billable_secs = min(bucket_secs, active_secs)` when
 the bucket is not silent. Every bucket carries `formula_version`. Reviewer
 deflations require a reason code; those codes tune the next version.
 
-## 2. Provenance (kills fake heartbeats)
+## 2. Provenance
 
 - **Hash chain:** `hash = SHA256(canonical_bucket || prev_hash)`, plus
   `mono_delta_ms` from a monotonic clock (wall time is display-only).
@@ -35,7 +35,7 @@ deflations require a reason code; those codes tune the next version.
   diff totals. A submission overlays the weighted timeline on the
   `head_from..head_to` commit graph.
 
-## 3. Universal core (kills harness fragmentation)
+## 3. Universal core
 
 | Layer | What | Coverage |
 |---|---|---|

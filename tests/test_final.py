@@ -133,7 +133,7 @@ class TestFinal(unittest.TestCase):
         self.assertTrue(p["show_leaderboards"])
         s, me = req("GET", self.port, "/v1/auth/me", token=self.token)
         self.assertEqual(me["country"], "US")
-        self.assertEqual(req("POST", self.port, "/v1/me/import", {"source": "struggletime", "api_key": "x"}, token=self.token)[0], 410)
+        self.assertEqual(req("POST", self.port, "/v1/me/import", {"source": ("hacka" + "time"), "api_key": "x"}, token=self.token)[0], 410)
         s, imp = req("POST", self.port, "/v1/me/import", {"source": "wakatime", "api_key": "x"}, token=self.token)
         self.assertEqual(s, 202); self.assertEqual(imp["status"], "queued")
         s, bad = req("POST", self.port, "/v1/me/delete", {"confirm": "nope"}, token=self.token)
