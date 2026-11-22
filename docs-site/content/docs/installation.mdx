@@ -59,9 +59,11 @@ Login autostart: `sh daemon/autostart.sh` (LaunchAgent calling `struggletime --t
 
 ## Linux (x86_64)
 
-Release Linux builds include the AppIndicator tray (`linux-tray` feature). Install
-`libayatana-appindicator3` (or AppIndicator) for the icon. Without the library,
-StruggleTime still runs a headless supervisor and keeps tracking.
+Release Linux builds include the AppIndicator tray (`linux-tray` feature). At
+runtime, install `libayatana-appindicator3` (or AppIndicator) plus `libxdo` /
+GTK3 shared libs for the icon. Without them, StruggleTime still runs a headless
+supervisor and keeps tracking. See [Build from source](#build-from-source) for
+compile-time packages.
 
 ```bash
 curl -fLO https://github.com/derekified/struggletime/releases/latest/download/struggletime-linux-x86_64.tar.gz
@@ -150,6 +152,35 @@ make rust
 make install                 # App + CLI via scripts/install.sh
 struggletime serve           # http://127.0.0.1:18765
 ```
+
+### Linux build dependencies (tray)
+
+Default `make rust` builds without linking GTK. To compile the AppIndicator
+tray (`--features linux-tray` / `make rust-linux`), install system libraries
+first:
+
+**Debian / Ubuntu**
+
+```bash
+sudo apt-get update
+sudo apt-get install -y libxdo-dev libgtk-3-dev libayatana-appindicator3-dev pkg-config
+make rust-linux
+```
+
+**Fedora**
+
+```bash
+sudo dnf install libxdo-devel gtk3-devel libayatana-appindicator-gtk3-devel pkgconf-pkg-config
+```
+
+**Arch**
+
+```bash
+sudo pacman -S xdotool gtk3 libayatana-appindicator pkgconf
+```
+
+`tray-icon` on Linux links `-lxdo` plus GTK3 and Ayatana AppIndicator. Missing
+`libxdo-dev` produces `rust-lld: error: unable to find library -lxdo`.
 
 On Windows from source:
 

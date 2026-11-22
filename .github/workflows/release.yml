@@ -37,11 +37,15 @@ jobs:
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: ${{ matrix.target }}
-      - name: Linux tray deps
+      - name: Linux tray / linker deps
         if: runner.os == 'Linux'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libayatana-appindicator3-dev libgtk-3-dev
+          sudo apt-get install -y \
+            libxdo-dev \
+            libgtk-3-dev \
+            libayatana-appindicator3-dev \
+            pkg-config
       - name: Build release binary
         working-directory: rust
         run: |

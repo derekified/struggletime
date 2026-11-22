@@ -70,6 +70,18 @@ struggletime status
 struggletime adapters install   # VS Code/Cursor, Neovim, Claude, hooks, …
 ```
 
+### Linux tray build deps
+
+For `make rust-linux` / `--features linux-tray` (AppIndicator icon), install:
+
+```bash
+# Debian / Ubuntu
+sudo apt-get install -y libxdo-dev libgtk-3-dev libayatana-appindicator3-dev pkg-config
+```
+
+Fedora: `libxdo-devel gtk3-devel libayatana-appindicator-gtk3-devel pkgconf-pkg-config`.  
+Arch: `xdotool gtk3 libayatana-appindicator pkgconf`.
+
 ## What it does
 
 A local tracker watches file saves in linked project folders. Paths leave as

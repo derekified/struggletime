@@ -5,11 +5,24 @@ daemon, and local HTTP server.
 
 ```bash
 cargo build --release -p struggletime
-# Linux release packages with AppIndicator tray:
+# Linux AppIndicator tray (needs system libs — see below):
 cargo build --release -p struggletime --features linux-tray
 ./target/release/struggletime --help
 ./target/release/struggletime --tray
 ```
+
+### Linux system packages (`linux-tray`)
+
+`st-tray` enables `tray-icon` via the `linux-tray` feature. That crate links
+`libxdo`, GTK3, and Ayatana AppIndicator:
+
+| Distro | Packages |
+|---|---|
+| Debian / Ubuntu | `libxdo-dev libgtk-3-dev libayatana-appindicator3-dev pkg-config` |
+| Fedora | `libxdo-devel gtk3-devel libayatana-appindicator-gtk3-devel pkgconf-pkg-config` |
+| Arch | `xdotool gtk3 libayatana-appindicator pkgconf` |
+
+Without `libxdo-dev`, the linker fails with `unable to find library -lxdo`.
 
 | Subcommand | Crate | Role |
 |---|---|---|

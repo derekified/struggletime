@@ -117,9 +117,9 @@ Installs:
   ~/.local/share/applications/struggletime.desktop
   optional ~/.config/autostart/struggletime.desktop
 
-Release builds include the AppIndicator tray. Install libayatana-appindicator3
-(or libappindicator) for the icon. Without it, StruggleTime still runs a
-headless supervisor.
+Release builds include the AppIndicator tray. Runtime libs: libxdo, GTK3, and
+libayatana-appindicator3 (or libappindicator). Without them, StruggleTime still
+runs a headless supervisor.
 
 Then:
   struggletime --version

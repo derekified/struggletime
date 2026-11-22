@@ -1,9 +1,10 @@
 PORT ?= 18765
 
-.PHONY: help check test verify-adapters adversarial server daemon tray rust rust-test binaries install install-binaries docs docs-dev package clean clippy
+.PHONY: help check test verify-adapters adversarial server daemon tray rust rust-linux rust-test binaries install install-binaries docs docs-dev package clean clippy
 
 help:
 	@echo "make rust / binaries   build unified struggletime binary"
+	@echo "make rust-linux        same + AppIndicator tray (--features linux-tray)"
 	@echo "make install           App + CLI (macOS/Linux via scripts/install.sh)"
 	@echo "make check             cargo test + adapter verify"
 	@echo "make adversarial       isolated subagent adversarial harness"
@@ -13,6 +14,9 @@ help:
 	@echo "make tray              struggletime --tray"
 	@echo "make docs              build Fumadocs static site"
 	@echo "make package           source tarball (scripts/package.sh)"
+	@echo ""
+	@echo "Linux tray build deps (Debian/Ubuntu):"
+	@echo "  sudo apt-get install -y libxdo-dev libgtk-3-dev libayatana-appindicator3-dev pkg-config"
 
 check:
 	sh scripts/check.sh
@@ -27,6 +31,10 @@ adversarial: rust
 
 rust binaries:
 	cd rust && cargo build --release -p struggletime
+
+# AppIndicator tray pulls GTK + libxdo + Ayatana (see help for apt packages).
+rust-linux:
+	cd rust && cargo build --release -p struggletime --features linux-tray
 
 rust-test:
 	cd rust && cargo test --workspace
