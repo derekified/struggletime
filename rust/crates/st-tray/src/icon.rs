@@ -1,18 +1,17 @@
-//! Rasterize struggletime.svg with colourscheme tokens.
+//! Rasterize struggletime.svg with colourscheme tokens (transparent background).
 use crate::theme::ThemePalette;
 use anyhow::Result;
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
 pub fn make_icon(theme: ThemePalette, tracking: bool, paused: bool) -> Result<tray_icon::Icon> {
-    use crate::theme::icon_colors;
-    use anyhow::Context;
-    let (fg, bg) = icon_colors(theme, tracking, paused);
-    let (rgba, w, h) = render_svg_rgba(fg, bg, 64)?;
+    use crate::theme::icon_fg;
+    let fg = icon_fg(theme, tracking, paused);
+    let (rgba, w, h) = render_svg_rgba(fg, 64)?;
     tray_icon::Icon::from_rgba(rgba, w, h).map_err(|e| anyhow::anyhow!(e))
 }
 
 #[cfg(any(target_os = "macos", target_os = "windows"))]
-fn render_svg_rgba(fg: &str, bg: &str, size: u32) -> Result<(Vec<u8>, u32, u32)> {
+fn render_svg_rgba(fg: &str, size: u32) -> Result<(Vec<u8>, u32, u32)> {
     use anyhow::Context;
     let raw = include_str!("../assets/struggletime.svg");
     let mut inner = raw.to_string();
@@ -23,10 +22,10 @@ fn render_svg_rgba(fg: &str, bg: &str, size: u32) -> Result<(Vec<u8>, u32, u32)>
         inner = inner[..idx].to_string();
     }
     inner = inner.replace("currentColor", fg);
+    // Transparent canvas — no rounded tile behind the glyph.
     let wrapped = format!(
         r##"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
-<rect width="128" height="128" rx="28" fill="{bg}"/>
-<g transform="translate(10 10) scale(0.84)" stroke="{fg}" fill="none" color="{fg}">
+<g stroke="{fg}" fill="none" color="{fg}">
 {inner}
 </g></svg>"##
     );

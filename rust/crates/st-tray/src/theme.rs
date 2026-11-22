@@ -112,18 +112,13 @@ pub fn resolve_theme(name: &str) -> ThemePalette {
         .unwrap_or(CLASSIC)
 }
 
-/// Foreground / background for the tray glyph (tracking / paused / idle).
-pub fn icon_colors(
-    theme: ThemePalette,
-    tracking: bool,
-    paused: bool,
-) -> (&'static str, &'static str) {
-    let fg = if paused {
+/// Foreground for the tray glyph (tracking / paused / idle). Background is transparent.
+pub fn icon_fg(theme: ThemePalette, tracking: bool, paused: bool) -> &'static str {
+    if paused {
         theme.trust_yellow
     } else if tracking {
         theme.accent
     } else {
         theme.mut_fg
-    };
-    (fg, theme.bg)
+    }
 }
