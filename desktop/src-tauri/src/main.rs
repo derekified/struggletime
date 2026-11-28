@@ -29,6 +29,9 @@ fn main() {
             let navigation_base = base.clone();
             let injected = Arc::new(AtomicBool::new(false));
             let injected_on_load = Arc::clone(&injected);
+            // On macOS the menu is app-global (set on `app` below), so the
+            // window handle is unused there; allow it to keep -D warnings clean.
+            #[cfg_attr(target_os = "macos", allow(unused_variables))]
             let main = WebviewWindowBuilder::new(
                 app,
                 "main",
