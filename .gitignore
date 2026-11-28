@@ -10,6 +10,10 @@ docs-site/node_modules/
 docs-site/.next/
 docs-site/out/
 docs-site/tsconfig.tsbuildinfo
+desktop/node_modules/
+desktop/dist/
+desktop/src-tauri/target/
+desktop/src-tauri/binaries/
 ~/
 *.tar.gz
 rust/target/

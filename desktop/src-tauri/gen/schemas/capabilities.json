@@ -1,0 +1,1 @@
+{"settings":{"identifier":"settings","description":"Local tracker settings and explicitly allowlisted CLI actions","local":true,"windows":["settings"],"permissions":["core:default"]}}

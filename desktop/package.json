@@ -1,0 +1,23 @@
+{
+  "name": "struggletime-desktop",
+  "version": "0.1.0",
+  "private": true,
+  "license": "AGPL-3.0-or-later",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "check": "tsc --noEmit",
+    "prepare:cli": "node scripts/prepare-sidecar.mjs",
+    "tauri:dev": "node scripts/prepare-sidecar.mjs --profile debug && tauri dev",
+    "tauri:build": "node scripts/prepare-sidecar.mjs --profile release && tauri build"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2.5.0"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2.5.0",
+    "typescript": "^5.9.2",
+    "vite": "^7.1.0"
+  }
+}

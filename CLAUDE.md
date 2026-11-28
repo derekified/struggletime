@@ -54,6 +54,22 @@ npm run dev
 
 For `docs-site/` work, follow `docs-site/AGENTS.md`: consult the linked Fumadocs documentation for the relevant page, organization, UI, theme, or upgrade task rather than relying on older Fumadocs conventions.
 
+### Desktop app (`desktop/`)
+
+```bash
+npm --prefix desktop ci
+npm --prefix desktop run check
+npm --prefix desktop run build
+npm --prefix desktop run tauri:dev
+npm --prefix desktop run tauri:build
+cargo test --manifest-path desktop/src-tauri/Cargo.toml
+cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+```
+
+- **Never search, glob, or read inside `target/`, `node_modules/`, `dist/`, or `desktop/src-tauri/binaries/`.** Scanning build artifacts floods the context window and causes upstream API timeouts.
+- Keep responses and reasoning concise; execute one focused step at a time.
+- On Windows, any background helper (`tasklist`, `taskkill`, etc.) spawned from GUI/tray code must set `CREATE_NO_WINDOW` (`0x0800_0000`) so no console window flashes.
+
 ## Architecture
 
 ### Binaries and crate boundaries

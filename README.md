@@ -56,6 +56,18 @@ struggletime --version
 
 Full steps: [docs/installation](https://struggletime.screenseekr.com/docs/installation/).
 
+## Desktop dashboard (Tauri)
+
+`desktop/` contains the Tauri 2 dashboard app for Windows, macOS, and Linux. It loads the existing dashboard in the main window and adds a local **Tracker Settings** window for API keys, project links, and start/pause/resume/sync/stop controls. The existing tray and CLI remain supported.
+
+```bash
+npm --prefix desktop ci
+npm --prefix desktop run tauri:dev     # build CLI sidecar + run desktop app
+npm --prefix desktop run tauri:build   # platform installer with CLI sidecar
+```
+
+See [`desktop/README.md`](desktop/README.md) for platform dependencies, checks, and explicit-target builds.
+
 ## Install from source
 
 ```bash
@@ -96,6 +108,7 @@ Optional IDE and agent adapters live under `adapters/`.
 | Path | |
 |---|---|
 | `rust/` | desktop `struggletime` + optional `struggletime-server` |
+| `desktop/` | Tauri dashboard + local tracker settings |
 | `daemon/` | installers, shell hooks, assets |
 | `scripts/install.sh` / `install.ps1` | App + CLI installers |
 | `adapters/` | optional editor / agent bridges |

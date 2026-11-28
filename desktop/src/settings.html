@@ -1,0 +1,86 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>StruggleTime — Tracker Settings</title>
+    <link rel="stylesheet" href="/settings.css" />
+  </head>
+  <body>
+    <main>
+      <header class="heading">
+        <div class="mark" aria-hidden="true">ST</div>
+        <div>
+          <p class="eyebrow">DESKTOP</p>
+          <h1>Tracker Settings</h1>
+        </div>
+        <span id="connection" class="status-pill">checking</span>
+      </header>
+
+      <p class="intro">
+        Controls the same daemon and settings as your existing StruggleTime tray and CLI.
+        Project paths stay in this local window.
+      </p>
+
+      <section class="card">
+        <div class="section-heading"><h2>Connection</h2><span id="key-state">checking</span></div>
+        <dl class="facts">
+          <div><dt>Dashboard</dt><dd id="server">loading…</dd></div>
+          <div><dt>CLI sidecar</dt><dd id="cli">checking…</dd></div>
+        </dl>
+        <label for="api-key">StruggleTime API key</label>
+        <div class="row">
+          <input id="api-key" type="password" placeholder="st_…" autocomplete="off" spellcheck="false" />
+          <button id="save-key" class="primary">Save key</button>
+          <button id="clear-key" class="ghost">Clear</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>Link a project</h2>
+        <label for="project-id">Project ID <span class="muted">(optional)</span></label>
+        <input id="project-id" type="text" placeholder="my-project" autocomplete="off" />
+        <label for="project-path">Local folder</label>
+        <div class="row">
+          <input id="project-path" type="text" placeholder="Choose a folder…" autocomplete="off" />
+          <button id="browse" class="ghost">Browse</button>
+          <button id="link-project" class="primary">Link</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><h2>Linked projects</h2><button id="refresh-projects" class="ghost small">Refresh</button></div>
+        <ul id="project-list" class="project-list"></ul>
+        <p id="project-empty" class="muted">No projects linked yet — link a folder above.</p>
+      </section>
+
+      <section class="card">
+        <h2>Tracking controls</h2>
+        <div class="controls">
+          <button data-action="start" class="primary">Start</button>
+          <button data-action="pause">Pause</button>
+          <button data-action="resume">Resume</button>
+          <button data-action="sync">Sync now</button>
+          <button data-action="stop" class="danger">Stop</button>
+        </div>
+      </section>
+
+      <section class="card">
+        <div class="section-heading"><h2>Editor &amp; agent adapters</h2><button id="refresh-adapters" class="ghost small">Refresh</button></div>
+        <p class="muted small-note">Adapters add metadata-only AI harness events (labels and counts — never prompts, paths, or file contents), so time spent in any editor or agent harness counts toward your projects.</p>
+        <div class="controls">
+          <button id="install-adapters" class="primary">Install all adapters</button>
+        </div>
+        <pre id="adapters" class="adapters-output">Loading adapters…</pre>
+      </section>
+
+      <section class="card status-card">
+        <div class="section-heading"><h2>Local status</h2><button id="refresh" class="ghost small">Refresh</button></div>
+        <pre id="status">Loading status…</pre>
+      </section>
+
+      <p id="message" class="message" role="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="/settings.ts"></script>
+  </body>
+</html>

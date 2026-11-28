@@ -49,6 +49,45 @@ jobs:
           test -f /tmp/st-dist/struggletime-linux-x86_64/install.sh
           test -f /tmp/st-dist/struggletime-linux-x86_64/struggletime.desktop
 
+  desktop:
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: desktop/package-lock.json
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - name: Linux Tauri dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            build-essential pkg-config libssl-dev \
+            libwebkit2gtk-4.1-dev libgtk-3-dev librsvg2-dev \
+            libxdo-dev libayatana-appindicator3-dev
+      - name: Install and build local frontend
+        working-directory: desktop
+        run: |
+          npm ci
+          npm run build
+      - name: Build CLI sidecar
+        working-directory: desktop
+        run: node scripts/prepare-sidecar.mjs --profile debug
+      - name: Format
+        run: cargo fmt --manifest-path desktop/src-tauri/Cargo.toml -- --check
+      - name: Test
+        run: cargo test --manifest-path desktop/src-tauri/Cargo.toml
+      - name: Clippy
+        run: cargo clippy --manifest-path desktop/src-tauri/Cargo.toml --all-targets -- -D warnings
+
   docs:
     runs-on: ubuntu-latest
     steps:
